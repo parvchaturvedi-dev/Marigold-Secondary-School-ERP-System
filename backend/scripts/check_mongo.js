@@ -1,7 +1,5 @@
+import '../server/utils/loadEnv.js';
 import { connectMongo, getDbStatus } from '../server/db.js';
-import dotenv from 'dotenv';
-
-dotenv.config();
 
 (async () => {
   await connectMongo();

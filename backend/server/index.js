@@ -1,8 +1,8 @@
 import cors from 'cors';
-import dotenv from 'dotenv';
 import express from 'express';
 import { createServer } from 'node:http';
 import { Server } from 'socket.io';
+import './utils/loadEnv.js';
 import academicCalendarRoutes from './routes/academicCalendar.js';
 import applicationRoutes from './routes/applications.js';
 import assignmentRoutes from './routes/assignments.js';
@@ -16,8 +16,6 @@ import { connectMongo, getDbStatus } from './db.js';
 import { requireAuth } from './middleware/auth.js';
 import { setRealtimeServer } from './realtime.js';
 import { createSessionMiddleware } from './utils/session.js';
-
-dotenv.config();
 
 const app = express();
 const server = createServer(app);

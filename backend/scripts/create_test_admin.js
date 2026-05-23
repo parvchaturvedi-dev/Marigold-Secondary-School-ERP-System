@@ -1,11 +1,9 @@
 // create_test_admin.js
 // Run with: node scripts/create_test_admin.js
+import '../server/utils/loadEnv.js';
 import mongoose from 'mongoose';
 import User from '../server/models/User.js';
 import { createPasswordHash } from '../server/utils/identity.js';
-import dotenv from 'dotenv';
-
-dotenv.config();
 
 const MONGODB_URI = process.env.MONGODB_URI;
 if (!MONGODB_URI) {
