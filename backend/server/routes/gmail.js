@@ -4,9 +4,9 @@ import nodemailer from 'nodemailer';
 const router = express.Router();
 
 const getMailConfig = () => {
-  const user = process.env.GMAIL_USER;
-  const pass = process.env.GMAIL_APP_PASSWORD;
-  const fromName = process.env.GMAIL_FROM_NAME || 'MGPS ERP Portal';
+  const user = process.env.EMAIL_USER || process.env.GMAIL_USER;
+  const pass = process.env.EMAIL_PASS || process.env.GMAIL_APP_PASSWORD;
+  const fromName = process.env.EMAIL_FROM_NAME || process.env.GMAIL_FROM_NAME || 'MGPS ERP Portal';
 
   return {
     user,
@@ -56,7 +56,7 @@ router.post('/send', async (request, response) => {
 
   if (!mailConfig.isReady) {
     response.status(503).json({
-      message: 'Gmail is not configured. Set GMAIL_USER and GMAIL_APP_PASSWORD in .env.',
+      message: 'Email is not configured. Set EMAIL_USER and EMAIL_PASS in .env.',
     });
     return;
   }

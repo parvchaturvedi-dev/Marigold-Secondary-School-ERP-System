@@ -9,6 +9,7 @@ const isProductionLike = () =>
   Boolean(process.env.VERCEL || process.env.RENDER || process.env.RAILWAY);
 
 const getSessionSecret = () =>
+  process.env.JWT_SECRET ||
   process.env.SESSION_SECRET ||
   process.env.AUTH_TOKEN_SECRET ||
   randomBytes(32).toString('hex');
@@ -43,4 +44,3 @@ export const createSessionMiddleware = () => {
 
   return session(baseOptions);
 };
-

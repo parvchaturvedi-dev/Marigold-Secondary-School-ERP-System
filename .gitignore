@@ -21,6 +21,8 @@ coverage
 .env
 .env.*
 !.env.example
+!frontend/.env.example
+!backend/.env.example
 
 # Editor directories and files
 .vscode/*

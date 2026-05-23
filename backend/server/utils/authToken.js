@@ -2,6 +2,7 @@ import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
 
 const TOKEN_TTL_MS = 8 * 60 * 60 * 1000;
 const SECRET =
+  process.env.JWT_SECRET ||
   process.env.AUTH_TOKEN_SECRET ||
   process.env.SESSION_SECRET ||
   process.env.MONGODB_URI ||

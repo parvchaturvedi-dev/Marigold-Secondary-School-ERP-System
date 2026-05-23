@@ -1,6 +1,8 @@
 # 🌸 Marigold Secondary School ERP Portal (MGPS ERP)
 ### A State-of-the-Art, Role-Based School Management System
 
+> Repository layout update: the app is now split into `frontend/` for the Vite React SPA and `backend/` for the Express API. Root scripts delegate into those workspaces for local development.
+
 Welcome to the **Marigold Secondary School ERP Portal (MGPS ERP)**, a premium school administration system meticulously engineered to connect Administrators, Clerks, Teachers, and Students/Families in one unified, modern workspace.
 
 MGPS ERP features high-end aesthetics, a custom HSL-tailored responsive layout, smooth glassmorphism containers, micro-interactions, robust backend synchronization, and real-time persistence.
@@ -49,33 +51,22 @@ MGPS ERP implements a strict four-tiered role permission matrix:
 
 ## 📁 System Project Structure
 
-```
+``` 
 mgps-erp/
-├── .env                  # Real environment configurations (ignored by git)
-├── .env.example          # Template environment configurations
-├── package.json          # System dependencies & scripts
-├── vite.config.js        # Vite bundler, CSS and API proxy configuration
-├── eslint.config.js      # Linting configuration
-├── index.html            # Core client page
-├── scripts/              # Setup and seeding tools
-│   ├── check_mongo.js    # Infrastructure connection tester
-│   └── create_test_admin.js # Bootstrap script for initial ADM-001 administrator
-├── server/               # Secure Node.js Backend API
-│   ├── db.js             # Mongoose database client loader
-│   ├── index.js          # Main Express app starter
-│   ├── middleware/       # JWT Authorization rules
-│   ├── models/           # Mongoose ODM schemas
-│   ├── routes/           # REST endpoints
-│   └── utils/            # Hashing, token creation, and sync engine
-└── src/                  # React Frontend Application
-    ├── main.jsx          # App entry and styling hooks
-    ├── App.jsx           # Protected role routes and layout boundaries
-    ├── index.css         # Styling imports
-    ├── layouts/          # Portal structural shells (Admin, Teacher, Student, Clerk)
-    ├── pages/            # Role pages (Dashboard, Profile, Notices, Settings, etc.)
-    └── components/       # Custom React controls and stores
-        ├── ui/           # Generic buttons, avatars, dropdowns
-        └── common/       # Modular stores, api fetchers, and useMongoState hooks
+├── package.json          # Workspace scripts
+├── frontend/             # Vite React SPA deployed to Vercel
+│   ├── package.json
+│   ├── .env.example
+│   ├── vite.config.js
+│   ├── vercel.json
+│   ├── index.html
+│   ├── public/
+│   └── src/
+└── backend/              # Express API deployed to Render
+    ├── package.json
+    ├── .env.example
+    ├── scripts/
+    └── server/
 ```
 
 ---
@@ -92,16 +83,15 @@ npm install
 ```
 
 ### 3. Setup Environment Settings
-Copy the template `.env.example` file to `.env`:
+Copy the workspace templates into each app directory:
 ```bash
-cp .env.example .env
+cp frontend/.env.example frontend/.env
+cp backend/.env.example backend/.env
 ```
 
-Open `.env` and fill out your configuration parameters:
-- **`MONGODB_URI`:** MongoDB Atlas or local MongoDB connection URL.
-- **`AUTH_TOKEN_SECRET`:** A long random string for token verification.
-- **`AUTH_AUTO_PROVISION`:** Set to `true` during first setup.
-- **`AUTH_AUTO_PROVISION_PASSWORD`:** Specify a strong password (minimum 12 characters) for the auto-created administrative account.
+Fill in the values in each file:
+- `frontend/.env`: `VITE_API_BASE_URL`
+- `backend/.env`: `MONGODB_URI`, `JWT_SECRET`, `FRONTEND_URL`, `EMAIL_USER`, `EMAIL_PASS`, `PORT`
 
 ### 4. Create Initial Administrator Account
 Run the automated bootstrapper to seed the `ADM-001` account in MongoDB:
@@ -115,12 +105,12 @@ node scripts/create_test_admin.js
 
 #### Start the Secure Express API Server:
 ```bash
-npm run server
+npm run start:backend
 ```
 
 #### Launch the Vite React Frontend Dev Server:
 ```bash
-npm run dev
+npm run dev:frontend
 ```
 
 Open your browser and navigate to `http://127.0.0.1:5173/` or `http://localhost:5173/` to log in using the newly provisioned administrator account.
@@ -132,13 +122,14 @@ Open your browser and navigate to `http://127.0.0.1:5173/` or `http://localhost:
 | Environment Variable | Description | Default | Required in Production |
 | :--- | :--- | :--- | :--- |
 | `PORT` | Local Express API port | `5000` | Optional |
-| `CLIENT_ORIGIN` | Allowed CORS frontend origins | `http://127.0.0.1:5173` | Yes |
+| `FRONTEND_URL` | Primary frontend origin | `https://your-vercel-app.vercel.app` | Yes |
+| `CORS_ORIGINS` | Additional allowed CORS origins | `http://127.0.0.1:5173,http://localhost:5173` | Optional |
 | `MONGODB_URI` | MongoDB connection connection string | *None* | Yes |
 | `MONGODB_DB_NAME` | Targeted Database namespace | `mgps_erp` | Optional |
-| `AUTH_TOKEN_SECRET` | Secret key for signing authorization JWTs | *None* | Yes |
+| `JWT_SECRET` | Secret key for signing authorization JWTs | *None* | Yes |
 | `AUTH_AUTO_PROVISION` | Automatically creates ADM-001 admin | `false` | No |
-| `GMAIL_USER` | NodeMailer school sender Gmail address | *None* | No |
-| `GMAIL_APP_PASSWORD` | Google App Password credentials | *None* | No |
+| `EMAIL_USER` | NodeMailer school sender Gmail address | *None* | No |
+| `EMAIL_PASS` | Google App Password credentials | *None* | No |
 
 ---
 

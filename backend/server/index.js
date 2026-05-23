@@ -30,11 +30,12 @@ const parseOriginList = (value = '') =>
     .filter(Boolean);
 const localDevOriginPattern = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
 const vercelOrigin = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '';
+const frontendUrl = process.env.FRONTEND_URL || process.env.FRONTEND_ORIGIN || '';
 const configuredOrigins = new Set(
   [
     ...parseOriginList(process.env.CORS_ORIGINS),
     ...parseOriginList(process.env.CLIENT_ORIGIN),
-    ...parseOriginList(process.env.FRONTEND_ORIGIN),
+    ...parseOriginList(frontendUrl),
     vercelOrigin,
   ].filter(Boolean)
 );
