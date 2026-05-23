@@ -31,7 +31,7 @@ const FeaturePage = () => {
  // CINEMATIC SOUND HANDLERS (With Origin Resolution & Audio Context Resume)
 const playSound = (type) => {
   try {
-    // Window location origin automatically appends http://localhost:5173 or your production domain
+    // Window location origin automatically resolves to the active deployment domain
     const audioUrl = `${window.location.origin}/sounds/${type === 'activate' ? 'activation.mp3' : 'deactivation.mp3'}`;
     const audio = new Audio(audioUrl);
     

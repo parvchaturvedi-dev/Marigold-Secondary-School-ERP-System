@@ -205,6 +205,24 @@ export const authenticateUser = async ({ username, password }) =>
     body: JSON.stringify({ username, password }),
   });
 
+export const fetchCurrentSession = async () => {
+  try {
+    return await apiFetch('/auth/session');
+  } catch {
+    return null;
+  }
+};
+
+export const logoutSession = async () => {
+  try {
+    await apiFetch('/auth/logout', {
+      method: 'POST',
+    });
+  } catch {
+    // ignore logout transport failures; local state will still be cleared
+  }
+};
+
 export const saveSession = (authPayload) => {
   const { username, role } = authPayload || {};
   if (!username || !isValidRole(role)) return null;

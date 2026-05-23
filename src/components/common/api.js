@@ -1,6 +1,20 @@
 export const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') || '/api';
 
+export const API_ORIGIN = (() => {
+  if (typeof window === 'undefined') return '';
+
+  if (!API_BASE_URL || API_BASE_URL.startsWith('/')) {
+    return window.location.origin;
+  }
+
+  try {
+    return new URL(API_BASE_URL, window.location.origin).origin;
+  } catch {
+    return window.location.origin;
+  }
+})();
+
 const AUTH_STORAGE_KEY = 'mgps_erp_auth_session';
 
 export const getAuthToken = () => {
@@ -19,6 +33,7 @@ export const withAuthHeaders = (headers = {}) => {
 export const authFetch = (url, options = {}) =>
   fetch(url, {
     ...options,
+    credentials: 'include',
     headers: withAuthHeaders(options.headers || {}),
   });
 

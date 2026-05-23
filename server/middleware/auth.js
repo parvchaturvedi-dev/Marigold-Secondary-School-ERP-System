@@ -1,6 +1,13 @@
 import { verifyAuthToken } from '../utils/authToken.js';
 
 export const requireAuth = (request, response, next) => {
+  const sessionAuth = request.session?.auth;
+  if (sessionAuth?.username && sessionAuth?.role) {
+    request.auth = sessionAuth;
+    next();
+    return;
+  }
+
   const header = request.get('authorization') || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : '';
   const auth = verifyAuthToken(token);

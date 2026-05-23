@@ -1,6 +1,7 @@
 import express from 'express';
 import Application from '../models/Application.js';
 import { isMongoConnected } from '../db.js';
+import { emitRealtimeEvent } from '../realtime.js';
 
 const router = express.Router();
 const CLASS_APPROVAL_THRESHOLD = 80;
@@ -113,6 +114,7 @@ router.post('/', ensureMongo, async (request, response) => {
     status: isClassRequest ? 'collecting_consensus' : 'pending',
   });
 
+  emitRealtimeEvent('mgps-erp-applications-updated');
   response.status(201).json(normalizeApplication(application));
 });
 
@@ -135,6 +137,7 @@ router.patch('/:id/vote', ensureMongo, async (request, response) => {
   updateConsensusStatus(application);
   await application.save();
 
+  emitRealtimeEvent('mgps-erp-applications-updated');
   response.json(normalizeApplication(application));
 });
 
@@ -158,6 +161,7 @@ router.patch('/:id/admin-action', ensureMongo, async (request, response) => {
   application.adminActionAt = new Date();
   await application.save();
 
+  emitRealtimeEvent('mgps-erp-applications-updated');
   response.json(normalizeApplication(application));
 });
 

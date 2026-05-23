@@ -2,6 +2,7 @@ import express from 'express';
 import multer from 'multer';
 import Event from '../models/Event.js';
 import { isMongoConnected } from '../db.js';
+import { emitRealtimeEvent } from '../realtime.js';
 
 const router = express.Router();
 const upload = multer({
@@ -82,6 +83,7 @@ router.post('/', ensureMongo, upload.single('image'), async (request, response) 
   applyImageFields(event, request.file);
   await event.save();
 
+  emitRealtimeEvent('mgps-erp-events-updated');
   response.status(201).json(toEventPayload(event));
 });
 
@@ -105,11 +107,13 @@ router.patch('/:id', ensureMongo, upload.single('image'), async (request, respon
   applyImageFields(event, request.file);
   await event.save();
 
+  emitRealtimeEvent('mgps-erp-events-updated');
   response.json(toEventPayload(event));
 });
 
 router.delete('/:id', ensureMongo, async (request, response) => {
   await Event.findByIdAndDelete(request.params.id);
+  emitRealtimeEvent('mgps-erp-events-updated');
   response.json({ message: 'Event removed.' });
 });
 
@@ -139,6 +143,7 @@ router.patch('/:id/participate', ensureMongo, async (request, response) => {
   });
   await event.save();
 
+  emitRealtimeEvent('mgps-erp-events-updated');
   response.json(toEventPayload(event));
 });
 

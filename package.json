@@ -7,16 +7,23 @@
     "dev": "vite",
     "server": "node server/index.js",
     "dev:api": "node server/index.js",
+    "start": "node server/index.js",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "dependencies": {
     "@e965/xlsx": "^0.20.3",
     "@tailwindcss/vite": "^4.3.0",
+    "connect-mongo": "^6.0.0",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "express-session": "^1.19.0",
     "jspdf": "^4.2.1",
     "lucide-react": "^1.16.0",
     "mongodb": "^7.2.0",
@@ -27,6 +34,8 @@
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.15.1",
     "recharts": "^3.8.1",
+    "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3",
     "tailwindcss": "^4.3.0"
   },
   "devDependencies": {

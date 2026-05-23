@@ -1,6 +1,7 @@
 import express from 'express';
 import LeaveRequest from '../models/LeaveRequest.js';
 import { isMongoConnected } from '../db.js';
+import { emitRealtimeEvent } from '../realtime.js';
 
 const router = express.Router();
 
@@ -104,6 +105,7 @@ router.post('/', ensureMongo, async (request, response) => {
     classTeacherName: isStudent ? payload.classTeacherName || '' : '',
   });
 
+  emitRealtimeEvent('mgps-erp-leave-requests-updated');
   response.status(201).json(toLeavePayload(leaveRequest));
 });
 
@@ -121,6 +123,7 @@ router.patch('/:id/admin-action', ensureMongo, async (request, response) => {
   leaveRequest.adminActionAt = new Date();
   await leaveRequest.save();
 
+  emitRealtimeEvent('mgps-erp-leave-requests-updated');
   response.json(toLeavePayload(leaveRequest));
 });
 
@@ -143,6 +146,7 @@ router.patch('/:id/teacher-action', ensureMongo, async (request, response) => {
   leaveRequest.teacherActionAt = new Date();
   await leaveRequest.save();
 
+  emitRealtimeEvent('mgps-erp-leave-requests-updated');
   response.json(toLeavePayload(leaveRequest));
 });
 

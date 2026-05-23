@@ -2,6 +2,7 @@ import express from 'express';
 import multer from 'multer';
 import Assignment from '../models/Assignment.js';
 import { isMongoConnected } from '../db.js';
+import { emitRealtimeEvent } from '../realtime.js';
 
 const router = express.Router();
 const upload = multer({
@@ -118,6 +119,7 @@ router.post('/', ensureMongo, upload.single('attachment'), async (request, respo
   applyAttachment(assignment, request.file);
   await assignment.save();
 
+  emitRealtimeEvent('mgps-erp-assignments-updated');
   response.status(201).json(toAssignmentPayload(assignment));
 });
 
@@ -153,6 +155,7 @@ router.patch('/:id', ensureMongo, upload.single('attachment'), async (request, r
   applyAttachment(assignment, request.file);
   await assignment.save();
 
+  emitRealtimeEvent('mgps-erp-assignments-updated');
   response.json(toAssignmentPayload(assignment));
 });
 
@@ -190,6 +193,7 @@ router.patch('/:id/checking-date', ensureMongo, async (request, response) => {
   assignment.updatedByName = request.body.actorName;
   await assignment.save();
 
+  emitRealtimeEvent('mgps-erp-assignments-updated');
   response.json(toAssignmentPayload(assignment));
 });
 

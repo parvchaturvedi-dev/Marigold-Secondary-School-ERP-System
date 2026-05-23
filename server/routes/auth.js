@@ -84,6 +84,25 @@ const toSessionPayload = (user) => {
   return session;
 };
 
+const persistSessionAuth = (request, payload, response) => {
+  request.session.regenerate((regenerateError) => {
+    if (regenerateError) {
+      response.status(500).json({ message: 'Could not create authenticated session.' });
+      return;
+    }
+
+    request.session.auth = payload;
+    request.session.save((saveError) => {
+      if (saveError) {
+        response.status(500).json({ message: 'Could not persist authenticated session.' });
+        return;
+      }
+
+      response.json(payload);
+    });
+  });
+};
+
 router.post('/login', ensureMongo, async (request, response) => {
   const username = String(request.body.username || '').trim().toUpperCase();
   const password = String(request.body.password || '');
@@ -131,11 +150,45 @@ router.post('/login', ensureMongo, async (request, response) => {
     return;
   }
 
-  response.json(toSessionPayload(user));
+  const payload = toSessionPayload(user);
+  persistSessionAuth(request, payload, response);
 });
 
 router.get('/users', ensureMongo, requireAuth, requireRole('admin'), async (_request, response) => {
   response.json(await listIdentityUsers());
+});
+
+router.get('/session', requireAuth, async (request, response) => {
+  if (request.session?.auth?.username) {
+    response.json(request.session.auth);
+    return;
+  }
+
+  if (!isMongoConnected()) {
+    response.status(503).json({ message: 'MongoDB is not connected. Set MONGODB_URI and restart the API server.' });
+    return;
+  }
+
+  const user = await User.findOne({ username: request.auth.username });
+  if (!user) {
+    response.status(404).json({ message: 'Session user not found.' });
+    return;
+  }
+
+  const payload = toSessionPayload(user);
+  request.session.auth = payload;
+  request.session.save(() => response.json(payload));
+});
+
+router.post('/logout', async (request, response) => {
+  if (!request.session) {
+    response.json({ message: 'Logged out.' });
+    return;
+  }
+
+  request.session.destroy(() => {
+    response.json({ message: 'Logged out.' });
+  });
 });
 
 export default router;

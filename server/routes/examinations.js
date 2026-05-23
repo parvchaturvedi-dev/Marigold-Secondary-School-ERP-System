@@ -1,6 +1,7 @@
 import express from 'express';
 import ExaminationState from '../models/ExaminationState.js';
 import { isMongoConnected } from '../db.js';
+import { emitRealtimeEvent } from '../realtime.js';
 
 const router = express.Router();
 
@@ -51,6 +52,7 @@ router.put('/state', ensureMongo, async (request, response) => {
     }
   );
 
+  emitRealtimeEvent('mgps-erp-examination-updated');
   response.json(normalizeState(record.state));
 });
 

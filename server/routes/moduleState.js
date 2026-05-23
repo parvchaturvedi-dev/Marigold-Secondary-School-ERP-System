@@ -1,6 +1,7 @@
 import express from 'express';
 import ModuleState from '../models/ModuleState.js';
 import { isMongoConnected } from '../db.js';
+import { emitRealtimeEvent } from '../realtime.js';
 import { IDENTITY_SOURCE_NAMESPACES, syncIdentityUsersFromState } from '../utils/identity.js';
 
 const router = express.Router();
@@ -32,6 +33,7 @@ router.put('/:namespace', ensureMongo, async (request, response) => {
     await syncIdentityUsersFromState();
   }
 
+  emitRealtimeEvent(`mgps-erp-module-state:${request.params.namespace}`, record.value);
   response.json({ value: record.value });
 });
 

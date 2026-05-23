@@ -2,6 +2,7 @@ import express from 'express';
 import multer from 'multer';
 import AcademicCalendar from '../models/AcademicCalendar.js';
 import { isMongoConnected } from '../db.js';
+import { emitRealtimeEvent } from '../realtime.js';
 
 const router = express.Router();
 const upload = multer({
@@ -67,11 +68,13 @@ router.post('/', ensureMongo, upload.single('calendarPdf'), async (request, resp
     uploadedBy: request.body.uploadedBy || 'Admin',
   });
 
+  emitRealtimeEvent('mgps-academic-calendar-updated');
   response.status(201).json(toCalendarPayload(calendar));
 });
 
 router.delete('/', ensureMongo, async (_request, response) => {
   await AcademicCalendar.deleteMany({});
+  emitRealtimeEvent('mgps-academic-calendar-updated');
   response.json({ message: 'Academic calendar PDF removed.' });
 });
 

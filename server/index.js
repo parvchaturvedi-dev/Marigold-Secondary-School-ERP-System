@@ -1,6 +1,8 @@
 import cors from 'cors';
 import dotenv from 'dotenv';
 import express from 'express';
+import { createServer } from 'node:http';
+import { Server } from 'socket.io';
 import academicCalendarRoutes from './routes/academicCalendar.js';
 import applicationRoutes from './routes/applications.js';
 import assignmentRoutes from './routes/assignments.js';
@@ -12,30 +14,72 @@ import leaveRequestRoutes from './routes/leaveRequests.js';
 import moduleStateRoutes from './routes/moduleState.js';
 import { connectMongo, getDbStatus } from './db.js';
 import { requireAuth } from './middleware/auth.js';
+import { setRealtimeServer } from './realtime.js';
+import { createSessionMiddleware } from './utils/session.js';
 
 dotenv.config();
 
 const app = express();
+const server = createServer(app);
 const port = process.env.PORT || 5000;
-const configuredOrigins = (process.env.CLIENT_ORIGIN || 'http://127.0.0.1:5173')
-  .split(',')
-  .map((origin) => origin.trim())
-  .filter(Boolean);
-const localDevOriginPattern = /^http:\/\/(localhost|127\.0\.0\.1):\d+$/;
 
-app.use(
-  cors({
-    origin(origin, callback) {
-      if (!origin || configuredOrigins.includes(origin) || localDevOriginPattern.test(origin)) {
-        callback(null, true);
-        return;
-      }
-
-      callback(new Error(`CORS blocked for origin: ${origin}`));
-    },
-  })
+const parseOriginList = (value = '') =>
+  String(value)
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+const localDevOriginPattern = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+const vercelOrigin = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '';
+const configuredOrigins = new Set(
+  [
+    ...parseOriginList(process.env.CORS_ORIGINS),
+    ...parseOriginList(process.env.CLIENT_ORIGIN),
+    ...parseOriginList(process.env.FRONTEND_ORIGIN),
+    vercelOrigin,
+  ].filter(Boolean)
 );
+
+const isAllowedOrigin = (origin) =>
+  !origin || configuredOrigins.has(origin) || localDevOriginPattern.test(origin);
+
+const corsOrigin = (origin, callback) => {
+  if (isAllowedOrigin(origin)) {
+    callback(null, true);
+    return;
+  }
+
+  callback(new Error(`CORS blocked for origin: ${origin}`));
+};
+
+const sessionMiddleware = createSessionMiddleware();
+
+app.set('trust proxy', 1);
+app.use(cors({
+  origin: corsOrigin,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+app.use(sessionMiddleware);
 app.use(express.json({ limit: '1mb' }));
+
+const io = new Server(server, {
+  cors: {
+    origin: corsOrigin,
+    credentials: true,
+  },
+});
+
+io.engine.use(sessionMiddleware);
+setRealtimeServer(io);
+
+io.use((socket, next) => {
+  const sessionAuth = socket.request.session?.auth;
+  if (sessionAuth?.username && sessionAuth?.role) {
+    socket.data.auth = sessionAuth;
+  }
+  next();
+});
 
 app.get('/api/health', (_request, response) => {
   response.json({
@@ -57,6 +101,6 @@ app.use('/api/module-state', moduleStateRoutes);
 
 await connectMongo();
 
-app.listen(port, () => {
-  console.log(`MGPS ERP API running on http://127.0.0.1:${port}`);
+server.listen(port, () => {
+  console.log(`MGPS ERP API running on port ${port}`);
 });
