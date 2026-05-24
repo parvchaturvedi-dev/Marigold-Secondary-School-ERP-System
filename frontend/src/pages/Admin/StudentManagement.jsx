@@ -12,6 +12,7 @@ import {
   Users,
 } from 'lucide-react';
 import { useMongoState } from '../../components/common/mongoState';
+import { useMasterData, sortClassNames } from '../../components/common/masterData';
 
 const templateColumns = [
   'admissionNumber',
@@ -66,6 +67,10 @@ const sampleRows = [
 ];
 
 const normalizeCell = (value) => String(value || '').trim();
+const normalizeAmount = (value) => {
+  const amount = Number(String(value || '').replace(/[^0-9.-]/g, ''));
+  return Number.isFinite(amount) ? amount : 0;
+};
 
 const buildStudentRecord = (row, selectedClassView) => {
   const admissionNumber = normalizeCell(row.admissionNumber || row['Admission Number']).toUpperCase();
@@ -106,8 +111,12 @@ const buildStudentRecord = (row, selectedClassView) => {
   return {
     admissionNumber,
     id: admissionNumber,
+    displayName: studentName,
     name: studentName,
+    className: targetClass,
     class: targetClass,
+    section: rawProfile.section || '',
+    rollNo: rawProfile.rollNo || '',
     gender: rawProfile.gender,
     category: rawProfile.category,
     lastSchoolName: rawProfile.lastSchoolName,
@@ -115,6 +124,13 @@ const buildStudentRecord = (row, selectedClassView) => {
     email: rawProfile.email,
     fatherName: rawProfile.fatherName,
     motherName: rawProfile.motherName,
+    guardianName: rawProfile.guardianName,
+    guardianPhone: rawProfile.guardianMobile || rawProfile.mobileNo,
+    guardianEmail: rawProfile.email,
+    address: rawProfile.permAddress || rawProfile.tempAddress,
+    paidFees: normalizeAmount(row.paidFees || row.collectedFees || row.feesPaid),
+    pendingFees: normalizeAmount(row.pendingFees || row.feePending || row.balanceFees || row.unpaidFees),
+    yearlyFee: normalizeAmount(row.yearlyFee || row.annualFee || row.totalFees || row.assignedFees),
     status: 'Active',
     documents: [],
     rawProfile,
@@ -128,6 +144,7 @@ const StudentManagement = ({ setActivePage }) => {
   // Active Structural Pool
   const [classCards] = useMongoState('admin-student-management-class-cards', []);
   const [managedClasses] = useMongoState('admin-class-management-classes', []);
+  const { classes: derivedClasses, classNames } = useMasterData();
 
   // Updated Roster Pool matching Student Assigning parameters exactly
   const [studentsDb, setStudentsDb] = useMongoState('admin-student-management-students', []);
@@ -172,14 +189,21 @@ const StudentManagement = ({ setActivePage }) => {
   }, [selectedClassView, studentsDb, searchTerm, genderFilter, categoryFilter, sortOrder]);
 
   const displayedClassCards = useMemo(() => {
-    if (classCards.length > 0) return classCards;
-    if (managedClasses.length > 0) return managedClasses;
+    if (derivedClasses.length > 0) return derivedClasses;
+    if (classCards.length > 0) {
+      const orderedClassNames = sortClassNames(classCards.map((item) => item.name), classNames);
+      return orderedClassNames.map((name) => classCards.find((item) => item.name === name)).filter(Boolean);
+    }
+    if (managedClasses.length > 0) {
+      const orderedClassNames = sortClassNames(managedClasses.map((item) => item.name), classNames);
+      return orderedClassNames.map((name) => managedClasses.find((item) => item.name === name)).filter(Boolean);
+    }
 
-    return [...new Set(studentsDb.map((student) => student.class).filter(Boolean))].map((className) => ({
+    return sortClassNames(studentsDb.map((student) => student.class), classNames).map((className) => ({
       id: className,
       name: className,
     }));
-  }, [classCards, managedClasses, studentsDb]);
+  }, [classCards, classNames, derivedClasses, managedClasses, studentsDb]);
 
   const downloadSampleWorkbook = () => {
     const sheet = utils.json_to_sheet(sampleRows, { header: templateColumns });

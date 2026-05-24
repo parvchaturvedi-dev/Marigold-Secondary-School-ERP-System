@@ -1,4 +1,5 @@
 import { API_BASE_URL, authFetch, withAuthHeaders } from './api';
+import { sortClassNames } from './masterData';
 
 export const LEAVE_REQUEST_STORAGE_KEY = 'mgps_erp_leave_requests';
 export const LEAVE_REQUEST_UPDATED_EVENT = 'mgps-erp-leave-requests-updated';
@@ -74,7 +75,7 @@ export const getLeaveDemoIdentity = (session) => {
           name: session?.displayName || username || 'Teacher',
           className: session?.allottedClasses?.[0] || '',
           metaInfo: session?.allottedClasses?.length
-            ? `Classes: ${session.allottedClasses.join(', ')}`
+            ? `Classes: ${sortClassNames(session.allottedClasses).join(', ')}`
             : 'Teacher',
         },
       ],
@@ -175,7 +176,7 @@ export const getLeaveRequestsForSession = (session, selectedIdentity) => {
   return requests.filter((request) => request.applicantUsername === session?.username);
 };
 
-export const fetchLeaveRequests = async (session, selectedIdentity) => {
+export const fetchLeaveRequests = async (session, selectedIdentity, { broadcast = false } = {}) => {
   try {
     const params = new URLSearchParams({
       role: session?.role || '',
@@ -190,14 +191,14 @@ export const fetchLeaveRequests = async (session, selectedIdentity) => {
     if (response.ok) {
       const requests = await response.json();
       writeLeaveRequests(requests);
-      broadcastLeaveRequestUpdate();
+      if (broadcast) broadcastLeaveRequestUpdate();
       return requests;
     }
 
     const errorPayload = await response.json().catch(() => ({}));
     throw new Error(errorPayload.message || 'Leave requests could not be loaded.');
   } catch (error) {
-    alert(`Leave request sync failed: ${error.message}`);
+    alert(`Leave request loading failed: ${error.message}`);
     return getLeaveRequestsForSession(session, selectedIdentity);
   }
 };

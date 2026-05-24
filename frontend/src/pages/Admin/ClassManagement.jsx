@@ -2,7 +2,28 @@ import React, { useState } from 'react';
 import { Layers, ArrowRightLeft, Users, UserCheck } from 'lucide-react';
 import ClassDetail from './ClassDetail'; // Formatted view screen placeholder
 import { useMongoState } from '../../components/common/mongoState';
-import { useMasterData } from '../../components/common/masterData';
+import { getClassName, sortClassNames, useMasterData } from '../../components/common/masterData';
+
+const getTeacherId = (teacher = {}) => teacher.id || teacher.teacherId || teacher.empId || teacher.employeeId || '';
+
+const resolveClassTeacher = (classRecord = {}, teachers = []) => {
+  const storedTeacherId = classRecord.classTeacherId || classRecord.teacherId || '';
+  const storedTeacherName = classRecord.classTeacherName || classRecord.teacher || '';
+  const byStoredId = storedTeacherId
+    ? teachers.find((teacher) => getTeacherId(teacher) === storedTeacherId)
+    : null;
+  const byCharge = teachers.find(
+    (teacher) =>
+      teacher.isClassTeacher === 'Yes' &&
+      teacher.assignedClassTeacherFor === classRecord.name
+  );
+  const teacher = byStoredId || byCharge;
+
+  return {
+    id: teacher ? getTeacherId(teacher) : storedTeacherId,
+    name: teacher?.name || storedTeacherName || '',
+  };
+};
 
 const ClassManagement = () => {
   // Navigation State for tracking inner sub views
@@ -10,9 +31,28 @@ const ClassManagement = () => {
 
   // Main Dashboard Workspace State
   const [classes, setClasses] = useMongoState('admin-class-management-classes', []);
-  const { classes: derivedClasses } = useMasterData();
-  const displayClasses = derivedClasses.length ? derivedClasses : classes;
-  const classOrderSequence = displayClasses.map((classItem) => classItem.name);
+  const [students, setStudents] = useMongoState('admin-student-management-students', []);
+  const [orderedClasses] = useMongoState('admin-class-preferences', []);
+  const { classes: derivedClasses, teachers } = useMasterData();
+  const hierarchySequence = orderedClasses.length
+    ? orderedClasses.map(getClassName).filter(Boolean)
+    : sortClassNames([...(derivedClasses.length ? derivedClasses : classes).map(getClassName)]);
+  const rankClass = (className = '') => {
+    const index = hierarchySequence.indexOf(className);
+    return index === -1 ? Number.MAX_SAFE_INTEGER : index;
+  };
+  const sourceClasses = derivedClasses.length ? derivedClasses : classes;
+  const displayClasses = [...sourceClasses]
+    .map((classRecord) => {
+      const classTeacher = resolveClassTeacher(classRecord, teachers);
+      return {
+        ...classRecord,
+        classTeacherId: classTeacher.id,
+        classTeacherName: classTeacher.name,
+        teacher: classTeacher.name,
+      };
+    })
+    .sort((a, b) => rankClass(a.name) - rankClass(b.name) || String(a.name).localeCompare(String(b.name)));
 
   // MOVE TO NEXT JOURNEY (Session Promotion Core Business Logic)
   const handleNextJourneyPromotion = () => {
@@ -21,36 +61,67 @@ const ClassManagement = () => {
     );
     if (!confirmation) return;
 
-    // We map back to front loop to prevent overriding clean arrays
-    const promotedData = displayClasses.map((currentClass) => {
-      const currentRankIndex = classOrderSequence.indexOf(currentClass.name);
+    if (hierarchySequence.length === 0) {
+      alert('Please configure class hierarchy in Class Preferences before promotion.');
+      return;
+    }
 
-      // If class is not found in preferences sequence or is already at the highest apex grade
-      if (currentRankIndex === -1 || currentRankIndex === classOrderSequence.length - 1) {
-        return { ...currentClass, studentCount: 0 }; // Graduated / Flushed out of the current matrix
+    const promotedStudents = students.map((student) => {
+      const currentClassName = student.className || student.class || student.rawProfile?.targetClass || '';
+      const currentRankIndex = hierarchySequence.indexOf(currentClassName);
+
+      if (student.isRepeating || currentRankIndex === -1) {
+        return student;
       }
 
-      // Find the targeted incoming class that is exactly 1 rank below current inside state
-      const sourceClassName = classOrderSequence[currentRankIndex];
-      // Find what was the count in the previous class to inherit it safely
-      const inboundClassRecord = displayClasses.find((c) => c.name === sourceClassName);
-      
+      if (currentRankIndex === hierarchySequence.length - 1) {
+        return {
+          ...student,
+          status: student.status || 'Promoted Out',
+          promotedOut: true,
+          previousClass: currentClassName,
+          class: '',
+          className: '',
+          rawProfile: {
+            ...(student.rawProfile || {}),
+            targetClass: '',
+          },
+        };
+      }
+
+      const nextClassName = hierarchySequence[currentRankIndex + 1];
       return {
-        ...currentClass,
-        studentCount: inboundClassRecord ? inboundClassRecord.studentCount : 0
+        ...student,
+        previousClass: currentClassName,
+        class: nextClassName,
+        className: nextClassName,
+        rawProfile: {
+          ...(student.rawProfile || {}),
+          targetClass: nextClassName,
+        },
       };
     });
 
-    // Handle the lowest initial starting entry class (Set to 0 fresh admissions)
-    const lowestClassName = classOrderSequence[0];
-    const finalizedData = promotedData.map((c) => {
-      if (c.name === lowestClassName) {
-        return { ...c, studentCount: 0 }; 
-      }
-      return c;
-    });
+    const studentCountByClass = promotedStudents.reduce((acc, student) => {
+      const className = student.className || student.class || student.rawProfile?.targetClass || '';
+      if (className) acc[className] = (acc[className] || 0) + 1;
+      return acc;
+    }, {});
 
-    setClasses(finalizedData);
+    setStudents(promotedStudents);
+    setClasses((currentClasses) => {
+      const classMap = new Map(currentClasses.map((classRecord) => [getClassName(classRecord), classRecord]));
+      hierarchySequence.forEach((className) => {
+        if (!classMap.has(className)) {
+          classMap.set(className, { id: className, name: className });
+        }
+      });
+
+      return [...classMap.values()].map((classRecord) => ({
+        ...classRecord,
+        studentCount: studentCountByClass[getClassName(classRecord)] || 0,
+      }));
+    });
     alert('Academic journey shifted successfully! Records updated.');
   };
 
@@ -109,8 +180,8 @@ const ClassManagement = () => {
               <div className="flex items-center gap-2 text-xs text-[#555555]">
                 <UserCheck className="w-3.5 h-3.5 text-[#1A1A1A]" />
                 <span className="font-medium">Class Teacher:</span>
-                <span className={`font-bold ${cls.teacher ? 'text-[#1A1A1A]' : 'text-red-600/80'}`}>
-                  {cls.teacher || 'N/A'}
+                <span className={`font-bold ${cls.classTeacherName ? 'text-[#1A1A1A]' : 'text-red-600/80'}`}>
+                  {cls.classTeacherName || 'N/A'}
                 </span>
               </div>
 

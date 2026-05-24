@@ -24,6 +24,7 @@ import {
   getLeaveRequestsForSession,
   teacherActionLeaveRequest,
 } from './leaveRequestStore';
+import { useMasterData } from './masterData';
 
 const statusTone = {
   [LEAVE_STATUS.pendingAdmin]: 'bg-amber-50 text-amber-700 border-amber-100',
@@ -127,6 +128,7 @@ const LeaveCard = ({ request, actions }) => {
 };
 
 const LeaveRequestUserHub = ({ session, role }) => {
+  const masterData = useMasterData();
   const identityConfig = useMemo(() => getLeaveDemoIdentity(session), [session]);
   const [selectedIdentityId, setSelectedIdentityId] = useState(identityConfig.members[0]?.id || '');
   const selectedIdentity =
@@ -135,15 +137,40 @@ const LeaveRequestUserHub = ({ session, role }) => {
   const [, setRequestVersion] = useState(0);
   const [formState, setFormState] = useState(initialFormState);
   const requests = getLeaveRequestsForSession(session, selectedIdentity);
+  const classTeacher = useMemo(() => {
+    const className = selectedIdentity?.className || '';
+    if (!className) return { username: '', name: '' };
+
+    const classRecord = masterData.classes.find((item) => item.name === className) || {};
+    const teacher =
+      masterData.teachers.find(
+        (item) =>
+          item.id === classRecord.classTeacherId ||
+          item.empId === classRecord.classTeacherId ||
+          item.name === classRecord.classTeacherName ||
+          item.assignedClassTeacherFor === className
+      ) || {};
+
+    return {
+      username: teacher.id || teacher.empId || classRecord.classTeacherId || '',
+      name: teacher.name || classRecord.classTeacherName || '',
+    };
+  }, [masterData.classes, masterData.teachers, selectedIdentity?.className]);
 
   useEffect(() => {
-    const refreshRequests = () => setRequestVersion((version) => version + 1);
+    let isActive = true;
+    const refreshRequests = () => {
+      fetchLeaveRequests(session, selectedIdentity).then(() => {
+        if (isActive) setRequestVersion((version) => version + 1);
+      });
+    };
     window.addEventListener(LEAVE_REQUEST_UPDATED_EVENT, refreshRequests);
 
     return () => {
+      isActive = false;
       window.removeEventListener(LEAVE_REQUEST_UPDATED_EVENT, refreshRequests);
     };
-  }, []);
+  }, [session, selectedIdentity]);
 
   useEffect(() => {
     fetchLeaveRequests(session, selectedIdentity).then(() =>
@@ -186,6 +213,8 @@ const LeaveRequestUserHub = ({ session, role }) => {
       applicantIdentityId: selectedIdentity?.id || '',
       applicantIdentity: selectedIdentity?.name || '',
       className: selectedIdentity?.className || '',
+      classTeacherUsername: classTeacher.username,
+      classTeacherName: classTeacher.name,
       metaInfo: selectedIdentity?.metaInfo || selectedIdentity?.className || '',
       leaveMode: formState.leaveMode,
       startDate: formState.startDate,

@@ -133,6 +133,9 @@ const getLocalApplicationsForSession = (session, selectedIdentity) => {
 const mapApiApplication = (application) => ({
   ...application,
   votes: application.votes || [],
+  adminReplyVersion: application.adminReplyVersion || 0,
+  replyReadVersion: application.replyReadVersion || 0,
+  replyEditedAfterRead: Boolean(application.replyEditedAfterRead),
 });
 
 export const fetchApplications = async (session, selectedIdentity) => {
@@ -152,7 +155,7 @@ export const fetchApplications = async (session, selectedIdentity) => {
       return applications;
     }
   } catch (error) {
-    alert(`Application sync failed: ${error.message}`);
+    alert(`Application loading failed: ${error.message}`);
     return getLocalApplicationsForSession(session, selectedIdentity);
   }
 
@@ -227,6 +230,28 @@ export const adminActionApplication = async ({ applicationId, action, reply, adm
     throw new Error(errorPayload.message || 'Admin action could not be saved.');
   } catch (error) {
     alert(`Application action failed: ${error.message}`);
+    return null;
+  }
+};
+
+export const markApplicationReplyRead = async ({ applicationId, username }) => {
+  try {
+    const response = await authFetch(`${APPLICATION_API_URL}/${applicationId}/reply-read`, {
+      method: 'PATCH',
+      headers: withAuthHeaders({
+        'Content-Type': 'application/json',
+      }),
+      body: JSON.stringify({ username }),
+    });
+
+    if (response.ok) {
+      const application = mapApiApplication(await response.json());
+      writeApplications(readApplications().map((item) => (item.id === application.id ? application : item)));
+      broadcastApplicationUpdate();
+      return application;
+    }
+    return null;
+  } catch {
     return null;
   }
 };

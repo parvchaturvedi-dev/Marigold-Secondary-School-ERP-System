@@ -12,6 +12,7 @@ import {
   Users,
   X,
 } from 'lucide-react';
+import { formatNotificationTime, useNotificationsDatabase } from './notificationStore';
 
 const Header = ({ session, onLogout, onPageChange, onStudentChange }) => {
   // UI Interactive Toggle States
@@ -22,7 +23,7 @@ const Header = ({ session, onLogout, onPageChange, onStudentChange }) => {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showStudentMenu, setShowStudentMenu] = useState(false);
 
-  const [notifications] = useState([]);
+  const { notifications, error: notificationError, markRead } = useNotificationsDatabase(session);
 
   // Derived unread computations
   const unreadCount = notifications.filter(n => n.unread).length;
@@ -205,13 +206,16 @@ const Header = ({ session, onLogout, onPageChange, onStudentChange }) => {
               </div>
               
               <div className="max-h-48 overflow-y-auto divide-y divide-[#EAEAEA]">
-                {notifications.filter(n => n.unread).length === 0 ? (
-                  <p className="p-4 text-center text-[#555555] text-[11px] italic font-semibold">No unread alerts in workspace buffer.</p>
+                {notificationError ? (
+                  <p className="p-4 text-center text-red-600 text-[11px] font-semibold">{notificationError}</p>
+                ) : notifications.filter(n => n.unread).length === 0 ? (
+                  <p className="p-4 text-center text-[#555555] text-[11px] italic font-semibold">No unread alerts in database.</p>
                 ) : (
                   notifications.filter(n => n.unread).map((notif) => (
                     <div key={notif.id} className="p-3 hover:bg-[#EAEAEA]/30 transition-colors">
-                      <p className="text-[#1A1A1A] text-[11px] leading-tight font-semibold">{notif.text}</p>
-                      <span className="text-[9px] text-[#555555] font-mono block mt-1">{notif.time}</span>
+                      <p className="text-[#1A1A1A] text-[11px] leading-tight font-black">{notif.title}</p>
+                      <p className="text-[#555555] text-[10px] leading-tight font-semibold mt-1">{notif.text}</p>
+                      <span className="text-[9px] text-[#555555] font-mono block mt-1">{formatNotificationTime(notif.time)}</span>
                     </div>
                   ))
                 )}
@@ -220,7 +224,11 @@ const Header = ({ session, onLogout, onPageChange, onStudentChange }) => {
               {/* VIEW ALL REDIRECT ACTION BLOCK */}
               <button 
                 type="button"
-                onClick={() => { setShowFullPanel(true); setShowUnreadBox(false); }}
+                onClick={() => {
+                  setShowFullPanel(true);
+                  setShowUnreadBox(false);
+                  markRead(notifications.filter((notif) => notif.unread).map((notif) => notif.id)).catch(() => {});
+                }}
                 className="w-full bg-[#1A1A1A] text-[#E1FA6C] py-2 text-center text-[10px] font-black uppercase tracking-wider block hover:opacity-90 transition-all border-t border-[#C8C8C8]"
               >
                 View All Notifications
@@ -313,15 +321,18 @@ const Header = ({ session, onLogout, onPageChange, onStudentChange }) => {
 
             {/* Timewise Notification Rows Data Container */}
             <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#D9D9D9]/20">
-              {notifications.map((notif) => (
+              {notifications.length === 0 ? (
+                <p className="p-4 text-center text-[#555555] text-[11px] italic font-semibold">No notification history in database.</p>
+              ) : notifications.map((notif) => (
                 <div 
                   key={notif.id} 
                   className={`p-3.5 rounded-xl border text-[11px] font-bold text-[#1A1A1A] space-y-1.5 bg-white transition-all ${notif.unread ? 'border-amber-400 shadow-2xs' : 'border-[#C8C8C8]/60'}`}
                 >
-                  <p className="leading-relaxed">{notif.text}</p>
+                  <p className="leading-relaxed font-black">{notif.title}</p>
+                  <p className="leading-relaxed text-[#555555]">{notif.text}</p>
                   <div className="flex items-center gap-1 text-[9px] text-[#555555] font-mono">
                     <Clock className="w-3 h-3 text-[#555555]" />
-                    <span>{notif.time}</span>
+                    <span>{formatNotificationTime(notif.time)}</span>
                     {notif.unread && (
                       <span className="ml-auto text-[8px] text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">New</span>
                     )}

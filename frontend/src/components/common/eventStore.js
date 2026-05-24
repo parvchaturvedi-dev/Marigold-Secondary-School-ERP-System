@@ -39,22 +39,22 @@ const toFormData = (payload) => {
   return formData;
 };
 
-const cacheApiEvents = (events) => {
+const cacheApiEvents = (events, { broadcast = false } = {}) => {
   writeEvents(events);
-  broadcastEventUpdate();
+  if (broadcast) broadcastEventUpdate();
 };
 
-export const fetchEvents = async () => {
+export const fetchEvents = async ({ broadcast = false } = {}) => {
   try {
     const response = await authFetch(EVENTS_API_URL);
 
     if (response.ok) {
       const events = await response.json();
-      cacheApiEvents(events);
+      cacheApiEvents(events, { broadcast });
       return events;
     }
   } catch (error) {
-    alert(`Event sync failed: ${error.message}`);
+    alert(`Event loading failed: ${error.message}`);
     return readEvents();
   }
 
@@ -70,7 +70,7 @@ export const createEvent = async (payload) => {
 
     if (response.ok) {
       const event = await response.json();
-      cacheApiEvents([event, ...readEvents().filter((item) => item.id !== event.id)]);
+      cacheApiEvents([event, ...readEvents().filter((item) => item.id !== event.id)], { broadcast: true });
       return event;
     }
     const errorPayload = await response.json().catch(() => ({}));

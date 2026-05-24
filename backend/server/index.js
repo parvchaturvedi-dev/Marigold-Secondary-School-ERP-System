@@ -4,6 +4,7 @@ import { createServer } from 'node:http';
 import { Server } from 'socket.io';
 import './utils/loadEnv.js';
 import academicCalendarRoutes from './routes/academicCalendar.js';
+import aiRoutes from './routes/ai.js';
 import applicationRoutes from './routes/applications.js';
 import assignmentRoutes from './routes/assignments.js';
 import authRoutes from './routes/auth.js';
@@ -11,10 +12,12 @@ import examinationRoutes from './routes/examinations.js';
 import eventRoutes from './routes/events.js';
 import gmailRoutes from './routes/gmail.js';
 import leaveRequestRoutes from './routes/leaveRequests.js';
+import meetingRoutes from './routes/meetings.js';
 import moduleStateRoutes from './routes/moduleState.js';
+import notificationRoutes from './routes/notifications.js';
 import { connectMongo, getDbStatus } from './db.js';
 import { requireAuth } from './middleware/auth.js';
-import { setRealtimeServer } from './realtime.js';
+import { setRealtimeServer, trackRealtimeSocket } from './realtime.js';
 import { createSessionMiddleware } from './utils/session.js';
 
 const app = express();
@@ -91,6 +94,10 @@ io.use((socket, next) => {
   next();
 });
 
+io.on('connection', (socket) => {
+  trackRealtimeSocket(socket);
+});
+
 app.get('/api/health', (_request, response) => {
   response.json({
     ok: true,
@@ -101,13 +108,16 @@ app.get('/api/health', (_request, response) => {
 app.use('/api/auth', authRoutes);
 app.use('/api', requireAuth);
 app.use('/api/academic-calendar', academicCalendarRoutes);
+app.use('/api/ai', aiRoutes);
 app.use('/api/applications', applicationRoutes);
 app.use('/api/assignments', assignmentRoutes);
 app.use('/api/examinations', examinationRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/gmail', gmailRoutes);
 app.use('/api/leave-requests', leaveRequestRoutes);
+app.use('/api/meetings', meetingRoutes);
 app.use('/api/module-state', moduleStateRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 await connectMongo();
 

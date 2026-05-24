@@ -55,11 +55,14 @@ import {
   getPaperStatusMeta,
   getPrintDocument,
   getReportRowsForStudent,
+  getBoardResultForStudent,
   getSavedReportOptionsForStudent,
   getStudentsForClass,
   getSubjectsForClass,
   getTeacherExamAssignments,
   isMarksRecordLocked,
+  isBoardClass,
+  isBoardFinalExam,
   isTeacherMarksEditUnlocked,
   readExaminationState,
   recordReportDelivery,
@@ -68,6 +71,8 @@ import {
   roleCanManageExams,
   roleCanManageReportCards,
   savePaperRecord,
+  setBoardClassEnabled,
+  upsertBoardResult,
   upsertMarksRecord,
   upsertScheduleRows,
 } from './examinationStore';
@@ -126,6 +131,15 @@ const ROLE_SECTIONS = {
 const getDefaultSection = (role) => ROLE_SECTIONS[role]?.[0] || 'exam-creation';
 
 const getTodayInputValue = () => new Date().toISOString().slice(0, 10);
+const MAX_BOARD_RESULT_SIZE = 4 * 1024 * 1024;
+
+const fileToDataUrl = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
 
 const classNames = (...items) => items.filter(Boolean).join(' ');
 const getReportOptionKey = (option) => `${option?.examId || ''}__${option?.className || ''}`;
@@ -266,6 +280,12 @@ const buildReportCardHtml = (state, exam, students) =>
 
 const ExaminationHub = ({ role = 'admin', session, activePage = 'Examinations', setActivePage }) => {
   const masterData = useMasterData();
+  const {
+    classNames: masterClassNames,
+    students: masterStudents,
+    teachers: masterTeachers,
+    subjectsByClass: masterSubjectsByClass,
+  } = masterData;
   const [state, setState] = useState(() => readExaminationState());
   const [localSection, setLocalSection] = useState(getDefaultSection(role));
   const [paperToEdit, setPaperToEdit] = useState(null);
@@ -281,9 +301,17 @@ const ExaminationHub = ({ role = 'admin', session, activePage = 'Examinations', 
           : getDefaultSection(role);
 
   useEffect(() => {
-    const refreshState = () => setState(readExaminationState());
+    let isActive = true;
+    const refreshState = () => {
+      fetchExaminationState().then((latestState) => {
+        if (isActive) setState(latestState);
+      });
+    };
     window.addEventListener(EXAMINATION_UPDATED_EVENT, refreshState);
-    return () => window.removeEventListener(EXAMINATION_UPDATED_EVENT, refreshState);
+    return () => {
+      isActive = false;
+      window.removeEventListener(EXAMINATION_UPDATED_EVENT, refreshState);
+    };
   }, []);
 
   useEffect(() => {
@@ -291,13 +319,13 @@ const ExaminationHub = ({ role = 'admin', session, activePage = 'Examinations', 
   }, []);
 
   useEffect(() => {
-    configureExaminationMasterData(masterData);
-  }, [
-    masterData.classNames,
-    masterData.students,
-    masterData.teachers,
-    masterData.subjectsByClass,
-  ]);
+    configureExaminationMasterData({
+      classNames: masterClassNames,
+      students: masterStudents,
+      teachers: masterTeachers,
+      subjectsByClass: masterSubjectsByClass,
+    });
+  }, [masterClassNames, masterStudents, masterTeachers, masterSubjectsByClass]);
 
   const actor = useMemo(() => getActor(role, session), [role, session]);
 
@@ -410,7 +438,7 @@ const ExaminationHub = ({ role = 'admin', session, activePage = 'Examinations', 
       )}
       {activeSection === 'paper-selected' && <PaperSelectedSection state={state} />}
       {activeSection === 'report-card-management' && (
-        <ReportCardManagementSection state={state} role={role} onRefresh={refreshWith} />
+        <ReportCardManagementSection state={state} role={role} actor={actor} onRefresh={refreshWith} />
       )}
       {activeSection === 'marks-management' && (
         <MarksManagementSection
@@ -439,6 +467,10 @@ const ExamCreationSection = ({ state, actor, role, onRefresh }) => {
   const [name, setName] = useState('');
   const [academicYear, setAcademicYear] = useState('2026-27');
   const canManage = roleCanManageExams(role);
+  const toggleBoardClass = (className) => {
+    const nextState = setBoardClassEnabled(className, !isBoardClass(state, className));
+    onRefresh(nextState);
+  };
 
   const handleSubmit = (event) => {
     event.preventDefault();
@@ -497,7 +529,40 @@ const ExamCreationSection = ({ state, actor, role, onRefresh }) => {
         )}
       </div>
 
-      <div className="xl:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="xl:col-span-1 bg-white border border-[#EAEAEA] rounded-3xl p-5 shadow-sm h-fit">
+        <h3 className="text-sm font-black flex items-center gap-2">
+          <ShieldCheck className="w-4 h-4 text-emerald-600" /> Board Exam Classes
+        </h3>
+        <p className="text-xs font-semibold text-[#666666] mt-1">
+          For selected classes, final internal marks entry is replaced by PDF result upload.
+        </p>
+        <div className="mt-4 grid grid-cols-2 gap-2 max-h-72 overflow-y-auto pr-1">
+          {allExamClasses.map((classItem) => {
+            const checked = isBoardClass(state, classItem);
+            return (
+              <button
+                key={classItem}
+                type="button"
+                disabled={!canManage}
+                onClick={() => toggleBoardClass(classItem)}
+                className={classNames(
+                  'rounded-2xl border px-3 py-2 text-left text-xs font-black transition-all disabled:opacity-60',
+                  checked
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : 'bg-[#F8F8F8] text-[#555555] border-[#EAEAEA]'
+                )}
+              >
+                <span className="flex items-center gap-2">
+                  <span className={classNames('h-3 w-3 rounded border', checked ? 'bg-emerald-500 border-emerald-500' : 'bg-white border-[#C8C8C8]')} />
+                  {classItem}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="xl:col-span-1 grid grid-cols-1 gap-4">
         {state.exams.map((exam) => {
           const papers = state.papers.filter((paper) => paper.examId === exam.id);
           const selectedPapers = papers.filter((paper) => paper.status === 'selected');
@@ -587,6 +652,7 @@ const PaperCreationSection = ({
   }, [onConsumedPaperToEdit, paperToEdit]);
 
   const selectedExam = state.exams.find((exam) => exam.id === examId) || state.exams[0];
+  const boardFinalSelected = isBoardFinalExam(state, selectedExam, className);
   const reworkPapers = state.papers.filter((paper) =>
     ['draft', 'teacher_rejected', 'admin_rejected'].includes(paper.status)
   );
@@ -594,6 +660,10 @@ const PaperCreationSection = ({
   const openFreshEditor = () => {
     if (!selectedExam || !className || !subject) {
       alert('Please select examination, class, and subject first.');
+      return;
+    }
+    if (boardFinalSelected) {
+      alert('Final internal paper creation is disabled for board exam classes. Upload the final PDF result in Report Card Management.');
       return;
     }
 
@@ -640,6 +710,10 @@ const PaperCreationSection = ({
   const persistPaper = (status) => {
     if (!paperId || !title.trim() || !editorContent.trim()) {
       alert('Please create the paper page and write content first.');
+      return;
+    }
+    if (boardFinalSelected) {
+      alert('Final internal paper saving is disabled for board exam classes. Upload the final PDF result in Report Card Management.');
       return;
     }
 
@@ -715,12 +789,18 @@ const PaperCreationSection = ({
             <button
               type="button"
               onClick={openFreshEditor}
-              className="w-full rounded-full bg-[#1A1A1A] px-4 py-3 text-xs font-black text-white flex items-center justify-center gap-2"
+              disabled={boardFinalSelected}
+              className="w-full rounded-full bg-[#1A1A1A] px-4 py-3 text-xs font-black text-white flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <FileText className="w-4 h-4" /> Create
             </button>
           </div>
         </div>
+        {boardFinalSelected && (
+          <div className="mt-4 rounded-2xl bg-amber-50 border border-amber-200 px-4 py-3 text-xs font-bold text-amber-800">
+            {className} is configured as a board exam class. The final exam is managed by PDF result upload instead of internal paper creation.
+          </div>
+        )}
       </div>
 
       <style>{`
@@ -1251,13 +1331,14 @@ const PaperSelectedSection = ({ state }) => {
   );
 };
 
-const ReportCardManagementSection = ({ state, role, onRefresh }) => {
+const ReportCardManagementSection = ({ state, role, actor, onRefresh }) => {
   const [examId, setExamId] = useState(state.exams[0]?.id || '');
   const [className, setClassName] = useState('Class 9');
   const [scheduleRows, setScheduleRows] = useState([]);
   const [showAdmitPreview, setShowAdmitPreview] = useState(false);
   const selectedExam = state.exams.find((exam) => exam.id === examId) || state.exams[0];
   const students = getStudentsForClass(className);
+  const boardFinalSelected = isBoardFinalExam(state, selectedExam, className);
 
   useEffect(() => {
     const savedRows = state.schedules.filter(
@@ -1308,6 +1389,35 @@ const ReportCardManagementSection = ({ state, role, onRefresh }) => {
       `${getExamLabel(selectedExam)} Admit Cards`,
       buildAdmitCardHtml(selectedExam, className, students, scheduleRows)
     );
+  };
+
+  const uploadBoardResult = async (student, file) => {
+    if (!file) return;
+    if (file.type !== 'application/pdf') {
+      alert('Please upload the board result as a PDF file.');
+      return;
+    }
+    if (file.size > MAX_BOARD_RESULT_SIZE) {
+      alert('Board result PDF must be 4 MB or less.');
+      return;
+    }
+
+    const dataUrl = await fileToDataUrl(file);
+    const nextState = upsertBoardResult(
+      {
+        examId,
+        className,
+        studentId: student.id,
+        admissionNumber: student.admissionNumber,
+        studentName: student.displayName,
+        fileName: file.name,
+        fileType: file.type,
+        fileSize: file.size,
+        dataUrl,
+      },
+      actor
+    );
+    onRefresh(nextState);
   };
 
   return (
@@ -1430,6 +1540,11 @@ const ReportCardManagementSection = ({ state, role, onRefresh }) => {
           <h3 className="text-sm font-black flex items-center gap-2">
             <Users className="w-4 h-4 text-emerald-600" /> Student List: {className}
           </h3>
+          {boardFinalSelected && (
+            <p className="mt-2 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-2xl px-3 py-2">
+              Final outcome for this board class is recorded by uploading each student's PDF result.
+            </p>
+          )}
           <div className="mt-4 overflow-x-auto rounded-2xl border border-[#EAEAEA]">
             <table className="w-full min-w-[920px] text-left text-xs font-bold">
               <thead className="bg-[#EAEAEA] text-[#555555] uppercase text-[10px]">
@@ -1442,25 +1557,55 @@ const ReportCardManagementSection = ({ state, role, onRefresh }) => {
                   <th className="px-3 py-2">Mother</th>
                   <th className="px-3 py-2">Mobile</th>
                   <th className="px-3 py-2">Address</th>
+                  {boardFinalSelected && <th className="px-3 py-2">Board Result PDF</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#EAEAEA]">
-                {students.map((student) => (
-                  <tr key={student.id}>
-                    <td className="px-3 py-2">
-                      <div className="w-10 h-10 rounded-xl bg-[#F5F3FF] text-[#8b5cf6] flex items-center justify-center font-black">
-                        {getInitials(student.displayName)}
-                      </div>
-                    </td>
-                    <td className="px-3 py-2">{student.admissionNumber}</td>
-                    <td className="px-3 py-2">{student.rollNo}</td>
-                    <td className="px-3 py-2 font-black">{student.displayName}</td>
-                    <td className="px-3 py-2">{student.fatherName}</td>
-                    <td className="px-3 py-2">{student.motherName}</td>
-                    <td className="px-3 py-2">{student.guardianPhone}</td>
-                    <td className="px-3 py-2 max-w-[220px] truncate">{student.address}</td>
-                  </tr>
-                ))}
+                {students.map((student) => {
+                  const boardResult = getBoardResultForStudent(state, student, examId, className);
+                  return (
+                    <tr key={student.id}>
+                      <td className="px-3 py-2">
+                        <div className="w-10 h-10 rounded-xl bg-[#F5F3FF] text-[#8b5cf6] flex items-center justify-center font-black">
+                          {getInitials(student.displayName)}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2">{student.admissionNumber}</td>
+                      <td className="px-3 py-2">{student.rollNo}</td>
+                      <td className="px-3 py-2 font-black">{student.displayName}</td>
+                      <td className="px-3 py-2">{student.fatherName}</td>
+                      <td className="px-3 py-2">{student.motherName}</td>
+                      <td className="px-3 py-2">{student.guardianPhone}</td>
+                      <td className="px-3 py-2 max-w-[220px] truncate">{student.address}</td>
+                      {boardFinalSelected && (
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            {boardResult?.dataUrl ? (
+                              <button
+                                type="button"
+                                onClick={() => window.open(boardResult.dataUrl, '_blank')}
+                                className="rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 px-3 py-1.5 text-[10px] font-black"
+                              >
+                                View PDF
+                              </button>
+                            ) : (
+                              <span className="text-[10px] text-[#666666]">Not uploaded</span>
+                            )}
+                            <label className="rounded-full bg-[#E1FA6C] px-3 py-1.5 text-[10px] font-black cursor-pointer">
+                              Upload
+                              <input
+                                type="file"
+                                accept="application/pdf,.pdf"
+                                onChange={(event) => uploadBoardResult(student, event.target.files?.[0])}
+                                className="hidden"
+                              />
+                            </label>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -1498,6 +1643,7 @@ const MarksManagementSection = ({ state, actor, role, session, onRefresh }) => {
   const [isSendingReports, setIsSendingReports] = useState(false);
 
   const selectedExam = state.exams.find((exam) => exam.id === examId) || state.exams[0];
+  const boardFinalSelected = isBoardFinalExam(state, selectedExam, className);
   const selectedRecord = state.marks.find(
     (record) => record.examId === examId && record.className === className && record.subject === subject
   );
@@ -1550,6 +1696,10 @@ const MarksManagementSection = ({ state, actor, role, session, onRefresh }) => {
 
   const saveMarks = () => {
     if (!roleCanEnterMarks(role)) return;
+    if (boardFinalSelected) {
+      alert('Final internal marks are disabled for board exam classes. Upload the final PDF result in Report Card Management.');
+      return;
+    }
     if (isLocked) {
       alert('24 hours have passed. This marks list is locked for teacher editing.');
       return;
@@ -1698,10 +1848,10 @@ const MarksManagementSection = ({ state, actor, role, session, onRefresh }) => {
             <button
               type="button"
               onClick={saveMarks}
-              disabled={isLocked}
+              disabled={isLocked || boardFinalSelected}
               className={classNames(
                 'w-full rounded-full px-4 py-3 text-xs font-black flex items-center justify-center gap-2',
-                isLocked ? 'bg-[#EAEAEA] text-[#666666] cursor-not-allowed' : 'bg-[#E1FA6C] text-[#1A1A1A]'
+                isLocked || boardFinalSelected ? 'bg-[#EAEAEA] text-[#666666] cursor-not-allowed' : 'bg-[#E1FA6C] text-[#1A1A1A]'
               )}
             >
               <Save className="w-4 h-4" /> Save Marks
@@ -1725,6 +1875,11 @@ const MarksManagementSection = ({ state, actor, role, session, onRefresh }) => {
           {teacherEditUnlocked && (
             <span className="rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1">
               Teacher editing enabled until {formatExamDateTime(selectedRecord.teacherEditUnlockedUntil)}
+            </span>
+          )}
+          {boardFinalSelected && (
+            <span className="rounded-full bg-amber-50 text-amber-700 border border-amber-200 px-3 py-1">
+              Board class final result: upload PDF instead of entering internal marks
             </span>
           )}
         </div>
@@ -1801,7 +1956,7 @@ const MarksManagementSection = ({ state, actor, role, session, onRefresh }) => {
                       min="0"
                       max={maxMarks}
                       value={row.marks}
-                      disabled={isLocked}
+                      disabled={isLocked || boardFinalSelected}
                       onChange={(event) => updateRow(row.studentId, 'marks', event.target.value)}
                       className="w-24 rounded-xl border border-[#C8C8C8] bg-[#F8F8F8] px-2 py-2 outline-none disabled:opacity-60"
                     />
@@ -1814,7 +1969,7 @@ const MarksManagementSection = ({ state, actor, role, session, onRefresh }) => {
                   <td className="px-3 py-2">
                     <input
                       value={row.remark}
-                      disabled={isLocked}
+                      disabled={isLocked || boardFinalSelected}
                       onChange={(event) => updateRow(row.studentId, 'remark', event.target.value)}
                       placeholder={row.marks === '' ? 'Remark' : getFocusRemark(row.marks, maxMarks)}
                       className="w-full rounded-xl border border-[#C8C8C8] bg-[#F8F8F8] px-2 py-2 outline-none disabled:opacity-60"
@@ -1844,7 +1999,26 @@ const StudentExamView = ({ state, session }) => {
       (item) => item.id === activeStudent.id || item.admissionNumber === activeStudent.admissionNumber
     ) || activeStudent;
   const reportOptions = useMemo(
-    () => getSavedReportOptionsForStudent(state, student),
+    () => {
+      const internalOptions = getSavedReportOptionsForStudent(state, student);
+      const boardOptions = (state.boardResults || [])
+        .filter(
+          (result) =>
+            (result.admissionNumber && result.admissionNumber === student.admissionNumber) ||
+            (result.studentId && result.studentId === student.id) ||
+            (result.studentName && result.studentName === student.displayName)
+        )
+        .map((result) => ({
+          examId: result.examId,
+          className: result.className,
+          updatedAt: result.uploadedAt,
+          type: 'board',
+        }));
+
+      return [...internalOptions, ...boardOptions].sort(
+        (a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0)
+      );
+    },
     [state, student]
   );
   const fallbackOption = useMemo(
@@ -1871,6 +2045,8 @@ const StudentExamView = ({ state, session }) => {
     fallbackOption;
   const reportStudent = { ...student, reportClassName: selectedOption.className };
   const selectedExam = state.exams.find((exam) => exam.id === selectedOption.examId) || state.exams[0];
+  const selectedBoardResult = getBoardResultForStudent(state, student, selectedExam?.id, selectedOption.className);
+  const isBoardReport = Boolean(selectedBoardResult?.dataUrl);
   const rows = getReportRowsForStudent(state, reportStudent, selectedExam?.id);
   const total = rows.reduce((sum, row) => sum + Number(row.marks || 0), 0);
   const maxTotal = rows.reduce((sum, row) => sum + Number(row.maxMarks || 0), 0);
@@ -1918,10 +2094,10 @@ const StudentExamView = ({ state, session }) => {
             </select>
             <button
               type="button"
-              onClick={printReport}
+              onClick={isBoardReport ? () => window.open(selectedBoardResult.dataUrl, '_blank') : printReport}
               className="rounded-full bg-[#E1FA6C] px-4 py-2 text-xs font-black flex items-center gap-2"
             >
-              <Printer className="w-4 h-4" /> Print Report Card
+              <Printer className="w-4 h-4" /> {isBoardReport ? 'Open Board Result PDF' : 'Print Report Card'}
             </button>
           </div>
         </div>
@@ -1936,6 +2112,18 @@ const StudentExamView = ({ state, session }) => {
       <section className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div className="xl:col-span-2 bg-white border border-[#EAEAEA] rounded-3xl p-5 shadow-sm">
           <h3 className="text-sm font-black">Subjectwise Report Card</h3>
+          {isBoardReport && (
+            <div className="mt-4 rounded-2xl bg-emerald-50 border border-emerald-200 p-4 text-xs font-bold text-emerald-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <span>Board result uploaded: {selectedBoardResult.fileName}</span>
+              <button
+                type="button"
+                onClick={() => window.open(selectedBoardResult.dataUrl, '_blank')}
+                className="rounded-full bg-white border border-emerald-200 px-4 py-2 text-[10px] font-black text-emerald-700"
+              >
+                View PDF
+              </button>
+            </div>
+          )}
           <div className="mt-4 overflow-x-auto rounded-2xl border border-[#EAEAEA]">
             <table className="w-full min-w-[760px] text-left text-xs font-bold">
               <thead className="bg-[#EAEAEA] text-[#555555] uppercase text-[10px]">

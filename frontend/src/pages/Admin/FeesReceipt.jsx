@@ -1,11 +1,16 @@
 import React, { useState } from 'react';
 import { Printer, MessageSquare, Mail, ArrowLeft, ShieldCheck } from 'lucide-react';
 import { sendGmailMessages } from '../../components/common/gmail';
+import { formatCurrency } from '../../components/common/financeData';
 
 const FeesReceipt = ({ setActivePage }) => {
   const [receiptData] = useState(() => {
-    const cachedData = localStorage.getItem('latest_invoice_payload');
-    return cachedData ? JSON.parse(cachedData) : null;
+    try {
+      const cachedData = localStorage.getItem('latest_invoice_payload');
+      return cachedData ? JSON.parse(cachedData) : null;
+    } catch {
+      return null;
+    }
   });
   const [isSendingMail, setIsSendingMail] = useState(false);
 
@@ -16,8 +21,6 @@ const FeesReceipt = ({ setActivePage }) => {
       window.location.reload();
     }
   };
-
-  const formatCurrency = (amount) => `Rs. ${Number(amount || 0).toLocaleString('en-IN')}`;
 
   const handleGmailBroadcast = async () => {
     const guardianEmail = receiptData?.familyDetails?.guardianEmail || receiptData?.familyDetails?.email;

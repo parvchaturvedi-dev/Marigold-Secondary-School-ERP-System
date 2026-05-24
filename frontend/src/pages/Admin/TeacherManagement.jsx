@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { UserCheck, MoreVertical, Edit2, UserX, Mail, Phone, BookOpen, GraduationCap, Calendar, Search, X, Plus, Trash2, FileText, CheckCircle2 } from 'lucide-react';
+import { UserCheck, MoreVertical, Edit2, UserX, Mail, Phone, BookOpen, GraduationCap, Search, X, Plus, Trash2, FileText, CheckCircle2 } from 'lucide-react';
 import { useMongoState } from '../../components/common/mongoState';
 import { useMasterData } from '../../components/common/masterData';
 
@@ -8,6 +8,7 @@ const TeacherManagement = ({ role = 'admin' }) => {
   const { classNames, globalSubjectNames, subjectsByClass } = useMasterData();
   // Master State for Teachers Database Directory
   const [teachersList, setTeachersList] = useMongoState('admin-teacher-management-list', []);
+  const [, setClassesDb] = useMongoState('admin-class-management-classes', []);
 
   // UI Interactive States
   const [searchTerm, setSearchTerm] = useState('');
@@ -32,6 +33,20 @@ const TeacherManagement = ({ role = 'admin' }) => {
     const confirmDelete = window.confirm(`⚠️ Permanently purge ${name} (ID: ${id}) from institute files?`);
     if (confirmDelete) {
       setTeachersList(prev => prev.filter(t => t.id !== id));
+      setClassesDb((classes) =>
+        classes.map((classRecord) =>
+          (classRecord.classTeacherId || classRecord.teacherId) === id ||
+          classRecord.classTeacherName === name ||
+          classRecord.teacher === name
+            ? {
+                ...classRecord,
+                classTeacherId: '',
+                classTeacherName: '',
+                teacher: '',
+              }
+            : classRecord
+        )
+      );
       alert('Asset removed from system logs.');
     }
   };
@@ -103,6 +118,7 @@ const TeacherManagement = ({ role = 'admin' }) => {
   // ACTION 3: COMMIT UPDATE CLOSING CYCLE
   const handleUpdateTeacherForm = (e) => {
     e.preventDefault();
+    const previousTeacher = teachersList.find((teacher) => teacher.id === editingTeacher.id) || {};
 
     // Re-verify validation mapping criteria
     const isAadharValid = /^\d{12}$/.test(editingTeacher.aadharNumber);
@@ -124,6 +140,52 @@ const TeacherManagement = ({ role = 'admin' }) => {
     };
 
     setTeachersList(prev => prev.map(t => t.id === sanitizedTeacher.id ? sanitizedTeacher : t));
+    setClassesDb((classes) => {
+      const cleanedClasses = classes.map((classRecord) => {
+        const currentClassTeacherId = classRecord.classTeacherId || classRecord.teacherId || '';
+        const isCurrentTeacher =
+          currentClassTeacherId === sanitizedTeacher.id ||
+          classRecord.classTeacherName === previousTeacher.name ||
+          classRecord.teacher === previousTeacher.name;
+        if (!isCurrentTeacher) return classRecord;
+
+        return {
+          ...classRecord,
+          classTeacherId: '',
+          classTeacherName: '',
+          teacher: '',
+        };
+      });
+
+      if (sanitizedTeacher.isClassTeacher !== 'Yes' || !sanitizedTeacher.assignedClassTeacherFor) {
+        return cleanedClasses;
+      }
+
+      const hasClass = cleanedClasses.some(
+        (classRecord) => classRecord.name === sanitizedTeacher.assignedClassTeacherFor
+      );
+      const nextClasses = hasClass
+        ? cleanedClasses
+        : [
+            ...cleanedClasses,
+            {
+              id: sanitizedTeacher.assignedClassTeacherFor,
+              name: sanitizedTeacher.assignedClassTeacherFor,
+              studentCount: 0,
+            },
+          ];
+
+      return nextClasses.map((classRecord) =>
+        classRecord.name === sanitizedTeacher.assignedClassTeacherFor
+          ? {
+              ...classRecord,
+              classTeacherId: sanitizedTeacher.id,
+              classTeacherName: sanitizedTeacher.name,
+              teacher: sanitizedTeacher.name,
+            }
+          : classRecord
+      );
+    });
     setEditingTeacher(null);
     alert('Teacher registry updated successfully!');
   };

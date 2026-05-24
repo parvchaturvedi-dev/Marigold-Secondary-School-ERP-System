@@ -130,6 +130,28 @@ Open your browser and navigate to `http://127.0.0.1:5173/` or `http://localhost:
 | `AUTH_AUTO_PROVISION` | Automatically creates ADM-001 admin | `false` | No |
 | `EMAIL_USER` | NodeMailer school sender Gmail address | *None* | No |
 | `EMAIL_PASS` | Google App Password credentials | *None* | No |
+| `GEMINI_API_KEY` | Server-side Gemini key for the Admin Feature Page AI assistant | *None* | No |
+| `GROK_API_KEY` | Server-side xAI Grok key for the Admin Feature Page AI assistant | *None* | No |
+| `DEFAULT_AI_PROVIDER` | Default AI provider used by `/api/ai/chat` (`gemini` or `grok`) | `gemini` | No |
+| `GEMINI_MODEL` | Gemini model override for provider calls | `gemini-2.5-flash` | No |
+| `GROK_MODEL` | Grok model override for provider calls | `grok-4.3` | No |
+
+### Admin Feature Page AI Assistant
+
+The Admin Portal Feature Page includes a school-specific AI assistant for **Marigold Secondary School, Behror**. It supports chat, browser microphone speech-to-text, browser text-to-speech, student lookup, finance summaries, attendance/fee charts, admin-confirmed fee payment, receipt generation, receipt PDF download, and receipt send workflows.
+
+Backend AI routes are mounted under `/api/ai`:
+
+- `/api/ai/chat`
+- `/api/ai/voice/transcribe`
+- `/api/ai/voice/speak`
+- `/api/ai/actions/execute`
+- `/api/ai/student-details`
+- `/api/ai/finance/payment`
+- `/api/ai/receipt/send`
+- `/api/ai/analytics`
+
+API keys stay on the backend only. If `GEMINI_API_KEY` or `GROK_API_KEY` is missing, the assistant uses safe development fallback responses from ERP data instead of exposing secrets or failing the page.
 
 ---
 

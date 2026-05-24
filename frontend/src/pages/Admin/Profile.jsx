@@ -1,5 +1,6 @@
-import React, { useState, useRef } from 'react';
-import { User, Mail, Phone, Shield, Calendar, Award, Building, Camera, Check } from 'lucide-react';
+import React from 'react';
+import { User, Mail, Phone, Shield, Calendar, Award, Building } from 'lucide-react';
+import ProfilePhotoUploader from '../../components/common/ProfilePhotoUploader';
 
 const Profile = ({ session }) => {
   const adminProfile = {
@@ -11,30 +12,6 @@ const Profile = ({ session }) => {
     role: session?.role || '',
     joiningDate: session?.joiningDate || '',
     department: session?.department || '',
-  };
-
-  // Profile Picture File Target State Vector
-  const [profilePic, setProfilePic] = useState(null);
-  const fileInputRef = useRef(null);
-
-  // File Upload Pipeline Trigger Handler
-  const handleImageChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      // Validate file target type criteria
-      if (!file.type.startsWith('image/')) {
-        alert('Validation Error: Please select an authorized graphics image file format.');
-        return;
-      }
-      
-      const localImageUrl = URL.createObjectURL(file);
-      setProfilePic(localImageUrl);
-    }
-  };
-
-  // Programmatically trigger input target hook click
-  const triggerFileInput = () => {
-    fileInputRef.current.click();
   };
 
   return (
@@ -56,39 +33,7 @@ const Profile = ({ session }) => {
         <div className="bg-[#ffffff] border border-[#C8C8C8] rounded-3xl p-6 md:col-span-4 flex flex-col items-center text-center space-y-4 shadow-2xs">
           
           {/* HOVER INTERACTIVE PHOTO MATRIX BLOCK */}
-          <div className="relative group w-24 h-24">
-            <div className="w-24 h-24 bg-[#EAEAEA] border-2 border-black rounded-3xl flex items-center justify-center text-3xl font-black text-[#1A1A1A] overflow-hidden shadow-inner">
-              {profilePic ? (
-                <img 
-                  src={profilePic} 
-                  alt="Admin Identity Asset" 
-                  className="w-full h-full object-cover select-none"
-                />
-              ) : (
-                "SA"
-              )}
-            </div>
-
-            {/* FLOATING ACTION OVERLAY FOR IMAGE MUTATION */}
-            <button
-              type="button"
-              onClick={triggerFileInput}
-              className="absolute inset-0 bg-black/60 rounded-3xl flex flex-col items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200 cursor-pointer text-[10px] font-black"
-              title="Upload New Avatar Node"
-            >
-              <Camera className="w-5 h-5 text-[#E1FA6C] mb-0.5" />
-              <span>EDIT PIC</span>
-            </button>
-
-            {/* HIDDEN INJECTIVE BROWSER INPUT ELEMENT */}
-            <input 
-              type="file"
-              ref={fileInputRef}
-              onChange={handleImageChange}
-              accept="image/*"
-              className="hidden"
-            />
-          </div>
+          <ProfilePhotoUploader session={session} className="w-24 h-24" />
 
           <div>
             <span className="font-mono text-[10px] bg-[#1A1A1A] text-[#E1FA6C] px-3 py-1 rounded-md font-black uppercase tracking-wider">

@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useMongoState } from './mongoState';
 
 export const MASTER_NAMESPACES = {
+  classPreferences: 'admin-class-preferences',
   classes: 'admin-class-management-classes',
   students: 'admin-student-management-students',
   teachers: 'admin-teacher-management-list',
@@ -29,7 +30,7 @@ export const DEFAULT_CLASS_NAMES = [
   'Class 12',
 ];
 
-const classRank = (className = '') => {
+export const classRank = (className = '') => {
   const normalized = String(className).trim().toLowerCase();
   if (normalized === 'nursery') return -3;
   if (normalized === 'lkg') return -2;
@@ -37,9 +38,37 @@ const classRank = (className = '') => {
   return Number(String(className).match(/\d+/)?.[0] || 999);
 };
 
-export const sortClassNames = (classNames = []) =>
-  [...new Set(classNames.filter(Boolean))]
-    .sort((a, b) => classRank(a) - classRank(b) || String(a).localeCompare(String(b)));
+export const getPreferenceClassName = (classRecord = {}) =>
+  classRecord.name || classRecord.className || classRecord.class || String(classRecord || '');
+
+export const sortClassNames = (classNames = [], preferredClassNames = []) => {
+  const preferenceRank = new Map(
+    (Array.isArray(preferredClassNames) ? preferredClassNames : [])
+      .map(getPreferenceClassName)
+      .filter(Boolean)
+      .map((name, index) => [String(name).trim().toLowerCase(), index])
+  );
+  const hasPreferences = preferenceRank.size > 0;
+
+  return [...new Set(classNames.filter(Boolean))].sort((a, b) => {
+    const normalizedA = String(a).trim().toLowerCase();
+    const normalizedB = String(b).trim().toLowerCase();
+    const preferredA = preferenceRank.get(normalizedA);
+    const preferredB = preferenceRank.get(normalizedB);
+
+    if (hasPreferences && preferredA !== undefined && preferredB !== undefined) {
+      return preferredA - preferredB;
+    }
+    if (hasPreferences && preferredA !== undefined) return -1;
+    if (hasPreferences && preferredB !== undefined) return 1;
+
+    return classRank(a) - classRank(b) || String(a).localeCompare(String(b));
+  });
+};
+
+export const compareClassNames = (a = '', b = '', preferredClassNames = []) =>
+  sortClassNames([a, b], preferredClassNames).indexOf(a) -
+  sortClassNames([a, b], preferredClassNames).indexOf(b);
 
 export const getClassName = (classRecord = {}) =>
   classRecord.name || classRecord.className || classRecord.class || '';
@@ -76,12 +105,19 @@ export const deriveMasterData = ({
   teachers = [],
   subjects = [],
   classSubjects = [],
+  classPreferences = [],
 } = {}) => {
   const normalizedStudents = (Array.isArray(students) ? students : []).map(normalizeStudentForDirectory);
   const configuredClassNames = (Array.isArray(classRecords) ? classRecords : []).map(getClassName);
   const studentClassNames = normalizedStudents.map((student) => student.className);
   const mappedClassNames = (Array.isArray(classSubjects) ? classSubjects : []).map((item) => item.className);
-  const classNames = sortClassNames([...configuredClassNames, ...studentClassNames, ...mappedClassNames]);
+  const preferredClassNames = (Array.isArray(classPreferences) ? classPreferences : [])
+    .map(getPreferenceClassName)
+    .filter(Boolean);
+  const classNames = sortClassNames(
+    [...configuredClassNames, ...studentClassNames, ...mappedClassNames, ...preferredClassNames],
+    preferredClassNames
+  );
   const classes = classNames.map((name) => {
     const source = classRecords.find((item) => getClassName(item) === name) || {};
     return {
@@ -128,6 +164,10 @@ export const deriveMasterData = ({
 };
 
 export const useMasterData = () => {
+  const [classPreferences, setClassPreferences, classPreferenceMeta] = useMongoState(
+    MASTER_NAMESPACES.classPreferences,
+    []
+  );
   const [classRecords, setClassRecords, classMeta] = useMongoState(MASTER_NAMESPACES.classes, []);
   const [students, setStudents, studentMeta] = useMongoState(MASTER_NAMESPACES.students, []);
   const [teachers, setTeachers, teacherMeta] = useMongoState(MASTER_NAMESPACES.teachers, []);
@@ -138,20 +178,28 @@ export const useMasterData = () => {
   );
 
   const data = useMemo(
-    () => deriveMasterData({ classRecords, students, teachers, subjects, classSubjects }),
-    [classRecords, students, teachers, subjects, classSubjects]
+    () => deriveMasterData({ classRecords, students, teachers, subjects, classSubjects, classPreferences }),
+    [classRecords, students, teachers, subjects, classSubjects, classPreferences]
   );
 
   return {
     ...data,
-    raw: { classRecords, students, teachers, subjects, classSubjects },
-    actions: { setClassRecords, setStudents, setTeachers, setSubjects, setClassSubjects },
+    raw: { classPreferences, classRecords, students, teachers, subjects, classSubjects },
+    actions: { setClassPreferences, setClassRecords, setStudents, setTeachers, setSubjects, setClassSubjects },
     isLoading:
+      classPreferenceMeta.isLoading ||
       classMeta.isLoading ||
       studentMeta.isLoading ||
       teacherMeta.isLoading ||
       subjectMeta.isLoading ||
       classSubjectMeta.isLoading,
-    errors: [classMeta.error, studentMeta.error, teacherMeta.error, subjectMeta.error, classSubjectMeta.error].filter(Boolean),
+    errors: [
+      classPreferenceMeta.error,
+      classMeta.error,
+      studentMeta.error,
+      teacherMeta.error,
+      subjectMeta.error,
+      classSubjectMeta.error,
+    ].filter(Boolean),
   };
 };

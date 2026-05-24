@@ -11,6 +11,8 @@ const examinationStateSchema = new mongoose.Schema(
         schedules: [],
         marks: [],
         deliveries: [],
+        boardClasses: [],
+        boardResults: [],
       },
     },
     updatedBy: {

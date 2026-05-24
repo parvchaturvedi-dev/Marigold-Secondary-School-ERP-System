@@ -17,6 +17,7 @@ import {
   saveStudentSelection,
 } from './components/common/auth';
 import { useRealtimeBridge } from './components/common/realtime';
+import { SESSION_UPDATED_EVENT } from './components/common/profileStore';
 import AdminLayout from './layouts/AdminLayout';
 import ClerkLayout from './layouts/ClerkLayout';
 import StudentLayout from './layouts/StudentLayout';
@@ -123,6 +124,15 @@ function AppRoutes() {
     return () => {
       isActive = false;
     };
+  }, []);
+
+  useEffect(() => {
+    const handleSessionUpdate = (event) => {
+      if (event.detail?.username) setSession(event.detail);
+    };
+
+    window.addEventListener(SESSION_UPDATED_EVENT, handleSessionUpdate);
+    return () => window.removeEventListener(SESSION_UPDATED_EVENT, handleSessionUpdate);
   }, []);
 
   const handleLoginSuccess = (authPayload) => {

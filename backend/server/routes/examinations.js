@@ -11,12 +11,14 @@ const EMPTY_EXAMINATION_STATE = {
   schedules: [],
   marks: [],
   deliveries: [],
+  boardClasses: [],
+  boardResults: [],
 };
 
 const ensureMongo = (_request, response, next) => {
   if (!isMongoConnected()) {
     response.status(503).json({
-      message: 'MongoDB is not connected. Set MONGODB_URI and restart the API server.',
+      message: 'Data service is not connected. Please restart the API server or contact support.',
     });
     return;
   }
@@ -30,6 +32,8 @@ const normalizeState = (state = {}) => ({
   schedules: Array.isArray(state.schedules) ? state.schedules : [],
   marks: Array.isArray(state.marks) ? state.marks : [],
   deliveries: Array.isArray(state.deliveries) ? state.deliveries : [],
+  boardClasses: Array.isArray(state.boardClasses) ? state.boardClasses : [],
+  boardResults: Array.isArray(state.boardResults) ? state.boardResults : [],
 });
 
 router.get('/state', ensureMongo, async (_request, response) => {

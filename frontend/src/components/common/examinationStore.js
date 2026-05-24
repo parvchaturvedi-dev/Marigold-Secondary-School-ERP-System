@@ -1,5 +1,5 @@
 import { getUserProfile } from './auth';
-import { DEFAULT_CLASS_NAMES } from './masterData';
+import { DEFAULT_CLASS_NAMES, sortClassNames } from './masterData';
 import { API_BASE_URL, authFetch, withAuthHeaders } from './api';
 
 export const EXAMINATION_STORAGE_KEY = 'mgps_erp_examination_module';
@@ -38,8 +38,6 @@ export const configureExaminationMasterData = (masterData = {}) => {
   allExamClasses.splice(0, allExamClasses.length, ...getAllExamClasses());
 };
 
-const getClassNumber = (className = '') => Number(String(className).replace(/\D/g, '')) || 0;
-
 const withTeacherUsername = (items) =>
   items.map((item) => ({
     ...item,
@@ -73,7 +71,7 @@ export const getSubjectTeacher = (className, subjectName) =>
 export const getTeacherExamAssignments = (session) => {
   const username = session?.username || '';
   const profile = getUserProfile(username, 'teacher');
-  const allottedClasses = profile.allottedClasses?.length ? profile.allottedClasses : [];
+  const allottedClasses = profile.allottedClasses?.length ? sortClassNames(profile.allottedClasses) : [];
 
   const allAssignments = allottedClasses.flatMap((className) =>
     getSubjectsForClass(className).map((item) => ({ ...item, className }))
@@ -139,6 +137,8 @@ const EMPTY_EXAMINATION_STATE = {
   schedules: [],
   marks: [],
   deliveries: [],
+  boardClasses: [],
+  boardResults: [],
 };
 
 let examinationStateCache = EMPTY_EXAMINATION_STATE;
@@ -149,6 +149,8 @@ const normalizeExaminationState = (state = {}) => ({
   schedules: Array.isArray(state.schedules) ? state.schedules : [],
   marks: Array.isArray(state.marks) ? state.marks : [],
   deliveries: Array.isArray(state.deliveries) ? state.deliveries : [],
+  boardClasses: Array.isArray(state.boardClasses) ? state.boardClasses : [],
+  boardResults: Array.isArray(state.boardResults) ? state.boardResults : [],
 });
 
 const persistExaminationState = async (state) => {
@@ -170,20 +172,20 @@ const persistExaminationState = async (state) => {
 
 export const readExaminationState = () => examinationStateCache;
 
-export const fetchExaminationState = async () => {
+export const fetchExaminationState = async ({ broadcast = false } = {}) => {
   try {
     const response = await authFetch(EXAMINATION_API_URL);
 
     if (response.ok) {
       examinationStateCache = normalizeExaminationState(await response.json());
-      broadcastExaminationUpdate();
+      if (broadcast) broadcastExaminationUpdate();
       return examinationStateCache;
     }
 
     const errorPayload = await response.json().catch(() => ({}));
     throw new Error(errorPayload.message || 'Examination state could not be loaded.');
   } catch (error) {
-    alert(`Examination sync failed: ${error.message}`);
+    alert(`Examination loading failed: ${error.message}`);
     return examinationStateCache;
   }
 };
@@ -219,6 +221,69 @@ export const createExamRecord = ({ name, academicYear, actor }) =>
       ...state.exams,
     ],
   }));
+
+export const isFinalExam = (exam = {}) => /final|annual/i.test(String(exam?.name || ''));
+
+export const isBoardClass = (state = {}, className = '') =>
+  (state.boardClasses || []).includes(className);
+
+export const isBoardFinalExam = (state = {}, exam = {}, className = '') =>
+  isFinalExam(exam) && isBoardClass(state, className);
+
+export const setBoardClassEnabled = (className, enabled) =>
+  updateExaminationState((state) => {
+    const current = new Set(state.boardClasses || []);
+    if (enabled) current.add(className);
+    else current.delete(className);
+
+    return {
+      ...state,
+      boardClasses: sortClassNames([...current]),
+    };
+  });
+
+export const upsertBoardResult = (payload, actor) =>
+  updateExaminationState((state) => {
+    const existingResult = state.boardResults.find(
+      (result) =>
+        result.examId === payload.examId &&
+        result.className === payload.className &&
+        result.admissionNumber === payload.admissionNumber
+    );
+
+    const nextResult = {
+      id: existingResult?.id || `BOARD-${Date.now()}`,
+      examId: payload.examId,
+      className: payload.className,
+      studentId: payload.studentId || '',
+      admissionNumber: payload.admissionNumber || '',
+      studentName: payload.studentName || '',
+      fileName: payload.fileName || '',
+      fileType: payload.fileType || '',
+      fileSize: Number(payload.fileSize || 0),
+      dataUrl: payload.dataUrl || '',
+      uploadedByName: actor.name,
+      uploadedByRole: actor.role,
+      uploadedAt: nowIso(),
+    };
+
+    return {
+      ...state,
+      boardResults: existingResult
+        ? state.boardResults.map((result) => (result.id === existingResult.id ? nextResult : result))
+        : [nextResult, ...state.boardResults],
+    };
+  });
+
+export const getBoardResultForStudent = (state = {}, student = {}, examId = '', className = '') =>
+  (state.boardResults || []).find(
+    (result) =>
+      result.examId === examId &&
+      result.className === className &&
+      ((result.admissionNumber && result.admissionNumber === student?.admissionNumber) ||
+        (result.studentId && result.studentId === student?.id) ||
+        (result.studentName && result.studentName === student?.displayName))
+  );
 
 export const getActor = (role, session) => ({
   role,
@@ -576,6 +641,6 @@ export const roleCanManageReportCards = (role) => role === 'admin' || role === '
 export const roleCanEnterMarks = (role) => ['admin', 'clerk', 'teacher'].includes(role);
 export const allExamClasses = DEFAULT_CLASS_NAMES.filter((className) => !['Nursery', 'LKG', 'UKG'].includes(className));
 export const getAllExamClasses = () =>
-  (examMasterData.classNames?.length ? examMasterData.classNames : DEFAULT_CLASS_NAMES).filter(
+  sortClassNames(examMasterData.classNames?.length ? examMasterData.classNames : DEFAULT_CLASS_NAMES).filter(
     (className) => !['Nursery', 'LKG', 'UKG'].includes(className)
   );

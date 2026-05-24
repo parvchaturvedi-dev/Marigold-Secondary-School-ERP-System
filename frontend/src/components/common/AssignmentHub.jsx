@@ -28,7 +28,7 @@ import {
   getTeacherAllowedClasses,
   updateAssignment,
 } from './assignmentStore';
-import { useMasterData } from './masterData';
+import { sortClassNames, useMasterData } from './masterData';
 
 const emptyForm = {
   title: '',
@@ -46,7 +46,10 @@ const AssignmentHub = ({ role, session }) => {
   const canManageAll = role === 'admin' || role === 'clerk';
   const { classNames } = useMasterData();
   const studentOptions = useMemo(() => getStudentOptions(session), [session]);
-  const teacherAllowedClasses = useMemo(() => getTeacherAllowedClasses(session), [session]);
+  const teacherAllowedClasses = useMemo(
+    () => sortClassNames(getTeacherAllowedClasses(session), classNames),
+    [classNames, session]
+  );
   const availableClasses = canManageAll ? classNames : teacherAllowedClasses;
   const [selectedStudentId, setSelectedStudentId] = useState(studentOptions[0]?.id || '');
   const selectedStudent =
@@ -272,6 +275,7 @@ const AssignmentHub = ({ role, session }) => {
       title: assignmentForm.title.trim(),
       description: assignmentForm.description.trim(),
       subject: assignmentForm.subject.trim() || 'General',
+      targetClasses: sortClassNames(assignmentForm.targetClasses, classNames),
       checkingDate: assignmentForm.checkingDate,
       createdByRole: actor.role,
       createdByUsername: actor.username,
@@ -401,6 +405,7 @@ const AssignmentHub = ({ role, session }) => {
                 <AssignmentCard
                   key={assignment.id}
                   assignment={assignment}
+                  classOrder={availableClasses}
                   getAttachmentMeta={getAttachmentMeta}
                   canMutate={canMutateAssignment(assignment)}
                   onEdit={() => openEditModal(assignment)}
@@ -416,7 +421,11 @@ const AssignmentHub = ({ role, session }) => {
           )}
 
           {canManageAll && (
-            <AssignmentReport assignments={visibleAssignments} selectedClass={activeSelectedClass} />
+            <AssignmentReport
+              assignments={visibleAssignments}
+              selectedClass={activeSelectedClass}
+              classOrder={availableClasses}
+            />
           )}
         </div>
       </div>
@@ -520,7 +529,7 @@ const AssignmentHub = ({ role, session }) => {
   );
 };
 
-const AssignmentCard = ({ assignment, getAttachmentMeta, canMutate, onEdit, onExtend }) => {
+const AssignmentCard = ({ assignment, classOrder, getAttachmentMeta, canMutate, onEdit, onExtend }) => {
   const latestExtension = assignment.extensionLogs?.[assignment.extensionLogs.length - 1];
   const attachmentMeta = assignment.attachment ? getAttachmentMeta(assignment.attachment) : null;
   const AttachmentIcon = attachmentMeta?.icon;
@@ -549,7 +558,7 @@ const AssignmentCard = ({ assignment, getAttachmentMeta, canMutate, onEdit, onEx
         <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-gray-200 text-gray-700 uppercase">
-              {assignment.targetClasses.join(', ')}
+              {sortClassNames(assignment.targetClasses, classOrder).join(', ')}
             </span>
             <h5 className="text-xs font-bold text-[#1A1A1A] flex items-center gap-1">
               <BookOpen className="w-3.5 h-3.5 text-gray-400" /> {assignment.subject}
@@ -614,7 +623,7 @@ const AssignmentCard = ({ assignment, getAttachmentMeta, canMutate, onEdit, onEx
   );
 };
 
-const AssignmentReport = ({ assignments, selectedClass }) => (
+const AssignmentReport = ({ assignments, selectedClass, classOrder }) => (
   <div className="mt-8 border-t border-gray-100 pt-5">
     <h4 className="text-xs font-black uppercase text-[#1A1A1A] mb-3">
       Class Assignment Report: {selectedClass}
@@ -636,7 +645,7 @@ const AssignmentReport = ({ assignments, selectedClass }) => (
             <tr key={assignment.id}>
               <td className="px-3 py-2">{assignment.createdByName}</td>
               <td className="px-3 py-2 font-mono text-gray-500">{formatAssignmentDateTime(assignment.createdAt)}</td>
-              <td className="px-3 py-2">{assignment.targetClasses.join(', ')}</td>
+              <td className="px-3 py-2">{sortClassNames(assignment.targetClasses, classOrder).join(', ')}</td>
               <td className="px-3 py-2">{assignment.subject}</td>
               <td className="px-3 py-2">{assignment.title}</td>
               <td className="px-3 py-2">{formatCheckingDate(assignment.checkingDate)}</td>

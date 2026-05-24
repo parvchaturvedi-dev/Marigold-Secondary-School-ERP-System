@@ -11,6 +11,7 @@ import {
   Users,
 } from 'lucide-react';
 import { apiFetch } from '../../components/common/api';
+import { MASTER_NAMESPACES } from '../../components/common/masterData';
 
 const roleLabels = {
   admin: 'Admin',
@@ -20,6 +21,13 @@ const roleLabels = {
 };
 
 const roleOrder = ['admin', 'clerk', 'teacher', 'student'];
+const identitySyncNamespaces = [
+  MASTER_NAMESPACES.classPreferences,
+  MASTER_NAMESPACES.classes,
+  MASTER_NAMESPACES.students,
+  MASTER_NAMESPACES.teachers,
+  'admin-clerk-management-list',
+];
 
 const getEmailForUser = (user = {}) =>
   user.email ||
@@ -28,7 +36,7 @@ const getEmailForUser = (user = {}) =>
   '';
 
 const getInitialPassword = (user = {}) =>
-  user.initialPassword ? 'Stored in MongoDB' : 'Not stored';
+  user.initialPassword || 'Password not available';
 
 const UsersManagement = () => {
   const [users, setUsers] = useState([]);
@@ -37,6 +45,9 @@ const UsersManagement = () => {
   const [query, setQuery] = useState('');
   const [activeRole, setActiveRole] = useState('all');
   const [visiblePasswords, setVisiblePasswords] = useState({});
+  const [otpPrompts, setOtpPrompts] = useState({});
+  const [revealedPasswords, setRevealedPasswords] = useState({});
+  const [isSendingCredentials, setIsSendingCredentials] = useState({});
   const [successMessage, setSuccessMessage] = useState('');
 
   const loadUsers = async () => {
@@ -70,6 +81,72 @@ const UsersManagement = () => {
 
     return () => {
       isMounted = false;
+    };
+  }, []);
+
+  const requestPasswordOtp = async (user) => {
+    setError('');
+    setSuccessMessage('');
+    try {
+      const payload = await apiFetch(`/auth/users/${encodeURIComponent(user.username)}/request-password-otp`, {
+        method: 'POST',
+      });
+      setOtpPrompts((current) => ({ ...current, [user.username]: true }));
+      setSuccessMessage(payload.message || 'OTP sent.');
+    } catch (otpError) {
+      setError(otpError.message);
+    }
+  };
+
+  const revealPassword = async (user, otp) => {
+    if (!otp.trim()) return;
+    setError('');
+    try {
+      const payload = await apiFetch(`/auth/users/${encodeURIComponent(user.username)}/reveal-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ otp }),
+      });
+      setRevealedPasswords((current) => ({ ...current, [user.username]: payload.password || '' }));
+      setVisiblePasswords((current) => ({ ...current, [user.username]: true }));
+      setOtpPrompts((current) => ({ ...current, [user.username]: false }));
+    } catch (revealError) {
+      setError(revealError.message);
+    }
+  };
+
+  const sendCredentials = async (user) => {
+    setError('');
+    setSuccessMessage('');
+    setIsSendingCredentials((current) => ({ ...current, [user.username]: true }));
+    try {
+      const payload = await apiFetch(`/auth/users/${encodeURIComponent(user.username)}/send-credentials`, {
+        method: 'POST',
+      });
+      setSuccessMessage(payload.message || 'Credentials sent.');
+    } catch (sendError) {
+      setError(sendError.message);
+    } finally {
+      setIsSendingCredentials((current) => ({ ...current, [user.username]: false }));
+    }
+  };
+
+  useEffect(() => {
+    let timeoutId;
+    const refreshGeneratedUsers = () => {
+      window.clearTimeout(timeoutId);
+      timeoutId = window.setTimeout(loadUsers, 250);
+    };
+
+    identitySyncNamespaces.forEach((namespace) => {
+      window.addEventListener(`mgps-erp-module-state:${namespace}`, refreshGeneratedUsers);
+    });
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      identitySyncNamespaces.forEach((namespace) => {
+        window.removeEventListener(`mgps-erp-module-state:${namespace}`, refreshGeneratedUsers);
+      });
     };
   }, []);
 
@@ -113,7 +190,7 @@ const UsersManagement = () => {
             <h1 className="text-xl font-black">Users Management</h1>
           </div>
           <p className="text-xs font-semibold text-[#555555] mt-1">
-            MongoDB synced login identities for admin, clerk, teacher, and student portals.
+            Login identities for admin, clerk, teacher, and student portals.
           </p>
         </div>
 
@@ -197,7 +274,7 @@ const UsersManagement = () => {
               {isLoading ? (
                 <tr>
                   <td colSpan="5" className="px-4 py-10 text-center text-sm font-bold text-[#555555]">
-                    Loading MongoDB identities...
+                    Loading users...
                   </td>
                 </tr>
               ) : filteredUsers.length ? (
@@ -224,21 +301,42 @@ const UsersManagement = () => {
                       <td className="px-4 py-3">
                         <div className="inline-flex items-center gap-2 text-xs font-mono font-bold text-[#1A1A1A]">
                           <KeyRound className="w-3.5 h-3.5" />
-                          {isPasswordVisible ? getInitialPassword(user) : '********'}
+                          {isPasswordVisible ? (revealedPasswords[user.username] || getInitialPassword(user)) : '********'}
                           <button
                             type="button"
-                            onClick={() =>
-                              setVisiblePasswords((current) => ({
-                                ...current,
-                                [user.username]: !current[user.username],
-                              }))
-                            }
+                            onClick={() => (isPasswordVisible ? setVisiblePasswords((current) => ({ ...current, [user.username]: false })) : requestPasswordOtp(user))}
                             className="text-[#555555] hover:text-[#1A1A1A]"
                             aria-label="Toggle password visibility"
                           >
                             {isPasswordVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                           </button>
                         </div>
+                        {otpPrompts[user.username] && (
+                          <form
+                            onSubmit={(event) => {
+                              event.preventDefault();
+                              revealPassword(user, event.currentTarget.otp.value);
+                            }}
+                            className="mt-2 flex gap-2"
+                          >
+                            <input
+                              name="otp"
+                              placeholder="Enter OTP"
+                              className="w-24 rounded-lg border border-[#C8C8C8] px-2 py-1 text-xs font-bold outline-none"
+                            />
+                            <button type="submit" className="rounded-lg bg-[#1A1A1A] px-2 py-1 text-[10px] font-black text-white">
+                              Reveal
+                            </button>
+                          </form>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => sendCredentials(user)}
+                          disabled={isSendingCredentials[user.username]}
+                          className="mt-2 rounded-lg border border-[#C8C8C8] bg-white px-2 py-1 text-[10px] font-black text-[#1A1A1A] hover:bg-[#EAEAEA] disabled:opacity-60"
+                        >
+                          {isSendingCredentials[user.username] ? 'Sending...' : 'Send Credentials via Gmail'}
+                        </button>
                       </td>
                       <td className="px-4 py-3">
                         <span

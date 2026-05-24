@@ -15,7 +15,7 @@ const upload = multer({
 const ensureMongo = (_request, response, next) => {
   if (!isMongoConnected()) {
     response.status(503).json({
-      message: 'MongoDB is not connected. Set MONGODB_URI and restart the API server.',
+      message: 'Data service is not connected. Please restart the API server or contact support.',
     });
     return;
   }

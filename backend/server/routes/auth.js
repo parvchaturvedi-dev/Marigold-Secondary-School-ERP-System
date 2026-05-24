@@ -1,4 +1,7 @@
 import express from 'express';
+import { randomInt } from 'crypto';
+import multer from 'multer';
+import nodemailer from 'nodemailer';
 import User from '../models/User.js';
 import { isMongoConnected } from '../db.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
@@ -11,11 +14,45 @@ import {
 } from '../utils/identity.js';
 
 const router = express.Router();
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 2 * 1024 * 1024,
+  },
+});
+const passwordRevealOtps = new Map();
+
+const getMailConfig = () => {
+  const user = process.env.EMAIL_USER || process.env.GMAIL_USER;
+  const pass = process.env.EMAIL_PASS || process.env.GMAIL_APP_PASSWORD;
+  const fromName = process.env.EMAIL_FROM_NAME || process.env.GMAIL_FROM_NAME || 'MGPS ERP Portal';
+  return { user, pass, fromName, isReady: Boolean(user && pass) };
+};
+
+const sendMail = async ({ to, subject, text }) => {
+  const mailConfig = getMailConfig();
+  if (!mailConfig.isReady) throw new Error('Email is not configured. Set Gmail credentials in .env.');
+
+  const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: mailConfig.user,
+      pass: mailConfig.pass,
+    },
+  });
+
+  await transporter.sendMail({
+    from: `"${mailConfig.fromName}" <${mailConfig.user}>`,
+    to,
+    subject,
+    text,
+  });
+};
 
 const ensureMongo = (_request, response, next) => {
   if (!isMongoConnected()) {
     response.status(503).json({
-      message: 'MongoDB is not connected. Set MONGODB_URI and restart the API server.',
+      message: 'Data service is not connected. Please restart the API server or contact support.',
     });
     return;
   }
@@ -54,6 +91,31 @@ const normalizeStudent = (student = {}, index = 0) => ({
   photoDataUrl: student.photoDataUrl || '',
 });
 
+const getEmailForUser = (user = {}) =>
+  user.profile?.email || user.profile?.studentProfiles?.[0]?.guardianEmail || '';
+
+const buildCredentialMessage = (user = {}) => {
+  const linkedStudents = user.profile?.studentProfiles || [];
+  const password = user.profile?.initialPassword || '';
+  return [
+    `Dear ${user.displayName || user.username},`,
+    '',
+    'Your MGPS ERP login credentials are:',
+    `Username: ${user.username}`,
+    `Password: ${password || 'Please contact the school office to reset your password.'}`,
+    '',
+    linkedStudents.length ? 'Linked student profiles:' : '',
+    ...linkedStudents.map(
+      (student) => `- ${student.displayName} (${student.admissionNumber || student.id}) - ${student.className || 'Class not set'}`
+    ),
+    '',
+    'If you are asked to change this password after login, please set a new private password immediately.',
+    '',
+    'Regards,',
+    'MGPS ERP Portal',
+  ].filter((line) => line !== '').join('\n');
+};
+
 const toSessionPayload = (user) => {
   const profile = user.profile || {};
   const displayName = profile.displayName || user.displayName || user.username;
@@ -78,7 +140,7 @@ const toSessionPayload = (user) => {
     session.selectedStudentId = session.activeStudent?.id || '';
     session.isSiblingAccount = studentProfiles.length > 1;
     session.displayName = session.activeStudent?.displayName || displayName;
-    session.photoDataUrl = session.activeStudent?.photoDataUrl || '';
+    session.photoDataUrl = profile.photoDataUrl || session.activeStudent?.photoDataUrl || '';
   }
 
   return session;
@@ -151,11 +213,127 @@ router.post('/login', ensureMongo, async (request, response) => {
   }
 
   const payload = toSessionPayload(user);
+  payload.mustChangePassword = Boolean(user.profile?.initialPassword && password === user.profile.initialPassword);
   persistSessionAuth(request, payload, response);
 });
 
-router.get('/users', ensureMongo, requireAuth, requireRole('admin'), async (_request, response) => {
+router.get('/users', ensureMongo, requireAuth, requireRole('admin', 'clerk'), async (_request, response) => {
   response.json(await listIdentityUsers());
+});
+
+router.post('/users/:username/request-password-otp', ensureMongo, requireAuth, requireRole('admin', 'clerk'), async (request, response) => {
+  await syncIdentityUsersFromState();
+  const username = String(request.params.username || '').trim().toUpperCase();
+  const user = await User.findOne({ username }).lean();
+  const email = getEmailForUser(user);
+
+  if (!user || !email) {
+    response.status(404).json({ message: 'A linked Gmail address was not found for this user.' });
+    return;
+  }
+
+  const otp = String(randomInt(100000, 999999));
+  passwordRevealOtps.set(username, {
+    otp,
+    expiresAt: Date.now() + 5 * 60 * 1000,
+  });
+
+  await sendMail({
+    to: email,
+    subject: 'MGPS ERP password reveal OTP',
+    text: `Your OTP to reveal the MGPS ERP password for ${username} is ${otp}. It expires in 5 minutes.`,
+  });
+
+  response.json({ message: `OTP sent to ${email}.`, email });
+});
+
+router.post('/users/:username/reveal-password', ensureMongo, requireAuth, requireRole('admin', 'clerk'), async (request, response) => {
+  await syncIdentityUsersFromState();
+  const username = String(request.params.username || '').trim().toUpperCase();
+  const otp = String(request.body.otp || '').trim();
+  const otpRecord = passwordRevealOtps.get(username);
+
+  if (!otpRecord || otpRecord.expiresAt < Date.now() || otpRecord.otp !== otp) {
+    response.status(403).json({ message: 'Invalid or expired OTP.' });
+    return;
+  }
+
+  const user = await User.findOne({ username }).lean();
+  passwordRevealOtps.delete(username);
+  response.json({ password: user?.profile?.initialPassword || '' });
+});
+
+router.post('/users/:username/send-credentials', ensureMongo, requireAuth, requireRole('admin', 'clerk'), async (request, response) => {
+  await syncIdentityUsersFromState();
+  const username = String(request.params.username || '').trim().toUpperCase();
+  const user = await User.findOne({ username }).lean();
+  const email = getEmailForUser(user);
+
+  if (!user || !email) {
+    response.status(404).json({ message: 'A linked Gmail address was not found for this user.' });
+    return;
+  }
+
+  await sendMail({
+    to: email,
+    subject: `MGPS ERP login credentials - ${username}`,
+    text: buildCredentialMessage(user),
+  });
+
+  response.json({ message: `Credentials sent to ${email}.` });
+});
+
+router.post('/change-password', ensureMongo, requireAuth, async (request, response) => {
+  const newPassword = String(request.body.newPassword || '');
+  if (newPassword.length < 6) {
+    response.status(400).json({ message: 'New password must contain at least 6 characters.' });
+    return;
+  }
+
+  const user = await User.findOne({ username: request.auth.username });
+  if (!user) {
+    response.status(404).json({ message: 'Session user not found.' });
+    return;
+  }
+
+  user.passwordHash = createPasswordHash(newPassword);
+  user.profile = {
+    ...(user.profile || {}),
+    initialPassword: '',
+  };
+  await user.save();
+
+  if (request.session?.auth) {
+    request.session.auth.mustChangePassword = false;
+    request.session.save(() => response.json({ message: 'Password changed successfully.' }));
+    return;
+  }
+
+  response.json({ message: 'Password changed successfully.' });
+});
+
+router.patch('/profile-photo', ensureMongo, requireAuth, upload.single('photo'), async (request, response) => {
+  if (!request.file || !request.file.mimetype.startsWith('image/')) {
+    response.status(400).json({ message: 'Please upload a valid image file.' });
+    return;
+  }
+
+  const user = await User.findOne({ username: request.auth.username });
+  if (!user) {
+    response.status(404).json({ message: 'Session user not found.' });
+    return;
+  }
+
+  const photoDataUrl = `data:${request.file.mimetype};base64,${request.file.buffer.toString('base64')}`;
+  user.profile = {
+    ...(user.profile || {}),
+    photoDataUrl,
+  };
+  await user.save();
+
+  const payload = toSessionPayload(user);
+  request.session.auth = payload;
+  request.session.save(() => response.json(payload));
 });
 
 router.get('/session', requireAuth, async (request, response) => {
@@ -165,7 +343,7 @@ router.get('/session', requireAuth, async (request, response) => {
   }
 
   if (!isMongoConnected()) {
-    response.status(503).json({ message: 'MongoDB is not connected. Set MONGODB_URI and restart the API server.' });
+    response.status(503).json({ message: 'Data service is not connected. Please restart the API server or contact support.' });
     return;
   }
 

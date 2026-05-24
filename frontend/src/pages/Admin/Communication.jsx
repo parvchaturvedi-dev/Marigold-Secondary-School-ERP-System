@@ -1,18 +1,54 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Send, Hash, Users, Shield, Edit2, Trash2, Clock, CheckCircle, CheckSquare, Square } from 'lucide-react';
+import { useMasterData } from '../../components/common/masterData';
 import { useMongoState } from '../../components/common/mongoState';
 
+const ROLE_LABELS = {
+  admin: 'Admin',
+  teacher: 'Teacher',
+  student: 'Student',
+  clerk: 'Clerk',
+};
+
+const getClassChannelId = (className = '') =>
+  `ch-class-${String(className).trim().toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+
 const Communication = ({ session }) => {
+  const masterData = useMasterData();
   // Current logged-in simulated context
+  const roleKey = String(session?.role || 'admin').toLowerCase();
   const currentUser = {
     id: session?.username || 'user',
     name: session?.displayName || session?.username || 'User',
-    role: session?.role || 'Admin',
+    role: ROLE_LABELS[roleKey] || session?.role || 'Admin',
+    roleKey,
   };
   const currentSession = "2026-2027"; 
 
   // Channels Pool
-  const [channels] = useMongoState('admin-communication-channels', []);
+  const [storedChannels] = useMongoState('admin-communication-channels', []);
+  const channels = useMemo(() => {
+    const defaultChannels = [
+      {
+        id: 'ch-broadcast',
+        name: 'School Broadcast',
+        desc: 'Whole-school announcements and admin notices',
+        type: 'Broadcast',
+      },
+      ...masterData.classNames.map((className) => ({
+        id: getClassChannelId(className),
+        name: `${className} - Class Stream`,
+        desc: `${className} class communication channel`,
+        type: 'Class',
+        className,
+      })),
+    ];
+    const defaultsById = new Map(defaultChannels.map((channel) => [channel.id, channel]));
+    const customChannels = (Array.isArray(storedChannels) ? storedChannels : [])
+      .filter((channel) => channel?.id && !defaultsById.has(channel.id));
+
+    return [...defaultChannels, ...customChannels];
+  }, [masterData.classNames, storedChannels]);
 
   const [activeChannelId, setActiveChannelId] = useState('ch-broadcast');
   const [typedMessage, setTypedMessage] = useState('');
@@ -30,6 +66,16 @@ const Communication = ({ session }) => {
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, activeChannelId]);
+
+  useEffect(() => {
+    if (!channels.length) return;
+    if (!channels.some((channel) => channel.id === activeChannelId)) {
+      setActiveChannelId(channels[0].id);
+    }
+
+    const classChannelIds = new Set(channels.filter((channel) => channel.type === 'Class').map((channel) => channel.id));
+    setSelectedTargetClasses((prev) => prev.filter((channelId) => classChannelIds.has(channelId)));
+  }, [activeChannelId, channels]);
 
   // Helper function to generate standardized Date & Time stamp string
   const createTimestampString = () => {
@@ -54,7 +100,7 @@ const Communication = ({ session }) => {
     if (!typedMessage.trim()) return;
 
     const timestampStr = createTimestampString();
-    const isBroadcastMode = currentUser.role === 'Admin' && selectedTargetClasses.length > 0;
+    const isBroadcastMode = currentUser.roleKey === 'admin' && selectedTargetClasses.length > 0;
 
     if (isBroadcastMode) {
       // Admin is blasting the message across multiple selected classes + current active channel
@@ -99,7 +145,7 @@ const Communication = ({ session }) => {
     const targetMsg = messages.find(m => m.id === id);
     if (!targetMsg) return;
 
-    if (currentUser.role !== 'Admin') {
+    if (currentUser.roleKey !== 'admin') {
       const timeElapsedInMinutes = (new Date() - new Date(targetMsg.rawDate)) / 60000;
       if (timeElapsedInMinutes > 10) {
         alert("Security Lock: Editing access has expired (10 minutes structural limit).");
@@ -118,7 +164,7 @@ const Communication = ({ session }) => {
   };
 
   const triggerGlobalPurge = (id) => {
-    if (currentUser.role !== 'Admin') return;
+    if (currentUser.roleKey !== 'admin') return;
     if (window.confirm("⚠️ Execute structural purge for everyone?")) {
       setMessages(prev => prev.filter(m => m.id !== id));
     }
@@ -183,7 +229,7 @@ const Communication = ({ session }) => {
           ) : (
             currentChannelMessages.map((msg) => {
               const isMyMessage = msg.senderId === currentUser.id;
-              const isAdmin = currentUser.role === 'Admin';
+              const isAdmin = currentUser.roleKey === 'admin';
               const timeDeltaInMin = (new Date() - new Date(msg.rawDate)) / 60000;
               const isEditableByMe = isMyMessage && (timeDeltaInMin <= 10 || isAdmin);
 
@@ -251,7 +297,7 @@ const Communication = ({ session }) => {
         </div>
 
         {/* ADMIN MULTI-CLASS BROADCAST SELECTION CAPSULE PANEL */}
-        {currentUser.role === 'Admin' && (activeChannelId === 'ch-broadcast' || activeChannel?.type === 'Class') && (
+        {currentUser.roleKey === 'admin' && (activeChannelId === 'ch-broadcast' || activeChannel?.type === 'Class') && (
           <div className="px-4 py-2.5 bg-[#EAEAEA]/80 border-t border-[#C8C8C8] flex flex-wrap items-center gap-3">
             <span className="text-[10px] font-black uppercase tracking-wider text-[#555555] flex items-center gap-1">
               <Shield className="w-3.5 h-3.5 text-black" /> Blaster Cross-Routing Engine:

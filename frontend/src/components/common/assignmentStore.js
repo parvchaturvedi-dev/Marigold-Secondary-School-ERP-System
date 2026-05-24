@@ -1,5 +1,6 @@
 import { getUserProfile } from './auth';
 import { API_BASE_URL, authFetch, withAuthHeaders } from './api';
+import { sortClassNames } from './masterData';
 
 export const ASSIGNMENT_STORAGE_KEY = 'mgps_erp_assignments';
 export const ASSIGNMENT_UPDATED_EVENT = 'mgps-erp-assignments-updated';
@@ -71,11 +72,47 @@ const toFormData = (payload) => {
   return formData;
 };
 
-export const getAssignmentIdentity = (session) => getUserProfile(session?.username, session?.role);
+export const getAssignmentIdentity = (session = {}) => {
+  const profile = getUserProfile(session?.username || '', session?.role || '');
+  const activeStudent = session?.activeStudent || profile.studentProfile || {};
+  const children = session?.studentProfiles?.length
+    ? session.studentProfiles
+    : profile.children;
+
+  return {
+    ...profile,
+    displayName: session?.displayName || profile.displayName,
+    allottedClasses: session?.allottedClasses?.length
+      ? sortClassNames(session.allottedClasses)
+      : profile.allottedClasses || [],
+    className:
+      activeStudent.className ||
+      session?.className ||
+      profile.className ||
+      '',
+    section:
+      activeStudent.section ||
+      session?.section ||
+      profile.section ||
+      '',
+    admissionNumber:
+      activeStudent.admissionNumber ||
+      session?.admissionNumber ||
+      profile.admissionNumber ||
+      '',
+    fatherName:
+      activeStudent.fatherName ||
+      session?.fatherName ||
+      profile.fatherName ||
+      '',
+    children,
+    studentProfile: activeStudent.id ? activeStudent : profile.studentProfile,
+  };
+};
 
 export const getTeacherAllowedClasses = (session) => {
   const profile = getAssignmentIdentity(session);
-  return profile.allottedClasses?.length ? profile.allottedClasses : ['Class 9'];
+  return profile.allottedClasses?.length ? sortClassNames(profile.allottedClasses) : ['Class 9'];
 };
 
 export const getStudentOptions = (session) => {
@@ -138,7 +175,7 @@ export const fetchAssignments = async (session, selectedStudent) => {
       return assignments;
     }
   } catch (error) {
-    alert(`Assignment sync failed: ${error.message}`);
+    alert(`Assignment loading failed: ${error.message}`);
     return getLocalAssignmentsForRole(session, selectedStudent);
   }
 

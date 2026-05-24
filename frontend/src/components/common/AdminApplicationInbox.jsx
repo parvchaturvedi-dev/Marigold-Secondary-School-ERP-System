@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
+  Check,
   CheckCircle2,
   FileText,
   GraduationCap,
@@ -35,12 +36,47 @@ const statusTone = {
   replied: 'bg-blue-50 text-blue-700 border-blue-100',
 };
 
+const REPLY_EDIT_WINDOW_MS = 5 * 60 * 1000;
+
+const getReplyStatus = (application) => {
+  if (!application?.adminReply) return null;
+  if (application.replyReadAt) return 'read';
+  if (application.replyRecipientActiveAt) return 'active';
+  if (application.replyDeliveredAt) return 'online';
+  return 'sent';
+};
+
+const ReplyTicks = ({ status }) => {
+  const count = status === 'sent' ? 1 : status === 'online' ? 2 : 3;
+  const isRead = status === 'read';
+
+  return (
+    <span
+      className={`inline-flex items-center gap-0.5 ${isRead ? 'text-blue-600' : 'text-gray-400'}`}
+      title={
+        status === 'sent'
+          ? 'Sent while recipient is offline'
+          : status === 'online'
+            ? 'Recipient data is online'
+            : status === 'active'
+              ? 'Recipient is active on ERP'
+              : 'Recipient read this reply'
+      }
+    >
+      {Array.from({ length: count }).map((_, index) => (
+        <Check key={index} className="w-3.5 h-3.5 stroke-[3]" />
+      ))}
+    </span>
+  );
+};
+
 const AdminApplicationInbox = ({ session }) => {
   const [activeTab, setActiveTab] = useState('all');
   const [applications, setApplications] = useState([]);
   const [selectedApplicationId, setSelectedApplicationId] = useState('');
   const [replyDrafts, setReplyDrafts] = useState({});
   const [isLoading, setIsLoading] = useState(false);
+  const [currentTimeMs, setCurrentTimeMs] = useState(0);
 
   const loadApplications = async () => {
     setIsLoading(true);
@@ -77,6 +113,17 @@ const AdminApplicationInbox = ({ session }) => {
     };
   }, [session?.role, session?.username]);
 
+  useEffect(() => {
+    setCurrentTimeMs(Date.now());
+    const timerId = window.setInterval(() => {
+      setCurrentTimeMs(Date.now());
+    }, 1000);
+
+    return () => {
+      window.clearInterval(timerId);
+    };
+  }, []);
+
   const filteredApplications = useMemo(() => {
     if (activeTab === 'all') return applications;
     if (activeTab === 'class') {
@@ -96,6 +143,13 @@ const AdminApplicationInbox = ({ session }) => {
     selectedApplication
       ? replyDrafts[selectedApplication.id] ?? selectedApplication.adminReply ?? ''
       : '';
+  const replyStatus = getReplyStatus(selectedApplication);
+  const replyActionAt = selectedApplication?.adminReplyEditedAt || selectedApplication?.adminActionAt;
+  const canEditReply =
+    Boolean(selectedApplication?.adminReply && replyActionAt) &&
+    currentTimeMs - new Date(replyActionAt).getTime() <= REPLY_EDIT_WINDOW_MS;
+  const hasSentReply = Boolean(selectedApplication?.adminReply);
+  const isReplyLocked = hasSentReply && !canEditReply;
 
   const runAdminAction = async (action) => {
     if (!selectedApplication) return;
@@ -135,7 +189,7 @@ const AdminApplicationInbox = ({ session }) => {
             </p>
           </div>
 
-          <div className="flex bg-[#EAEAEA] p-1 rounded-full border border-gray-300 overflow-x-auto max-w-full">
+          <div className="flex flex-wrap items-center justify-end gap-1 bg-[#EAEAEA] p-1 rounded-2xl border border-gray-300 max-w-full overflow-hidden">
             {inboxTabs.map((tab) => {
               const Icon = tab.icon;
               return (
@@ -146,7 +200,7 @@ const AdminApplicationInbox = ({ session }) => {
                     setActiveTab(tab.id);
                     setSelectedApplicationId('');
                   }}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap ${
+                  className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-normal text-center ${
                     activeTab === tab.id
                       ? 'bg-[#E1FA6C] text-[#1A1A1A] shadow-sm'
                       : 'text-gray-600 hover:text-[#1A1A1A]'
@@ -256,6 +310,7 @@ const AdminApplicationInbox = ({ session }) => {
                 </div>
                 <textarea
                   value={reply}
+                  disabled={isReplyLocked}
                   onChange={(event) =>
                     setReplyDrafts((prev) => ({
                       ...prev,
@@ -264,8 +319,34 @@ const AdminApplicationInbox = ({ session }) => {
                   }
                   rows={5}
                   placeholder="Type Admin response here..."
-                  className="w-full bg-[#F8F8F8] border border-gray-200 rounded-2xl px-3 py-3 text-xs font-medium outline-none focus:border-[#8b5cf6] resize-none leading-relaxed"
+                  className="w-full bg-[#F8F8F8] border border-gray-200 rounded-2xl px-3 py-3 text-xs font-medium outline-none focus:border-[#8b5cf6] resize-none leading-relaxed disabled:text-gray-500 disabled:cursor-not-allowed"
                 />
+
+                {hasSentReply && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-blue-100 bg-blue-50 px-3 py-2 text-[11px] font-bold text-blue-900">
+                    <span className="flex flex-wrap items-center gap-2">
+                      Reply sent
+                      {selectedApplication.adminReplyEditedAt && (
+                        <span className="rounded-md border border-blue-200 bg-white px-2 py-0.5 text-[9px] font-black uppercase text-blue-700">
+                          Edited
+                        </span>
+                      )}
+                      {canEditReply ? 'Editable for five minutes after sending.' : 'Five-minute edit window closed.'}
+                    </span>
+                    {replyStatus && (
+                      <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide">
+                        <ReplyTicks status={replyStatus} />
+                        {replyStatus === 'sent'
+                          ? 'Offline'
+                          : replyStatus === 'online'
+                            ? 'Data online'
+                            : replyStatus === 'active'
+                              ? 'Active'
+                              : 'Read'}
+                      </span>
+                    )}
+                  </div>
+                )}
 
                 <div className="flex flex-wrap items-center justify-end gap-3">
                   {selectedApplication.kind === 'request' ? (
@@ -273,6 +354,7 @@ const AdminApplicationInbox = ({ session }) => {
                       <button
                         type="button"
                         onClick={() => runAdminAction('rejected')}
+                        disabled={isReplyLocked}
                         className="flex items-center gap-2 px-5 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-100 rounded-full text-xs font-bold transition-all"
                       >
                         <XCircle className="w-4 h-4" /> Reject Request
@@ -280,6 +362,7 @@ const AdminApplicationInbox = ({ session }) => {
                       <button
                         type="button"
                         onClick={() => runAdminAction('approved')}
+                        disabled={isReplyLocked}
                         className="flex items-center gap-2 px-6 py-2.5 bg-[#E1FA6C] hover:bg-[#d2eb5b] text-[#1A1A1A] rounded-full text-xs font-bold transition-all shadow-sm"
                       >
                         <CheckCircle2 className="w-4 h-4" /> Approve Request
@@ -289,9 +372,10 @@ const AdminApplicationInbox = ({ session }) => {
                     <button
                       type="button"
                       onClick={() => runAdminAction('replied')}
-                      className="flex items-center gap-2 px-6 py-2.5 bg-[#E1FA6C] hover:bg-[#d2eb5b] text-[#1A1A1A] rounded-full text-xs font-bold transition-all shadow-sm"
+                      disabled={isReplyLocked}
+                      className="flex items-center gap-2 px-6 py-2.5 bg-[#E1FA6C] hover:bg-[#d2eb5b] text-[#1A1A1A] rounded-full text-xs font-bold transition-all shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      <MessageSquareReply className="w-4 h-4" /> Send Reply
+                      <MessageSquareReply className="w-4 h-4" /> {hasSentReply ? 'Update Reply' : 'Send Reply'}
                     </button>
                   )}
                 </div>

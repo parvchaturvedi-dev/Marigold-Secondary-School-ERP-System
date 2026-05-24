@@ -13,7 +13,12 @@ const AcademicCalendarViewer = ({ portalLabel = 'Portal' }) => {
   const [calendarPdf, setCalendarPdf] = useState(() => readAcademicCalendar());
 
   useEffect(() => {
-    const refreshCalendar = () => setCalendarPdf(readAcademicCalendar());
+    let isActive = true;
+    const refreshCalendar = () => {
+      fetchAcademicCalendar().then((latestCalendar) => {
+        if (isActive) setCalendarPdf(latestCalendar);
+      });
+    };
     const handleStorageChange = (event) => {
       if (event.key === ACADEMIC_CALENDAR_STORAGE_KEY) refreshCalendar();
     };
@@ -22,6 +27,7 @@ const AcademicCalendarViewer = ({ portalLabel = 'Portal' }) => {
     window.addEventListener(ACADEMIC_CALENDAR_UPDATED_EVENT, refreshCalendar);
 
     return () => {
+      isActive = false;
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener(ACADEMIC_CALENDAR_UPDATED_EVENT, refreshCalendar);
     };

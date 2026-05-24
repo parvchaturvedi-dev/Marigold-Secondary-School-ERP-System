@@ -1,324 +1,838 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Bot, User, Send, Sparkles, RefreshCw, Trash2, Download, X, Power } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  AlertTriangle,
+  BarChart3,
+  Bot,
+  CheckCircle2,
+  Download,
+  Mail,
+  Mic,
+  MicOff,
+  PauseCircle,
+  RefreshCw,
+  Search,
+  Send,
+  ShieldCheck,
+  Sparkles,
+  User,
+  Volume2,
+  VolumeX,
+} from 'lucide-react';
+import { jsPDF } from 'jspdf';
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Legend,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
+import { apiFetch } from '../../services/api';
+
+const SCHOOL_NAME = 'Marigold Secondary School, Behror';
+const AI_ENDPOINT = '/api/ai';
+const CHART_COLORS = ['#111827', '#E1FA6C', '#2563EB', '#DC2626', '#16A34A'];
+
+const nowTime = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+const formatCurrency = (value) =>
+  `Rs. ${Math.round(Number(value || 0)).toLocaleString('en-IN')}`;
+
+const getSpeechRecognition = () => {
+  if (typeof window === 'undefined') return null;
+  return window.SpeechRecognition || window.webkitSpeechRecognition || null;
+};
+
+const createMessage = (sender, payload) => ({
+  id: `${sender}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+  sender,
+  timestamp: nowTime(),
+  ...payload,
+});
+
+const ProviderBadge = ({ enabled, children }) => (
+  <span
+    className={`rounded-full border px-2 py-0.5 text-[10px] font-black uppercase ${
+      enabled
+        ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+        : 'border-amber-200 bg-amber-50 text-amber-700'
+    }`}
+  >
+    {children}: {enabled ? 'Ready' : 'Mock'}
+  </span>
+);
+
+const DataTable = ({ element }) => {
+  const rows = Array.isArray(element.rows) ? element.rows : [];
+  const columns = rows.length ? Object.keys(rows[0]).slice(0, 7) : [];
+
+  if (!rows.length) {
+    return (
+      <div className="rounded-xl border border-neutral-200 bg-white p-4 text-xs font-semibold text-neutral-500">
+        No table rows available.
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-x-auto rounded-xl border border-neutral-200 bg-white">
+      <table className="w-full text-left text-xs">
+        <thead className="bg-neutral-50 text-[10px] uppercase tracking-wide text-neutral-500">
+          <tr>
+            {columns.map((column) => (
+              <th key={column} className="px-3 py-2 font-black">
+                {column.replace(/([A-Z])/g, ' $1')}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-neutral-100">
+          {rows.map((row, rowIndex) => (
+            <tr key={`${element.title}-${rowIndex}`} className="hover:bg-neutral-50">
+              {columns.map((column) => (
+                <td key={column} className="px-3 py-2 font-semibold text-neutral-700">
+                  {typeof row[column] === 'number' && column.toLowerCase().includes('fee')
+                    ? formatCurrency(row[column])
+                    : String(row[column] ?? '-')}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
+const ChartElement = ({ element }) => {
+  const data = Array.isArray(element.data) ? element.data : [];
+  if (!data.length) return null;
+
+  return (
+    <div className="rounded-xl border border-neutral-200 bg-white p-3">
+      <div className="mb-2 flex items-center gap-2 text-xs font-black text-neutral-800">
+        <BarChart3 className="h-4 w-4" />
+        {element.title}
+      </div>
+      <div className="h-56 w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          {element.chartType === 'pie' ? (
+            <PieChart>
+              <Pie data={data} dataKey="value" nameKey="name" innerRadius={42} outerRadius={76} paddingAngle={2}>
+                {data.map((entry, index) => (
+                  <Cell key={entry.name} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip formatter={(value) => (Number(value) > 100 ? formatCurrency(value) : value)} />
+              <Legend />
+            </PieChart>
+          ) : (
+            <BarChart data={data}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 10 }} />
+              <Tooltip formatter={(value) => (Number(value) > 100 ? formatCurrency(value) : value)} />
+              <Bar dataKey="value" radius={[6, 6, 0, 0]} fill="#111827" />
+            </BarChart>
+          )}
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+};
+
+const StudentCard = ({ student = {} }) => (
+  <div className="rounded-xl border border-neutral-200 bg-white p-4 text-xs">
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <p className="text-[10px] font-black uppercase tracking-wide text-neutral-500">Student Profile</p>
+        <h4 className="mt-1 text-sm font-black text-neutral-950">{student.name || student.displayName}</h4>
+        <p className="mt-1 font-semibold text-neutral-600">
+          {student.className || student.class} | Admission: {student.admissionNumber}
+        </p>
+      </div>
+      <span className="rounded-full bg-[#E1FA6C] px-3 py-1 text-[10px] font-black text-neutral-950">
+        {student.status || 'Active'}
+      </span>
+    </div>
+    <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+      <p className="rounded-lg bg-neutral-50 p-2 font-semibold">Father: {student.fatherName || '-'}</p>
+      <p className="rounded-lg bg-neutral-50 p-2 font-semibold">Mother: {student.motherName || '-'}</p>
+      <p className="rounded-lg bg-neutral-50 p-2 font-semibold">Mobile: {student.guardianPhone || '-'}</p>
+      <p className="rounded-lg bg-neutral-50 p-2 font-semibold">Email: {student.guardianEmail || '-'}</p>
+    </div>
+  </div>
+);
+
+const AssistantElements = ({ elements = [] }) => (
+  <div className="mt-3 space-y-3">
+    {elements.map((element, index) => {
+      if (element.type === 'chart') return <ChartElement key={`${element.title}-${index}`} element={element} />;
+      if (element.type === 'table') return <DataTable key={`${element.title}-${index}`} element={element} />;
+      if (element.type === 'student-card') {
+        return <StudentCard key={`${element.student?.admissionNumber || index}`} student={element.student} />;
+      }
+      return null;
+    })}
+  </div>
+);
+
+const ReceiptCard = ({ receipt, onDownload, onSend }) => {
+  if (!receipt) return null;
+
+  return (
+    <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-xs">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-wide text-emerald-700">Receipt Generated</p>
+          <h4 className="mt-1 text-sm font-black text-neutral-950">{receipt.receiptNo}</h4>
+          <p className="mt-1 font-semibold text-neutral-700">Amount: {formatCurrency(receipt.amountPaid)}</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => onDownload(receipt)}
+            className="inline-flex items-center gap-1 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-[10px] font-black"
+          >
+            <Download className="h-3.5 w-3.5" />
+            PDF
+          </button>
+          <button
+            type="button"
+            onClick={() => onSend(receipt)}
+            className="inline-flex items-center gap-1 rounded-lg bg-neutral-950 px-3 py-2 text-[10px] font-black text-white"
+          >
+            <Mail className="h-3.5 w-3.5" />
+            Gmail / WhatsApp
+          </button>
+        </div>
+      </div>
+      <div className="mt-3 rounded-lg bg-white p-3">
+        {(receipt.breakdown || []).map((item) => (
+          <div key={item.admissionNumber || item.name} className="flex justify-between gap-3 font-semibold">
+            <span>{item.name}</span>
+            <span>{formatCurrency(item.allocated)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const ConfirmationModal = ({ pendingAction, onCancel, onConfirm, isWorking }) => {
+  if (!pendingAction) return null;
+
+  return (
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 p-4">
+      <div className="w-full max-w-md rounded-2xl border border-neutral-200 bg-white p-5 shadow-2xl">
+        <div className="flex items-start gap-3">
+          <div className="rounded-xl bg-amber-50 p-2 text-amber-700">
+            <AlertTriangle className="h-5 w-5" />
+          </div>
+          <div>
+            <h3 className="text-sm font-black text-neutral-950">Are you sure you want to perform this action?</h3>
+            <p className="mt-2 text-xs font-semibold leading-relaxed text-neutral-600">
+              {pendingAction.label || pendingAction.type} will be recorded in the ERP audit log.
+            </p>
+          </div>
+        </div>
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={isWorking}
+            className="rounded-xl border border-neutral-300 px-4 py-2 text-xs font-black text-neutral-700"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={isWorking}
+            className="inline-flex items-center gap-2 rounded-xl bg-neutral-950 px-4 py-2 text-xs font-black text-white disabled:opacity-60"
+          >
+            {isWorking && <RefreshCw className="h-3.5 w-3.5 animate-spin" />}
+            Confirm
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const FeaturePage = () => {
   const chatEndRef = useRef(null);
-  const [userInput, setUserInput] = useState('');
-  const [isAiProcessing, setIsAiProcessing] = useState(false);
-  const [isResetDone, setIsResetDone] = useState(false);
-
-  // New Cinematic States
-  const [isActivating, setIsActivating] = useState(false);
-  const [isTerminalOpen, setIsTerminalOpen] = useState(false);
-
-  const [chatLog, setChatLog] = useState([
-    {
-      id: 'init-core',
-      sender: 'ai',
-      text: "System Core Initialized. I am linked via your enterprise AI API configuration. Issue direct operational inputs to manipulate database infrastructure.",
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    }
+  const recognitionRef = useRef(null);
+  const [config, setConfig] = useState({
+    defaultProvider: 'development-fallback',
+    providers: { gemini: false, grok: false },
+    role: '',
+  });
+  const [provider, setProvider] = useState('gemini');
+  const [mode, setMode] = useState('chat');
+  const [input, setInput] = useState('');
+  const [studentQuery, setStudentQuery] = useState('');
+  const [messages, setMessages] = useState([
+    createMessage('ai', {
+      text: `Namaste. I am the AI assistant for ${SCHOOL_NAME}. I can help with ERP lookup, finance, attendance, examinations, notices, meetings, documents, analytics, and admin-confirmed actions.`,
+      elements: [],
+      actions: [],
+    }),
   ]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [lastPrompt, setLastPrompt] = useState('');
+  const [isListening, setIsListening] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [pendingAction, setPendingAction] = useState(null);
+  const [isActionWorking, setIsActionWorking] = useState(false);
+
+  const speechSupported = useMemo(() => Boolean(getSpeechRecognition()), []);
 
   useEffect(() => {
-    if (isTerminalOpen) {
-      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    let active = true;
+    apiFetch(`${AI_ENDPOINT}/config`)
+      .then((payload) => {
+        if (!active) return;
+        setConfig(payload);
+        setProvider(payload.defaultProvider === 'grok' ? 'grok' : 'gemini');
+      })
+      .catch((fetchError) => {
+        if (active) setError(fetchError.message);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, isLoading]);
+
+  useEffect(() => {
+    return () => {
+      window.speechSynthesis?.cancel();
+      recognitionRef.current?.stop?.();
+    };
+  }, []);
+
+  const speak = async (text) => {
+    if (isMuted || !text || typeof window === 'undefined' || !window.speechSynthesis) return;
+    try {
+      await apiFetch(`${AI_ENDPOINT}/voice/speak`, {
+        method: 'POST',
+        body: { text },
+      });
+    } catch {
+      // Browser speech still works when the server voice endpoint is unavailable.
     }
-  }, [chatLog, isAiProcessing, isTerminalOpen]);
-
-  // CINEMATIC SOUND HANDLERS
-  // Place your audio files in standard public folder (e.g., public/sounds/activation.mp3)
- // CINEMATIC SOUND HANDLERS (With Origin Resolution & Audio Context Resume)
-const playSound = (type) => {
-  try {
-    // Window location origin automatically resolves to the active deployment domain
-    const audioUrl = `${window.location.origin}/sounds/${type === 'activate' ? 'activation.mp3' : 'deactivation.mp3'}`;
-    const audio = new Audio(audioUrl);
-    
-    audio.volume = 0.5;
-
-    // Browser ke Autoplay lock ko bypass karne ke liye explicitly user interaction thread par play karna
-    const playPromise = audio.play();
-
-    if (playPromise !== undefined) {
-      playPromise
-        .then(() => {
-          console.log(`🔊 Core Audio [${type}] dispatched successfully.`);
-        })
-        .catch(err => {
-          console.warn("⚠️ Browser Autoplay blocked the audio. Trying to force audio context...", err);
-          // Fallback: Agar pehli baar me block ho, toh window touch/click context par queue kar do
-          const forcePlay = () => {
-            audio.play();
-            window.removeEventListener('click', forcePlay);
-          };
-          window.addEventListener('click', forcePlay);
-        });
-    }
-  } catch (e) {
-    console.error("🚨 Audio Engine Execution Fault:", e);
-  }
-};
-
-  // TRIGGER 5-SECOND ABSORPTION PIPELINE
-  const handleActivationSequence = () => {
-    if (isActivating || isTerminalOpen) return;
-    setIsActivating(true);
-    playSound('activate');
-
-    // 5 Seconds Power Accumulation Animation Loop
-    setTimeout(() => {
-      setIsActivating(false);
-      setIsTerminalOpen(true);
-    }, 5000);
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 0.95;
+    utterance.pitch = 1;
+    utterance.onstart = () => setIsSpeaking(true);
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+    window.speechSynthesis.speak(utterance);
   };
 
-  // TERMINAL CLOSE PIPELINE WITH SOUND
-  const handleCloseTerminal = () => {
-    playSound('deactivate');
-    setIsTerminalOpen(false);
+  const stopSpeaking = () => {
+    window.speechSynthesis?.cancel();
+    setIsSpeaking(false);
   };
 
-  const handleResetChatRegistry = () => {
-    if (window.confirm("⚠️ Action Matrix Warning: Expunge current conversation history? Once reset, PDF export for this session will be locked.")) {
-      setChatLog([
-        {
-          id: 'init-core',
-          sender: 'ai',
-          text: "Memory state cleared. System listener re-anchored to production node. Ready for next instruction set.",
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        }
+  const appendAiMessage = (payload) => {
+    const nextMessage = createMessage('ai', payload);
+    setMessages((current) => [...current, nextMessage]);
+    speak(payload.text);
+  };
+
+  const submitPrompt = async (prompt = input) => {
+    const trimmed = String(prompt || '').trim();
+    if (!trimmed || isLoading) return;
+
+    setInput('');
+    setError('');
+    setLastPrompt(trimmed);
+    setMessages((current) => [
+      ...current,
+      createMessage('user', { text: trimmed, elements: [], actions: [] }),
+    ]);
+    setIsLoading(true);
+
+    try {
+      const payload = await apiFetch(`${AI_ENDPOINT}/chat`, {
+        method: 'POST',
+        body: {
+          message: trimmed,
+          provider,
+          history: messages.map((message) => ({
+            sender: message.sender,
+            text: message.text,
+          })),
+        },
+      });
+
+      appendAiMessage({
+        text: payload.text,
+        provider: payload.provider,
+        elements: payload.elements || [],
+        actions: payload.actions || [],
+        fallbackAttempts: payload.fallbackAttempts || [],
+      });
+    } catch (submitError) {
+      setError(submitError.message);
+      setMessages((current) => [
+        ...current,
+        createMessage('ai', {
+          text: `I could not complete that request: ${submitError.message}`,
+          error: true,
+          elements: [],
+          actions: [],
+        }),
       ]);
-      setIsResetDone(true);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleExportToPdf = () => {
-    if (isResetDone) {
-      alert("🔒 Security Lock: Cannot export log file. This chat session history has already been flushed.");
+  const retryLastPrompt = () => {
+    if (lastPrompt) submitPrompt(lastPrompt);
+  };
+
+  const toggleListening = () => {
+    const Recognition = getSpeechRecognition();
+    if (!Recognition) {
+      setError('Speech-to-text is not supported in this browser.');
       return;
     }
 
-    const printWindow = window.open('', '_blank');
-    const chatHtmlContent = chatLog.map(log => `
-      <div style="margin-bottom: 20px; padding: 15px; border-radius: 12px; background: ${log.sender === 'ai' ? '#f4f4f5' : '#e1fa6c'}; color: #1a1a1a; font-family: monospace;">
-        <strong>[${log.sender.toUpperCase()}] - ${log.timestamp}</strong>
-        <p style="margin-top: 8px; white-space: pre-wrap; line-height: 1.5;">${log.text}</p>
-      </div>
-    `).join('');
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
+      return;
+    }
 
-    printWindow.document.write(`
-      <html>
-        <head><title>ERP_AI_Core_Log</title></head>
-        <body style="font-family:sans-serif; padding:40px;">
-          <h2>ERP Cognitive Core - Transcript</h2>
-          <div>${chatHtmlContent}</div>
-          <script>window.onload = function() { window.print(); window.close(); }</script>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
+    const recognition = new Recognition();
+    recognition.lang = 'en-IN';
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.onstart = () => setIsListening(true);
+    recognition.onend = () => setIsListening(false);
+    recognition.onerror = (event) => {
+      setError(event.error || 'Microphone input failed.');
+      setIsListening(false);
+    };
+    recognition.onresult = async (event) => {
+      const transcript = event.results?.[0]?.[0]?.transcript || '';
+      setInput(transcript);
+      try {
+        await apiFetch(`${AI_ENDPOINT}/voice/transcribe`, {
+          method: 'POST',
+          body: { text: transcript },
+        });
+      } catch {
+        // The browser transcript is already usable.
+      }
+      submitPrompt(transcript);
+    };
+    recognitionRef.current = recognition;
+    recognition.start();
   };
 
-  const handleCommandSubmission = async (e) => {
-    e.preventDefault();
-    if (!userInput.trim() || isAiProcessing) return;
+  const searchStudent = async (event) => {
+    event.preventDefault();
+    const query = studentQuery.trim();
+    if (!query) return;
 
-    const captureUserText = userInput.trim();
-    setChatLog(prev => [...prev, {
-      id: `usr-${Date.now()}`,
-      sender: 'user',
-      text: captureUserText,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    }]);
-
-    setUserInput('');
-    setIsAiProcessing(true);
-
+    setError('');
+    setIsLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 1200));
-      setChatLog(prev => [...prev, {
-        id: `ai-${Date.now()}`,
-        sender: 'ai',
-        text: `[API Echo Resolution Framework]: Stream payload parsed successfully for input: "${captureUserText}"`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      }]);
-    } catch {
-      setIsAiProcessing(false);
+      const payload = await apiFetch(`${AI_ENDPOINT}/student-details`, {
+        method: 'POST',
+        body: { query },
+      });
+      appendAiMessage({
+        text: `Student profile loaded for ${payload.student.profile.name}.`,
+        elements: [
+          { type: 'student-card', student: payload.student.profile },
+          {
+            type: 'chart',
+            chartType: 'bar',
+            title: 'Fee Summary',
+            data: [
+              { name: 'Assigned', value: payload.student.finance.assignedFees },
+              { name: 'Paid', value: payload.student.finance.paidFees },
+              { name: 'Pending', value: payload.student.finance.pendingFees },
+            ],
+          },
+          {
+            type: 'chart',
+            chartType: 'pie',
+            title: 'Attendance',
+            data: [
+              { name: 'Present', value: payload.student.attendance.attendancePercentage },
+              {
+                name: 'Absent/Unmarked',
+                value: Math.max(0, 100 - payload.student.attendance.attendancePercentage),
+              },
+            ],
+          },
+        ],
+        actions: [],
+      });
+      setStudentQuery('');
+    } catch (searchError) {
+      setError(searchError.message);
     } finally {
-      setIsAiProcessing(false);
+      setIsLoading(false);
     }
   };
 
+  const downloadReceiptPdf = (receipt) => {
+    const doc = new jsPDF();
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.text(SCHOOL_NAME, 16, 18);
+    doc.setFontSize(12);
+    doc.text('Fee Receipt', 16, 30);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text(`Receipt No: ${receipt.receiptNo}`, 16, 42);
+    doc.text(`Date: ${new Date(receipt.timestamp || Date.now()).toLocaleString()}`, 16, 50);
+    doc.text(`Amount Paid: ${formatCurrency(receipt.amountPaid)}`, 16, 58);
+    doc.text(`Father/Guardian: ${receipt.familyDetails?.fatherName || '-'}`, 16, 66);
+    doc.text(`Contact: ${receipt.familyDetails?.contact || '-'}`, 16, 74);
+    doc.text('Breakdown', 16, 90);
+    let y = 100;
+    (receipt.breakdown || []).forEach((item) => {
+      doc.text(`${item.name || item.admissionNumber}: ${formatCurrency(item.allocated)}`, 20, y);
+      y += 8;
+    });
+    doc.text('Authorized by AI action workflow with admin confirmation.', 16, Math.max(y + 12, 122));
+    doc.save(`${receipt.receiptNo}.pdf`);
+  };
+
+  const openConfirmation = (action) => {
+    setPendingAction(action);
+  };
+
+  const confirmAction = async () => {
+    if (!pendingAction) return;
+    setIsActionWorking(true);
+    setError('');
+
+    try {
+      const payload = await apiFetch(`${AI_ENDPOINT}/actions/execute`, {
+        method: 'POST',
+        body: {
+          action: pendingAction.type,
+          payload: pendingAction.payload,
+          confirmed: true,
+        },
+      });
+      const result = payload.result || {};
+      appendAiMessage({
+        text:
+          pendingAction.type === 'finance_payment'
+            ? `Payment recorded successfully. Receipt ${result.receipt?.receiptNo} is ready.`
+            : 'Action completed successfully.',
+        elements: [],
+        actions: [],
+        result,
+      });
+      setPendingAction(null);
+    } catch (actionError) {
+      setError(actionError.message);
+    } finally {
+      setIsActionWorking(false);
+    }
+  };
+
+  const confirmReceiptSend = (receipt) => {
+    openConfirmation({
+      type: 'receipt_send',
+      label: `Send receipt ${receipt.receiptNo} through Gmail and WhatsApp`,
+      payload: {
+        receiptNo: receipt.receiptNo,
+        channels: ['gmail', 'whatsapp'],
+      },
+    });
+  };
+
   return (
-    <div className="w-full h-[calc(100vh-73px)] bg-[#050505] relative flex items-center justify-center overflow-hidden">
-      
-      {/* ADD NEON GLOWING CUSTOM STYLES DIRECTLY IN THE DOM FOR POWER RAYS */}
-      <style>{`
-        @keyframes rayAbsorb {
-          0% { transform: rotate(0deg) scale(2); opacity: 0.1; }
-          50% { opacity: 0.6; }
-          100% { transform: rotate(360deg) scale(0.2); opacity: 0; }
-        }
-        .power-ray {
-          position: absolute;
-          top: 50%; left: 50%;
-          width: 200%; height: 4px;
-          background: linear-gradient(90deg, transparent, #E1FA6C, transparent);
-          transform-origin: left center;
-          animation: rayAbsorb 2s infinite linear;
-        }
-      `}</style>
+    <div className="min-h-[calc(100vh-73px)] bg-[#F4F4F2] p-3 text-neutral-950 md:p-6">
+      <div className="mx-auto flex max-w-7xl flex-col gap-4">
+        <section className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-start gap-3">
+              <div className="rounded-2xl bg-neutral-950 p-3 text-[#E1FA6C]">
+                <Bot className="h-6 w-6" />
+              </div>
+              <div>
+                <h1 className="text-lg font-black tracking-tight md:text-xl">
+                  AI Assistant for {SCHOOL_NAME}
+                </h1>
+                <p className="mt-1 max-w-3xl text-xs font-semibold leading-relaxed text-neutral-600">
+                  School-specific ERP assistant for secure lookup, analytics, and admin-confirmed actions.
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <ProviderBadge enabled={config.providers?.gemini}>Gemini</ProviderBadge>
+                  <ProviderBadge enabled={config.providers?.grok}>Grok</ProviderBadge>
+                  <span className="rounded-full border border-neutral-200 bg-neutral-50 px-2 py-0.5 text-[10px] font-black uppercase text-neutral-600">
+                    Role: {config.role || 'Authenticated'}
+                  </span>
+                </div>
+              </div>
+            </div>
 
-      {/* PHASE 1: CENTRAL BIG ROUND AI ACTIVATION NODE */}
-      {!isTerminalOpen && (
-        <div className="relative flex flex-col items-center justify-center z-10">
-          
-          {/* 5-Second Rays Emission Ring */}
-          {isActivating && (
-            <div className="absolute inset-0 pointer-events-none w-[600px] h-[600px] -translate-x-1/2 -translate-y-1/2">
-              {[...Array(12)].map((_, i) => (
-                <div 
-                  key={i} 
-                  className="power-ray" 
-                  style={{ transform: `translate(-50%, -50%) rotate(${i * 30}deg)`, animationDelay: `${i * 0.15}s` }} 
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-1">
+                {['chat', 'voice'].map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => setMode(item)}
+                    className={`rounded-lg px-3 py-2 text-xs font-black capitalize ${
+                      mode === item ? 'bg-neutral-950 text-white' : 'text-neutral-600'
+                    }`}
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
+              <select
+                value={provider}
+                onChange={(event) => setProvider(event.target.value)}
+                className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-xs font-black outline-none"
+              >
+                <option value="gemini">Gemini</option>
+                <option value="grok">Grok</option>
+              </select>
+            </div>
+          </div>
+        </section>
+
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
+          <aside className="space-y-4">
+            <section className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
+              <h2 className="text-sm font-black">Student Search</h2>
+              <p className="mt-1 text-xs font-semibold text-neutral-500">
+                Search by admission number, name, father name, class, or mobile.
+              </p>
+              <form onSubmit={searchStudent} className="mt-3 flex gap-2">
+                <input
+                  value={studentQuery}
+                  onChange={(event) => setStudentQuery(event.target.value)}
+                  placeholder="ADM / name / mobile..."
+                  className="min-w-0 flex-1 rounded-xl border border-neutral-200 px-3 py-2 text-xs font-semibold outline-none focus:border-neutral-950"
                 />
-              ))}
-            </div>
-          )}
+                <button
+                  type="submit"
+                  disabled={!studentQuery.trim() || isLoading}
+                  className="rounded-xl bg-neutral-950 p-2.5 text-white disabled:opacity-40"
+                  title="Search student"
+                >
+                  <Search className="h-4 w-4" />
+                </button>
+              </form>
+            </section>
 
-          {/* Core Master Trigger Sphere */}
-          <button
-            type="button"
-            onClick={handleActivationSequence}
-            className={`w-40 h-40 rounded-full bg-black border flex flex-col items-center justify-center gap-3 transition-all duration-500 shadow-2xl group ${isActivating ? 'border-[#E1FA6C] scale-95 shadow-[0_0_60px_rgba(225,250,108,0.4)]' : 'border-neutral-800 hover:border-[#E1FA6C] hover:shadow-[0_0_40px_rgba(225,250,108,0.2)]'}`}
-          >
-            {isActivating ? (
-              <RefreshCw className="w-12 h-12 text-[#E1FA6C] animate-spin" />
-            ) : (
-              <Power className="w-12 h-12 text-neutral-500 group-hover:text-[#E1FA6C] transition-colors duration-300" />
-            )}
-            <span className={`text-[10px] font-black uppercase tracking-widest ${isActivating ? 'text-[#E1FA6C]' : 'text-neutral-400 group-hover:text-white'}`}>
-              {isActivating ? "Initializing..." : "Activate AI Agent"}
-            </span>
-          </button>
-          
-          <p className="text-[10px] font-mono text-neutral-600 mt-4 uppercase tracking-widest">
-            {isActivating ? "Absorbing core environment metrics..." : "Click sphere node to open secured prompt environment"}
-          </p>
-        </div>
-      )}
+            <section className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
+              <h2 className="text-sm font-black">Voice Controls</h2>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={toggleListening}
+                  disabled={mode !== 'voice' || !speechSupported}
+                  className={`inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-xs font-black ${
+                    isListening
+                      ? 'border-red-200 bg-red-50 text-red-700'
+                      : 'border-neutral-200 bg-neutral-50 text-neutral-800'
+                  } disabled:opacity-40`}
+                >
+                  {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                  {isListening ? 'Stop' : 'Speak'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsMuted((value) => !value)}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs font-black"
+                >
+                  {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                  {isMuted ? 'Muted' : 'Voice'}
+                </button>
+                <button
+                  type="button"
+                  onClick={stopSpeaking}
+                  disabled={!isSpeaking}
+                  className="col-span-2 inline-flex items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs font-black disabled:opacity-40"
+                >
+                  <PauseCircle className="h-4 w-4" />
+                  Stop Speaking
+                </button>
+              </div>
+              {!speechSupported && (
+                <p className="mt-2 text-[11px] font-semibold text-amber-700">
+                  Browser microphone speech recognition is not available here.
+                </p>
+              )}
+            </section>
 
-      {/* PHASE 2: OVERLAPPING COGNITIVE TERMINAL WINDOW (90vw / 90vh Strict Lock) */}
-      {isTerminalOpen && (
-        <div className="fixed inset-0 w-screen h-screen bg-black/80 backdrop-blur-md z-[999] flex items-center justify-center p-4 animate-fadeIn">
-          
-          <div className="w-[90vw] h-[90vh] bg-[#0A0A0A] border border-neutral-800 rounded-3xl p-5 flex flex-col justify-between relative shadow-[0_0_50px_rgba(0,0,0,0.8)] box-border overflow-hidden">
-            
-            {/* Ambient Background Glow Inside Popup */}
-            <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] bg-[#E1FA6C]/5 rounded-full blur-[120px] pointer-events-none" />
+            <section className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
+              <h2 className="flex items-center gap-2 text-sm font-black">
+                <ShieldCheck className="h-4 w-4" />
+                Security Rules
+              </h2>
+              <div className="mt-3 space-y-2 text-xs font-semibold text-neutral-600">
+                <p>Only Admin can run full AI action mode.</p>
+                <p>Sensitive actions always require confirmation.</p>
+                <p>API keys and secrets never leave the backend.</p>
+                <p>The assistant is limited to {SCHOOL_NAME}.</p>
+              </div>
+            </section>
+          </aside>
 
-            {/* HEADER INTERACTION CONSOLE */}
-            <div className="bg-[#121212]/90 p-3.5 rounded-2xl border border-neutral-800 flex items-center justify-between z-10 flex-shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-black rounded-xl flex items-center justify-center text-[#E1FA6C] border border-[#E1FA6C]/30 relative">
-                  <Bot className="w-4 h-4" />
-                  <span className="absolute w-1.5 h-1.5 bg-[#E1FA6C] rounded-full top-0 right-0 animate-ping" />
-                </div>
+          <main className="flex min-h-[680px] flex-col rounded-2xl border border-neutral-200 bg-white shadow-sm">
+            <div className="border-b border-neutral-200 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h4 className="text-[11px] font-black uppercase tracking-widest text-neutral-100 flex items-center gap-1">
-                    AUTOMATED COGNITIVE MODULE <Sparkles className="w-3 h-3 text-[#E1FA6C]" />
-                  </h4>
-                  <p className="text-[8px] text-[#E1FA6C] font-black font-mono tracking-tight mt-0.5">STATUS: SECURE TERMINAL REDIRECT</p>
+                  <h2 className="flex items-center gap-2 text-sm font-black">
+                    <Sparkles className="h-4 w-4 text-lime-600" />
+                    Conversation
+                  </h2>
+                  <p className="mt-1 text-xs font-semibold text-neutral-500">
+                    Ask for student details, pending fees, attendance reports, exam graphs, receipts, notices, and meetings.
+                  </p>
                 </div>
+                {error && (
+                  <button
+                    type="button"
+                    onClick={retryLastPrompt}
+                    className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-black text-red-700"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    Retry
+                  </button>
+                )}
               </div>
-
-              {/* ACTION MATRIX RIG */}
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={handleExportToPdf}
-                  disabled={isResetDone}
-                  className={`flex items-center gap-1 text-[9px] font-black uppercase tracking-wider px-3 py-1.5 rounded-xl border transition-all duration-300 ${isResetDone ? 'bg-neutral-900 border-neutral-950 text-neutral-600 cursor-not-allowed' : 'bg-[#E1FA6C] text-black border-[#E1FA6C] hover:bg-[#d5ee5f]'}`}
-                >
-                  <Download className="w-3 h-3" /> Export PDF
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleResetChatRegistry}
-                  className="flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-transparent text-neutral-400 hover:text-red-500 border border-neutral-800 hover:border-red-900/40 px-3 py-1.5 rounded-xl transition-all duration-300"
-                >
-                  <Trash2 className="w-3 h-3" /> Reset Chat
-                </button>
-
-                {/* VISUAL CLOSER TRAP */}
-                <button
-                  type="button"
-                  onClick={handleCloseTerminal}
-                  className="ml-2 p-1.5 bg-neutral-900 hover:bg-red-600/20 text-neutral-400 hover:text-red-500 border border-neutral-800 hover:border-red-600/40 rounded-xl transition-all duration-300"
-                  title="Deactivate Core Terminal"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
+              {error && <p className="mt-2 text-xs font-bold text-red-600">{error}</p>}
             </div>
 
-            {/* MESSAGE HUB FEED */}
-            <div className="flex-1 overflow-y-auto my-3 p-4 space-y-4 rounded-2xl border border-neutral-900 bg-black/40 z-10 text-left scrollbar-thin scrollbar-thumb-neutral-800 scrollbar-track-transparent">
-              {chatLog.map((log) => {
-                const isAi = log.sender === 'ai';
+            <div className="flex-1 space-y-4 overflow-y-auto bg-neutral-50 p-4">
+              {messages.map((message) => {
+                const isAi = message.sender === 'ai';
                 return (
-                  <div key={log.id} className={`flex gap-3 max-w-[85%] ${isAi ? 'mr-auto' : 'ml-auto flex-row-reverse'}`}>
-                    <div className={`w-8 h-8 rounded-xl flex-shrink-0 border flex items-center justify-center ${isAi ? 'bg-black text-[#E1FA6C] border-neutral-800' : 'bg-[#E1FA6C] text-black border-[#E1FA6C]'}`}>
-                      {isAi ? <Bot className="w-4 h-4" /> : <User className="w-4 h-4 stroke-[2.5]" />}
-                    </div>
-                    <div className="space-y-1 max-w-[calc(100%-40px)]">
-                      <div className={`p-3.5 rounded-2xl text-xs font-medium border leading-relaxed tracking-wide break-words ${isAi ? 'bg-[#121212] border-neutral-800 text-neutral-200 rounded-tl-none' : 'bg-neutral-900 border-neutral-800 text-neutral-100 rounded-tr-none'}`}>
-                        <p className="whitespace-pre-wrap">{log.text}</p>
+                  <div key={message.id} className={`flex gap-3 ${isAi ? 'justify-start' : 'justify-end'}`}>
+                    {isAi && (
+                      <div className="h-9 w-9 shrink-0 rounded-xl bg-neutral-950 p-2 text-[#E1FA6C]">
+                        <Bot className="h-5 w-5" />
                       </div>
-                      <span className="text-[8px] font-mono font-bold block opacity-40 px-1 text-neutral-400">{log.timestamp}</span>
+                    )}
+                    <div className={`max-w-[900px] ${isAi ? 'w-full' : 'w-auto'}`}>
+                      <div
+                        className={`rounded-2xl border p-3 text-sm font-semibold leading-relaxed ${
+                          isAi
+                            ? 'border-neutral-200 bg-white text-neutral-800'
+                            : 'border-neutral-950 bg-neutral-950 text-white'
+                        }`}
+                      >
+                        <p className="whitespace-pre-wrap">{message.text}</p>
+                        {message.provider && (
+                          <p className="mt-2 text-[10px] font-black uppercase text-neutral-400">
+                            Provider: {message.provider}
+                          </p>
+                        )}
+                      </div>
+                      <AssistantElements elements={message.elements} />
+                      <ReceiptCard
+                        receipt={message.result?.receipt || message.result?.result?.receipt}
+                        onDownload={downloadReceiptPdf}
+                        onSend={confirmReceiptSend}
+                      />
+                      {Array.isArray(message.actions) && message.actions.length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {message.actions.map((action) => (
+                            <button
+                              key={action.id || action.label}
+                              type="button"
+                              onClick={() => openConfirmation(action)}
+                              className="inline-flex items-center gap-2 rounded-xl bg-[#E1FA6C] px-3 py-2 text-xs font-black text-neutral-950"
+                            >
+                              <CheckCircle2 className="h-4 w-4" />
+                              {action.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <span className="mt-1 block px-1 text-[10px] font-bold text-neutral-400">
+                        {message.timestamp}
+                      </span>
                     </div>
+                    {!isAi && (
+                      <div className="h-9 w-9 shrink-0 rounded-xl bg-[#E1FA6C] p-2 text-neutral-950">
+                        <User className="h-5 w-5" />
+                      </div>
+                    )}
                   </div>
                 );
               })}
 
-              {isAiProcessing && (
-                <div className="flex gap-3 max-w-[85%] mr-auto items-center text-[10px] font-black text-[#E1FA6C] animate-pulse font-mono tracking-widest uppercase">
-                  <div className="w-8 h-8 bg-black border border-neutral-800 text-[#E1FA6C] rounded-xl flex items-center justify-center shadow-lg">
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                  </div>
-                  <span>Parsing database nodes...</span>
+              {isLoading && (
+                <div className="flex items-center gap-3 text-xs font-black uppercase tracking-wide text-neutral-500">
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                  AI is reading ERP data...
                 </div>
               )}
               <div ref={chatEndRef} />
             </div>
 
-            {/* INPUT TRANSITION COMMAND BAR */}
-            <div className="p-1.5 bg-[#121212]/90 backdrop-blur-md rounded-2xl border border-neutral-800 z-10 shadow-2xl flex-shrink-0">
-              <form onSubmit={handleCommandSubmission} className="flex gap-2 items-center">
+            <form onSubmit={(event) => { event.preventDefault(); submitPrompt(); }} className="border-t border-neutral-200 p-3">
+              <div className="flex items-center gap-2 rounded-2xl border border-neutral-200 bg-neutral-50 p-2">
+                <button
+                  type="button"
+                  onClick={toggleListening}
+                  disabled={mode !== 'voice' || !speechSupported}
+                  className={`rounded-xl p-2.5 ${
+                    isListening ? 'bg-red-100 text-red-700' : 'bg-white text-neutral-800'
+                  } disabled:opacity-40`}
+                  title="Use microphone"
+                >
+                  {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                </button>
                 <input
-                  type="text"
-                  value={userInput}
-                  onChange={(e) => setUserInput(e.target.value)}
-                  disabled={isAiProcessing}
-                  placeholder="Ask me to mark attendance or run deep performance analytics..."
-                  className="flex-1 p-3 bg-black/80 border border-neutral-900 focus:border-[#E1FA6C]/50 rounded-xl text-xs font-medium text-white placeholder-neutral-600 outline-none transition-all"
+                  value={input}
+                  onChange={(event) => setInput(event.target.value)}
+                  disabled={isLoading}
+                  placeholder="Ask: Show pending fees of Class 8, or Pay Rs. 5000 for ADM-001..."
+                  className="min-w-0 flex-1 bg-transparent px-2 py-2 text-sm font-semibold outline-none placeholder:text-neutral-400"
                 />
                 <button
                   type="submit"
-                  disabled={!userInput.trim() || isAiProcessing}
-                  className="p-3 bg-[#E1FA6C] text-black hover:bg-[#d5ee5f] transition-all rounded-xl disabled:opacity-20 flex-shrink-0 shadow-[0_0_15px_rgba(225,250,108,0.2)]"
+                  disabled={!input.trim() || isLoading}
+                  className="rounded-xl bg-neutral-950 p-3 text-white disabled:opacity-40"
+                  title="Send message"
                 >
-                  <Send className="w-4 h-4 stroke-[2.5]" />
+                  <Send className="h-4 w-4" />
                 </button>
-              </form>
-            </div>
-
-          </div>
+              </div>
+            </form>
+          </main>
         </div>
-      )}
+      </div>
 
+      <ConfirmationModal
+        pendingAction={pendingAction}
+        onCancel={() => setPendingAction(null)}
+        onConfirm={confirmAction}
+        isWorking={isActionWorking}
+      />
     </div>
   );
 };

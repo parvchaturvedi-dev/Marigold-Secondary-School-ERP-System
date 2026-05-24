@@ -68,6 +68,11 @@ const applicationSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
+    senderIdentityId: {
+      type: String,
+      trim: true,
+      default: '',
+    },
     className: {
       type: String,
       trim: true,
@@ -110,6 +115,34 @@ const applicationSchema = new mongoose.Schema(
     adminActionAt: {
       type: Date,
       default: null,
+    },
+    adminReplyEditedAt: {
+      type: Date,
+      default: null,
+    },
+    adminReplyVersion: {
+      type: Number,
+      default: 0,
+    },
+    replyDeliveredAt: {
+      type: Date,
+      default: null,
+    },
+    replyRecipientActiveAt: {
+      type: Date,
+      default: null,
+    },
+    replyReadAt: {
+      type: Date,
+      default: null,
+    },
+    replyReadVersion: {
+      type: Number,
+      default: 0,
+    },
+    replyEditedAfterRead: {
+      type: Boolean,
+      default: false,
     },
   },
   {

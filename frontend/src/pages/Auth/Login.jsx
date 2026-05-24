@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Lock, User, Eye, EyeOff, ShieldAlert, ArrowRight, RefreshCw } from 'lucide-react';
 import { authenticateUser, detectRoleFromUsername } from '../../components/common/auth';
+import { apiFetch } from '../../components/common/api';
 
 const Login = ({ onLoginSuccess }) => {
   // CORE FORM STATES
@@ -40,6 +41,11 @@ const Login = ({ onLoginSuccess }) => {
     try {
       const authSession = await authenticateUser({ username: targetUser, password: targetPass });
 
+      if (authSession.mustChangePassword) {
+        setForcedResetModal({ isOpen: true, username: authSession.username, role: authSession.role, session: authSession });
+        return;
+      }
+
       if (typeof onLoginSuccess === 'function') {
         onLoginSuccess(authSession);
       }
@@ -51,10 +57,10 @@ const Login = ({ onLoginSuccess }) => {
   };
 
   // EXTENDED FORCE PASSWORD CHANGEOVER HANDLER
-  const handleForcedPasswordReset = (e) => {
+  const handleForcedPasswordReset = async (e) => {
     e.preventDefault();
     if (newPassword.length < 6) {
-      alert('Security Requirement: Password must be at least 6 tokens long.');
+      alert('Password must be at least 6 characters long.');
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -62,11 +68,22 @@ const Login = ({ onLoginSuccess }) => {
       return;
     }
 
-    alert('Security Matrix Updated: Master token changed successfully. Proceeding to system load...');
-    setForcedResetModal({ isOpen: false, username: '', role: '' });
-    
-    if (typeof onLoginSuccess === 'function') {
-      onLoginSuccess({ username: forcedResetModal.username, role: forcedResetModal.role });
+    try {
+      await apiFetch('/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newPassword }),
+      });
+
+      const nextSession = { ...(forcedResetModal.session || {}), mustChangePassword: false };
+      setForcedResetModal({ isOpen: false, username: '', role: '', session: null });
+      setNewPassword('');
+      setConfirmPassword('');
+      if (typeof onLoginSuccess === 'function') {
+        onLoginSuccess(nextSession);
+      }
+    } catch (error) {
+      alert(error.message);
     }
   };
 
@@ -159,13 +176,13 @@ const Login = ({ onLoginSuccess }) => {
             disabled={isSubmitting}
             className="w-full mt-2 bg-neutral-950 hover:bg-neutral-800 text-white text-xs font-black uppercase tracking-widest py-3.5 px-4 rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all group disabled:opacity-60"
           >
-            {isSubmitting ? 'SYNCING MONGODB...' : 'INITIALIZE SESSION'} <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            {isSubmitting ? 'LOADING...' : 'INITIALIZE SESSION'} <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
           </button>
         </form>
 
         {/* SECURITY SYSTEM LOG PRINT */}
         <p className="text-[9px] font-mono font-bold text-neutral-400 text-center mt-6 uppercase tracking-wider">
-          * Unauthorized access attempts will execute firewall quarantine.
+          * Unauthorized access attempts are monitored.
         </p>
       </div>
 
@@ -181,15 +198,15 @@ const Login = ({ onLoginSuccess }) => {
                 <RefreshCw className="w-5 h-5 text-amber-600 animate-spin" style={{ animationDuration: '3s' }} />
               </div>
               <div>
-                <h3 className="text-sm font-black uppercase tracking-wider font-mono text-neutral-900">Security Override</h3>
-                <p className="text-[11px] text-neutral-500 font-medium mt-0.5">Admin has viewed your default setup token. You are required to configure a unique password block.</p>
+                <h3 className="text-sm font-black uppercase tracking-wider font-mono text-neutral-900">Change Password</h3>
+                <p className="text-[11px] text-neutral-500 font-medium mt-0.5">This login is using the shared password sent by the office. Please set a private password now.</p>
               </div>
             </div>
 
             <form onSubmit={handleForcedPasswordReset} className="space-y-3 pt-2">
               {/* NEW CREDENTIAL */}
               <div className="space-y-1">
-                <label className="text-[9px] font-mono font-black text-neutral-400 uppercase tracking-wider block">New Token String</label>
+                <label className="text-[9px] font-mono font-black text-neutral-400 uppercase tracking-wider block">New Password</label>
                 <input 
                   type="password"
                   required
@@ -202,7 +219,7 @@ const Login = ({ onLoginSuccess }) => {
 
               {/* RE-ENTRY VERIFICATION */}
               <div className="space-y-1">
-                <label className="text-[9px] font-mono font-black text-neutral-400 uppercase tracking-wider block">Verify Token String</label>
+                <label className="text-[9px] font-mono font-black text-neutral-400 uppercase tracking-wider block">Confirm Password</label>
                 <input 
                   type="password"
                   required
@@ -218,7 +235,7 @@ const Login = ({ onLoginSuccess }) => {
                 type="submit" 
                 className="w-full mt-2 bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-black uppercase tracking-widest py-3 rounded-xl transition-all"
               >
-                HARDEN & RUNTIME SYNC
+                Save New Password
               </button>
             </form>
           </div>

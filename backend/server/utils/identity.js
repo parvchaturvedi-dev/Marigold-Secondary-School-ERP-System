@@ -5,11 +5,13 @@ import User from '../models/User.js';
 const STUDENT_NAMESPACE = 'admin-student-management-students';
 const TEACHER_NAMESPACE = 'admin-teacher-management-list';
 const CLERK_NAMESPACE = 'admin-clerk-management-list';
+const CLASS_PREFERENCES_NAMESPACE = 'admin-class-preferences';
 
 export const IDENTITY_SOURCE_NAMESPACES = new Set([
   STUDENT_NAMESPACE,
   TEACHER_NAMESPACE,
   CLERK_NAMESPACE,
+  CLASS_PREFERENCES_NAMESPACE,
 ]);
 
 export const createPasswordHash = (password) => {
@@ -30,6 +32,38 @@ export const verifyPassword = (password, storedHash = '') => {
 
 const normalizeCode = (value = '') =>
   String(value || '').trim().toUpperCase().replace(/\s+/g, '-');
+
+const getClassName = (classRecord = {}) =>
+  classRecord.name || classRecord.className || classRecord.class || String(classRecord || '');
+
+const classRank = (className = '') => {
+  const normalized = String(className).trim().toLowerCase();
+  if (normalized === 'nursery') return -3;
+  if (normalized === 'lkg') return -2;
+  if (normalized === 'ukg') return -1;
+  return Number(String(className).match(/\d+/)?.[0] || 999);
+};
+
+const sortClassNames = (classNames = [], preferredClassNames = []) => {
+  const preferenceRank = new Map(
+    (Array.isArray(preferredClassNames) ? preferredClassNames : [])
+      .map(getClassName)
+      .filter(Boolean)
+      .map((name, index) => [String(name).trim().toLowerCase(), index])
+  );
+  const hasPreferences = preferenceRank.size > 0;
+
+  return [...new Set((Array.isArray(classNames) ? classNames : []).filter(Boolean))].sort((a, b) => {
+    const preferredA = preferenceRank.get(String(a).trim().toLowerCase());
+    const preferredB = preferenceRank.get(String(b).trim().toLowerCase());
+
+    if (hasPreferences && preferredA !== undefined && preferredB !== undefined) return preferredA - preferredB;
+    if (hasPreferences && preferredA !== undefined) return -1;
+    if (hasPreferences && preferredB !== undefined) return 1;
+
+    return classRank(a) - classRank(b) || String(a).localeCompare(String(b));
+  });
+};
 
 const usernameFor = (role, rawId) => {
   const id = normalizeCode(rawId);
@@ -110,11 +144,15 @@ const deactivateGeneratedUsersNotIn = async (role, activeUsernames) => {
 };
 
 export const syncIdentityUsersFromState = async () => {
-  const [students, teachers, clerks] = await Promise.all([
+  const [students, teachers, clerks, classPreferences] = await Promise.all([
     getStateValue(STUDENT_NAMESPACE, []),
     getStateValue(TEACHER_NAMESPACE, []),
     getStateValue(CLERK_NAMESPACE, []),
+    getStateValue(CLASS_PREFERENCES_NAMESPACE, []),
   ]);
+  const preferredClassNames = (Array.isArray(classPreferences) ? classPreferences : [])
+    .map(getClassName)
+    .filter(Boolean);
 
   const activeStudents = (Array.isArray(students) ? students : []).filter(
     (student) => normalizeCode(student.admissionNumber || student.id || student.rawProfile?.admissionNumber)
@@ -199,7 +237,10 @@ export const syncIdentityUsersFromState = async () => {
         mobile: teacher.mobile || '',
         photoDataUrl: teacher.photoDataUrl || '',
         allottedClasses: Array.isArray(teacher.classAssignments)
-          ? teacher.classAssignments.map((entry) => entry.className).filter(Boolean)
+          ? sortClassNames(
+              teacher.classAssignments.map((entry) => entry.className).filter(Boolean),
+              preferredClassNames
+            )
           : [],
         teacherProfile: teacher,
       },

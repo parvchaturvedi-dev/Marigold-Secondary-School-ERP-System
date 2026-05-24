@@ -99,8 +99,13 @@ const StudentAssigning = () => {
     setStudentsDb((students) => [
       {
         admissionNumber: submissionPayload.id,
+        id: submissionPayload.id,
+        displayName: submissionPayload.studentName,
         name: submissionPayload.studentName,
+        className: submissionPayload.targetClass,
         class: submissionPayload.targetClass,
+        section: submissionPayload.section || '',
+        rollNo: submissionPayload.rollNo || '',
         gender: submissionPayload.gender,
         category: submissionPayload.category,
         lastSchoolName: submissionPayload.lastSchoolName,
@@ -108,6 +113,14 @@ const StudentAssigning = () => {
         email: submissionPayload.email,
         fatherName: submissionPayload.fatherName,
         motherName: submissionPayload.motherName,
+        guardianName: submissionPayload.guardianName,
+        guardianPhone: submissionPayload.guardianMobile || submissionPayload.mobileNo,
+        guardianEmail: submissionPayload.email,
+        address: submissionPayload.permAddress || submissionPayload.tempAddress,
+        paidFees: Number(submissionPayload.paidFees || 0),
+        pendingFees: Number(submissionPayload.pendingFees || 0),
+        yearlyFee: Number(submissionPayload.yearlyFee || submissionPayload.paidFees || 0) +
+          Number(submissionPayload.pendingFees || 0),
         status: 'Active',
         documents: submissionPayload.documents,
         rawProfile: submissionPayload,

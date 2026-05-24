@@ -1,4 +1,5 @@
 import { getUserProfile } from '../../components/common/auth';
+import { compareClassNames, sortClassNames } from '../../components/common/masterData';
 import {
   getTeacherAllowedClasses,
   readAssignments,
@@ -105,7 +106,7 @@ export const getTeacherProfile = (session = {}) => {
     address: configuredProfile.address || 'Registered residential address',
     classTeacherFor: configuredProfile.classTeacherFor || 'Class 9-A',
     emergencyContact: configuredProfile.emergencyContact || 'Not updated',
-    allottedClasses: getTeacherAllowedClasses({ ...session, username }),
+    allottedClasses: sortClassNames(getTeacherAllowedClasses({ ...session, username })),
   };
 };
 
@@ -117,7 +118,7 @@ const getSectionForClass = (className = '', index = 0) => {
 export const getTeacherClassSections = (session = {}) => {
   const profile = getTeacherProfile(session);
 
-  return profile.allottedClasses.map((className, index) => {
+  return sortClassNames(profile.allottedClasses).map((className, index) => {
     const classTeacherSection = profile.classTeacherFor.startsWith(className)
       ? profile.classTeacherFor.split('-').pop()
       : '';
@@ -144,7 +145,9 @@ export const getTeacherClassSections = (session = {}) => {
 };
 
 export const getTeacherSubjectLoad = (session = {}) => {
-  const assignments = getTeacherExamAssignments(session);
+  const assignments = [...getTeacherExamAssignments(session)].sort(
+    (a, b) => compareClassNames(a.className, b.className)
+  );
   const fallbackClasses = getTeacherClassSections(session);
 
   if (!assignments.length) {

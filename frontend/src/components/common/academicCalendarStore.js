@@ -48,26 +48,26 @@ export const saveAcademicCalendar = async (file, uploadedBy = 'Admin') => {
   }
 };
 
-export const fetchAcademicCalendar = async () => {
+export const fetchAcademicCalendar = async ({ broadcast = false } = {}) => {
   try {
     const response = await authFetch(`${ACADEMIC_CALENDAR_API_URL}/latest`);
 
     if (response.ok) {
       const calendarPayload = await response.json();
       cacheCalendar(calendarPayload);
-      broadcastCalendarUpdate();
+      if (broadcast) broadcastCalendarUpdate();
       return calendarPayload;
     }
 
     if (response.status === 404) {
       cacheCalendar(null);
-      broadcastCalendarUpdate();
+      if (broadcast) broadcastCalendarUpdate();
       return null;
     }
     const errorPayload = await response.json().catch(() => ({}));
     throw new Error(errorPayload.message || 'Academic calendar could not be loaded.');
   } catch (error) {
-    alert(`Academic calendar sync failed: ${error.message}`);
+    alert(`Academic calendar loading failed: ${error.message}`);
     return readAcademicCalendar();
   }
 };

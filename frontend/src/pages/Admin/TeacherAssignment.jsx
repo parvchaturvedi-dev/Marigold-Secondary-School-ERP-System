@@ -30,6 +30,7 @@ const TeacherAssignment = () => {
   });
 
   const [, setTeachersDb] = useMongoState('admin-teacher-management-list', []);
+  const [, setClassesDb] = useMongoState('admin-class-management-classes', []);
 
   // Native Standard Inputs Mutator
   const handleInputChange = (e) => {
@@ -109,6 +110,32 @@ const TeacherAssignment = () => {
     };
 
     setTeachersDb(prev => [finalRecord, ...prev]);
+    if (finalRecord.isClassTeacher === 'Yes' && finalRecord.assignedClassTeacherFor) {
+      setClassesDb((classes) => {
+        const hasClass = classes.some((classRecord) => classRecord.name === finalRecord.assignedClassTeacherFor);
+        const nextClasses = hasClass
+          ? classes
+          : [
+              ...classes,
+              {
+                id: finalRecord.assignedClassTeacherFor,
+                name: finalRecord.assignedClassTeacherFor,
+                studentCount: 0,
+              },
+            ];
+
+        return nextClasses.map((classRecord) =>
+          classRecord.name === finalRecord.assignedClassTeacherFor
+            ? {
+                ...classRecord,
+                classTeacherId: finalRecord.id,
+                classTeacherName: finalRecord.name,
+                teacher: finalRecord.name,
+              }
+            : classRecord
+        );
+      });
+    }
     alert(`Teacher Profile Registered & Workspace Context Setup Successfully!\nGenerated Access Key ID: ${finalRecord.id}`);
     
     // Total System State Reset Controls

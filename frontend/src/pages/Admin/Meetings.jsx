@@ -1,9 +1,6 @@
-import React from 'react'
+import React from 'react';
+import JitsiMeetingHub from '../../components/common/JitsiMeetingHub';
 
-const Meetings = () => {
-  return (
-    <div>Meetings</div>
-  )
-}
+const Meetings = ({ session }) => <JitsiMeetingHub session={session} role="admin" />;
 
-export default Meetings
+export default Meetings;

@@ -11,6 +11,7 @@ import {
   UserCheck,
 } from 'lucide-react';
 import {
+  ACADEMIC_CALENDAR_UPDATED_EVENT,
   formatCalendarDate,
   formatFileSize,
   fetchAcademicCalendar,
@@ -28,12 +29,18 @@ const AcademicCalender = ({ session }) => {
   useEffect(() => {
     let isActive = true;
 
-    fetchAcademicCalendar().then((latestCalendar) => {
-      if (isActive) setCalendarPdf(latestCalendar);
-    });
+    const refreshCalendar = () => {
+      fetchAcademicCalendar().then((latestCalendar) => {
+        if (isActive) setCalendarPdf(latestCalendar);
+      });
+    };
+
+    refreshCalendar();
+    window.addEventListener(ACADEMIC_CALENDAR_UPDATED_EVENT, refreshCalendar);
 
     return () => {
       isActive = false;
+      window.removeEventListener(ACADEMIC_CALENDAR_UPDATED_EVENT, refreshCalendar);
     };
   }, []);
 

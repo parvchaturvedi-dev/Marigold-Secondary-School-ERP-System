@@ -58,13 +58,19 @@ const LeaveRequests = ({ session }) => {
   const leaveRequests = getLeaveRequestsForSession(session);
 
   useEffect(() => {
-    const refreshRequests = () => setRequestVersion((version) => version + 1);
+    let isActive = true;
+    const refreshRequests = () => {
+      fetchLeaveRequests({ ...session, role: 'admin' }, null).then(() => {
+        if (isActive) setRequestVersion((version) => version + 1);
+      });
+    };
     window.addEventListener(LEAVE_REQUEST_UPDATED_EVENT, refreshRequests);
 
     return () => {
+      isActive = false;
       window.removeEventListener(LEAVE_REQUEST_UPDATED_EVENT, refreshRequests);
     };
-  }, []);
+  }, [session]);
 
   useEffect(() => {
     fetchLeaveRequests({ ...session, role: 'admin' }, null).then(() =>

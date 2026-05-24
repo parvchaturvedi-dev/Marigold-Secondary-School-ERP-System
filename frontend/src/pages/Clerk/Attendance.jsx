@@ -45,7 +45,7 @@ const Attendance = () => {
   useEffect(() => {
     if (!students.length) return;
     setRoster((currentRoster) =>
-      students.map((student, index) => {
+      students.map((student) => {
         const existing = currentRoster.find((item) => item.id === student.id);
         return {
           ...student,

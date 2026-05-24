@@ -21,8 +21,10 @@ import {
   formatApplicationDate,
   getConsensusMetrics,
   getDemoIdentity,
+  markApplicationReplyRead,
   voteOnApplication,
 } from './applicationStore';
+import { useMasterData } from './masterData';
 
 const kindOptions = [
   { id: 'simple', label: 'Simple Application' },
@@ -38,6 +40,7 @@ const statusTone = {
 };
 
 const ApplicationUserHub = ({ session, role }) => {
+  const masterData = useMasterData();
   const identityConfig = useMemo(() => getDemoIdentity(session), [session]);
   const [selectedIdentityId, setSelectedIdentityId] = useState(identityConfig.members[0]?.id || '');
   const selectedIdentity =
@@ -56,6 +59,36 @@ const ApplicationUserHub = ({ session, role }) => {
   });
 
   const canUseClassConsensus = role === 'student' && formState.kind === 'request';
+  const classMemberCount = useMemo(
+    () =>
+      selectedClassName
+        ? masterData.students.filter((student) => student.className === selectedClassName).length
+        : 0,
+    [masterData.students, selectedClassName]
+  );
+  const visibleApplications = useMemo(() => {
+    if (role !== 'student') return applications;
+
+    return applications.filter(
+      (application) =>
+        (application.senderUsername === session?.username &&
+          (!selectedIdentity?.id ||
+            !application.senderIdentityId ||
+            application.senderIdentityId === selectedIdentity.id ||
+            application.senderIdentity === selectedIdentity.name)) ||
+        (application.audienceMode === 'all-class' &&
+          application.status === 'collecting_consensus' &&
+          application.targetClassName === selectedIdentity?.className)
+    );
+  }, [applications, role, selectedIdentity, session?.username]);
+
+  useEffect(() => {
+    if (!classMemberCount) return;
+    setFormState((prev) => ({
+      ...prev,
+      totalClassMembers: classMemberCount,
+    }));
+  }, [classMemberCount]);
 
   const loadApplications = async () => {
     setIsLoading(true);
@@ -94,6 +127,40 @@ const ApplicationUserHub = ({ session, role }) => {
     };
   }, [selectedClassName, selectedIdentityId, session?.role, session?.username]);
 
+  useEffect(() => {
+    const unreadReplies = applications.filter(
+      (application) =>
+        application.adminReply &&
+        application.senderUsername === session?.username &&
+        (application.replyReadVersion || 0) < (application.adminReplyVersion || 0)
+    );
+
+    if (!unreadReplies.length) return;
+
+    let isActive = true;
+    Promise.all(
+      unreadReplies.map((application) =>
+        markApplicationReplyRead({
+          applicationId: application.id,
+          username: session?.username,
+        })
+      )
+    ).then((updatedApplications) => {
+      if (!isActive) return;
+      const updatesById = new Map(
+        updatedApplications.filter(Boolean).map((application) => [application.id, application])
+      );
+      if (!updatesById.size) return;
+      setApplications((prev) =>
+        prev.map((application) => updatesById.get(application.id) || application)
+      );
+    });
+
+    return () => {
+      isActive = false;
+    };
+  }, [applications, session?.username]);
+
   const updateField = (field, value) => {
     setFormState((prev) => ({
       ...prev,
@@ -126,7 +193,7 @@ const ApplicationUserHub = ({ session, role }) => {
         canUseClassConsensus && formState.audienceMode === 'all-class'
           ? selectedIdentity?.className
           : '',
-      totalClassMembers: Number(formState.totalClassMembers) || 40,
+      totalClassMembers: classMemberCount || Number(formState.totalClassMembers) || 1,
     };
 
     await createApplication(payload);
@@ -135,7 +202,7 @@ const ApplicationUserHub = ({ session, role }) => {
       category: APPLICATION_CATEGORIES[0],
       kind: 'simple',
       audienceMode: 'individual',
-      totalClassMembers: 40,
+      totalClassMembers: classMemberCount || 40,
       message: '',
     });
     await loadApplications();
@@ -272,8 +339,9 @@ const ApplicationUserHub = ({ session, role }) => {
                   <input
                     type="number"
                     min="1"
-                    value={formState.totalClassMembers}
+                    value={classMemberCount || formState.totalClassMembers}
                     onChange={(event) => updateField('totalClassMembers', event.target.value)}
+                    readOnly={classMemberCount > 0}
                     className="w-24 bg-white border border-purple-100 rounded-xl px-3 py-2 text-xs font-bold outline-none"
                   />
                   <span className="text-[11px] text-purple-700 font-bold">
@@ -320,12 +388,12 @@ const ApplicationUserHub = ({ session, role }) => {
                 <ClipboardCheck className="w-4 h-4 text-[#8b5cf6]" /> Application Timeline
               </h4>
               <span className="text-[10px] font-bold text-gray-400">
-                {isLoading ? 'Syncing...' : `${applications.length} records`}
+                {isLoading ? 'Syncing...' : `${visibleApplications.length} records`}
               </span>
             </div>
 
             <div className="space-y-3 max-h-[760px] overflow-y-auto pr-1">
-              {applications.length === 0 && (
+              {visibleApplications.length === 0 && (
                 <div className="p-8 text-center text-gray-400">
                   <FileText className="w-10 h-10 mx-auto mb-2 stroke-[1.4]" />
                   <p className="text-xs font-black text-[#1A1A1A]">No applications yet</p>
@@ -333,7 +401,7 @@ const ApplicationUserHub = ({ session, role }) => {
                 </div>
               )}
 
-              {applications.map((application) => {
+              {visibleApplications.map((application) => {
                 const metrics = getConsensusMetrics(application);
                 const myVote = application.votes?.find(
                   (vote) => vote.username === (selectedIdentity?.id || session?.username)
@@ -432,8 +500,18 @@ const ApplicationUserHub = ({ session, role }) => {
 
                     {application.adminReply && (
                       <div className="bg-blue-50 border border-blue-100 rounded-2xl p-3 text-xs text-blue-900">
-                        <p className="font-black flex items-center gap-2 mb-1">
+                        <p className="font-black flex flex-wrap items-center gap-2 mb-1">
                           <MessageSquareReply className="w-4 h-4" /> Admin Reply
+                          {application.adminReplyEditedAt && (
+                            <span className="rounded-md border border-blue-200 bg-white px-2 py-0.5 text-[9px] font-black uppercase text-blue-700">
+                              Edited
+                            </span>
+                          )}
+                          {application.adminReplyEditedAt && (
+                            <span className="rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[9px] font-black uppercase text-amber-700">
+                              New reply notification
+                            </span>
+                          )}
                         </p>
                         <p className="leading-relaxed">{application.adminReply}</p>
                       </div>

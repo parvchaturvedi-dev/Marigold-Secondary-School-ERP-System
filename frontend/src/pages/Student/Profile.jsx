@@ -5,6 +5,7 @@ import {
   UserRound,
   Users,
 } from 'lucide-react';
+import ProfilePhotoUploader from '../../components/common/ProfilePhotoUploader';
 import {
   getClassLabel,
   getDocumentStatus,
@@ -33,8 +34,8 @@ const Profile = ({ session }) => {
     <div className="space-y-6 pb-8 select-none font-sans text-[#1A1A1A]">
       <section className="bg-white border border-[#C8C8C8] rounded-3xl p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-4 text-center space-y-4">
-          <div className="w-28 h-28 mx-auto rounded-3xl border-2 border-[#1A1A1A] bg-[#EAEAEA] flex items-center justify-center relative">
-            <UserRound className="w-14 h-14 text-[#555555]" />
+          <div className="relative">
+            <ProfilePhotoUploader session={{ ...session, displayName: student.displayName }} />
             <span className="absolute -bottom-2 bg-[#E1FA6C] border border-[#1A1A1A]/10 text-[9px] font-black px-2 py-1 rounded-md">
               ACTIVE USER
             </span>
