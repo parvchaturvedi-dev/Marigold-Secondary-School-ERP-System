@@ -1,11 +1,17 @@
 import express from 'express';
 import { randomInt } from 'crypto';
 import multer from 'multer';
-import nodemailer from 'nodemailer';
 import User from '../models/User.js';
 import { isMongoConnected } from '../db.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { createAuthToken } from '../utils/authToken.js';
+import {
+  buildMailErrorPayload,
+  closeMailTransporter,
+  createMailTransporter,
+  getMailConfig,
+  getSenderAddress,
+} from '../utils/mailer.js';
 import {
   createPasswordHash,
   listIdentityUsers,
@@ -22,31 +28,26 @@ const upload = multer({
 });
 const passwordRevealOtps = new Map();
 
-const getMailConfig = () => {
-  const user = process.env.EMAIL_USER || process.env.GMAIL_USER;
-  const pass = process.env.EMAIL_PASS || process.env.GMAIL_APP_PASSWORD;
-  const fromName = process.env.EMAIL_FROM_NAME || process.env.GMAIL_FROM_NAME || 'MGPS ERP Portal';
-  return { user, pass, fromName, isReady: Boolean(user && pass) };
-};
-
 const sendMail = async ({ to, subject, text }) => {
   const mailConfig = getMailConfig();
   if (!mailConfig.isReady) throw new Error('Email is not configured. Set Gmail credentials in .env.');
 
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: mailConfig.user,
-      pass: mailConfig.pass,
-    },
-  });
+  const transporter = await createMailTransporter(mailConfig);
+  try {
+    await transporter.sendMail({
+      from: getSenderAddress(mailConfig),
+      to,
+      subject,
+      text,
+    });
+  } finally {
+    closeMailTransporter(transporter);
+  }
+};
 
-  await transporter.sendMail({
-    from: `"${mailConfig.fromName}" <${mailConfig.user}>`,
-    to,
-    subject,
-    text,
-  });
+const handleMailError = (response, error) => {
+  const failure = buildMailErrorPayload(error);
+  response.status(failure.status).json(failure.body);
 };
 
 const ensureMongo = (_request, response, next) => {
@@ -238,11 +239,16 @@ router.post('/users/:username/request-password-otp', ensureMongo, requireAuth, r
     expiresAt: Date.now() + 5 * 60 * 1000,
   });
 
-  await sendMail({
-    to: email,
-    subject: 'MGPS ERP password reveal OTP',
-    text: `Your OTP to reveal the MGPS ERP password for ${username} is ${otp}. It expires in 5 minutes.`,
-  });
+  try {
+    await sendMail({
+      to: email,
+      subject: 'MGPS ERP password reveal OTP',
+      text: `Your OTP to reveal the MGPS ERP password for ${username} is ${otp}. It expires in 5 minutes.`,
+    });
+  } catch (error) {
+    handleMailError(response, error);
+    return;
+  }
 
   response.json({ message: `OTP sent to ${email}.`, email });
 });
@@ -274,11 +280,16 @@ router.post('/users/:username/send-credentials', ensureMongo, requireAuth, requi
     return;
   }
 
-  await sendMail({
-    to: email,
-    subject: `MGPS ERP login credentials - ${username}`,
-    text: buildCredentialMessage(user),
-  });
+  try {
+    await sendMail({
+      to: email,
+      subject: `MGPS ERP login credentials - ${username}`,
+      text: buildCredentialMessage(user),
+    });
+  } catch (error) {
+    handleMailError(response, error);
+    return;
+  }
 
   response.json({ message: `Credentials sent to ${email}.` });
 });

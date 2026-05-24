@@ -5,15 +5,20 @@ import {
   Bot,
   CheckCircle2,
   Download,
+  FileText,
   Mail,
   Mic,
   MicOff,
   PauseCircle,
+  PhoneCall,
+  PhoneOff,
   RefreshCw,
+  RotateCcw,
   Search,
   Send,
   ShieldCheck,
   Sparkles,
+  Undo2,
   User,
   Volume2,
   VolumeX,
@@ -39,6 +44,7 @@ const AI_ENDPOINT = '/api/ai';
 const CHART_COLORS = ['#111827', '#E1FA6C', '#2563EB', '#DC2626', '#16A34A'];
 
 const nowTime = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+const createConversationId = () => `ai-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 const formatCurrency = (value) =>
   `Rs. ${Math.round(Number(value || 0)).toLocaleString('en-IN')}`;
@@ -46,6 +52,29 @@ const formatCurrency = (value) =>
 const getSpeechRecognition = () => {
   if (typeof window === 'undefined') return null;
   return window.SpeechRecognition || window.webkitSpeechRecognition || null;
+};
+
+const getBestSpeechVoice = (text = '') => {
+  if (typeof window === 'undefined' || !window.speechSynthesis) return null;
+  const voices = window.speechSynthesis.getVoices?.() || [];
+  const needsHindi = /[\u0900-\u097F]/.test(text);
+  const preferred = needsHindi
+    ? [
+        (voice) => voice.lang?.toLowerCase() === 'hi-in',
+        (voice) => /hindi|हिन्दी|हिंदी/i.test(voice.name || ''),
+        (voice) => voice.lang?.toLowerCase().startsWith('hi'),
+      ]
+    : [
+        (voice) => voice.lang?.toLowerCase() === 'en-in',
+        (voice) => /india|indian/i.test(voice.name || ''),
+        (voice) => voice.lang?.toLowerCase().startsWith('en'),
+      ];
+
+  for (const matcher of preferred) {
+    const voice = voices.find(matcher);
+    if (voice) return voice;
+  }
+  return null;
 };
 
 const createMessage = (sender, payload) => ({
@@ -71,6 +100,26 @@ const providerOptions = [
   { value: 'groq', label: 'Groq Fast', description: 'Fast replies' },
   { value: 'gemini', label: 'Gemini Brain', description: 'Reasoning' },
 ];
+
+const initialAiMessage = () =>
+  createMessage('ai', {
+    text: `Namaste. Main ${SCHOOL_NAME} ki AI assistant hoon. Main sirf live ERP context se short, point-to-point answers dungi.`,
+    elements: [],
+    actions: [],
+    isGreeting: true,
+  });
+
+const buildHistoryPayload = (items = []) =>
+  items
+    .filter((message) => !message.isGreeting)
+    .slice(-4)
+    .map((message) => ({
+      sender: message.sender,
+      text: message.text,
+    }));
+
+const shouldEndCall = (text = '') =>
+  /(\bend call\b|\bstop call\b|\bhang up\b|call\s*(band|bund|बंद)|बात\s*बंद|कॉल\s*बंद)/i.test(String(text || ''));
 
 const DataTable = ({ element }) => {
   const rows = Array.isArray(element.rows) ? element.rows : [];
@@ -272,7 +321,12 @@ const ConfirmationModal = ({ pendingAction, onCancel, onConfirm, isWorking }) =>
 
 const FeaturePage = () => {
   const chatEndRef = useRef(null);
+  const conversationIdRef = useRef(createConversationId());
+  const messagesRef = useRef([]);
   const recognitionRef = useRef(null);
+  const startRecognitionRef = useRef(null);
+  const speechAudioRef = useRef(null);
+  const callActiveRef = useRef(false);
   const [config, setConfig] = useState({
     defaultProvider: 'development-fallback',
     providers: { gemini: false, groq: false },
@@ -282,19 +336,18 @@ const FeaturePage = () => {
   const [mode, setMode] = useState('chat');
   const [input, setInput] = useState('');
   const [studentQuery, setStudentQuery] = useState('');
-  const [messages, setMessages] = useState([
-    createMessage('ai', {
-      text: `Namaste. I am the AI assistant for ${SCHOOL_NAME}. I can help with ERP lookup, finance, attendance, examinations, notices, meetings, documents, analytics, and admin-confirmed actions.`,
-      elements: [],
-      actions: [],
-    }),
-  ]);
+  const [messages, setMessages] = useState(() => {
+    const initialMessages = [initialAiMessage()];
+    messagesRef.current = initialMessages;
+    return initialMessages;
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [lastPrompt, setLastPrompt] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isCallActive, setIsCallActive] = useState(false);
   const [pendingAction, setPendingAction] = useState(null);
   const [isActionWorking, setIsActionWorking] = useState(false);
 
@@ -317,44 +370,106 @@ const FeaturePage = () => {
   }, []);
 
   useEffect(() => {
+    messagesRef.current = messages;
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading]);
 
   useEffect(() => {
+    callActiveRef.current = isCallActive;
+  }, [isCallActive]);
+
+  useEffect(() => {
+    window.speechSynthesis?.getVoices?.();
     return () => {
       window.speechSynthesis?.cancel();
+      speechAudioRef.current?.pause?.();
       recognitionRef.current?.stop?.();
+      callActiveRef.current = false;
     };
   }, []);
 
   const speak = async (text) => {
-    if (isMuted || !text || typeof window === 'undefined' || !window.speechSynthesis) return;
+    if (isMuted || !text || typeof window === 'undefined') return Promise.resolve();
+    const speechText = /[\u0900-\u097F]/.test(text) ? text : text.replace(/\bAI\b/g, 'ए आई');
+    window.speechSynthesis?.cancel();
+    speechAudioRef.current?.pause?.();
+    speechAudioRef.current = null;
+    setIsSpeaking(true);
+
     try {
-      await apiFetch(`${AI_ENDPOINT}/voice/speak`, {
+      const payload = await apiFetch(`${AI_ENDPOINT}/voice/speak`, {
         method: 'POST',
-        body: { text },
+        body: { text: speechText },
       });
+      if (payload.audioBase64 && payload.mimeType) {
+        const audio = new Audio(`data:${payload.mimeType};base64,${payload.audioBase64}`);
+        speechAudioRef.current = audio;
+        audio.onplay = () => setIsSpeaking(true);
+        audio.onended = () => {
+          setIsSpeaking(false);
+          speechAudioRef.current = null;
+        };
+        audio.onerror = () => {
+          setIsSpeaking(false);
+          speechAudioRef.current = null;
+        };
+        await audio.play();
+        return new Promise((resolve) => {
+          audio.onended = () => {
+            setIsSpeaking(false);
+            speechAudioRef.current = null;
+            resolve();
+          };
+          audio.onerror = () => {
+            setIsSpeaking(false);
+            speechAudioRef.current = null;
+            resolve();
+          };
+        });
+      }
     } catch {
       // Browser speech still works when the server voice endpoint is unavailable.
     }
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
+
+    if (!window.speechSynthesis) {
+      setIsSpeaking(false);
+      return Promise.resolve();
+    }
+    const utterance = new SpeechSynthesisUtterance(speechText);
+    utterance.lang = /[\u0900-\u097F]/.test(speechText) ? 'hi-IN' : 'en-IN';
+    const voice = getBestSpeechVoice(speechText);
+    if (voice) utterance.voice = voice;
     utterance.rate = 0.95;
     utterance.pitch = 1;
     utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
+    const done = new Promise((resolve) => {
+      utterance.onend = () => {
+        setIsSpeaking(false);
+        resolve();
+      };
+      utterance.onerror = () => {
+        setIsSpeaking(false);
+        resolve();
+      };
+    });
     window.speechSynthesis.speak(utterance);
+    return done;
   };
 
   const stopSpeaking = () => {
     window.speechSynthesis?.cancel();
+    speechAudioRef.current?.pause?.();
+    speechAudioRef.current = null;
     setIsSpeaking(false);
   };
 
   const appendAiMessage = (payload, options = {}) => {
     const nextMessage = createMessage('ai', payload);
-    setMessages((current) => [...current, nextMessage]);
+    setMessages((current) => {
+      const nextMessages = [...current, nextMessage];
+      messagesRef.current = nextMessages;
+      return nextMessages;
+    });
     if (options.speak ?? mode === 'voice') {
       speak(payload.text);
     }
@@ -367,10 +482,15 @@ const FeaturePage = () => {
     setInput('');
     setError('');
     setLastPrompt(trimmed);
-    setMessages((current) => [
-      ...current,
-      createMessage('user', { text: trimmed, elements: [], actions: [] }),
-    ]);
+    const requestHistory = buildHistoryPayload(messagesRef.current);
+    setMessages((current) => {
+      const nextMessages = [
+        ...current,
+        createMessage('user', { text: trimmed, elements: [], actions: [] }),
+      ];
+      messagesRef.current = nextMessages;
+      return nextMessages;
+    });
     setIsLoading(true);
 
     try {
@@ -379,10 +499,8 @@ const FeaturePage = () => {
         body: {
           message: trimmed,
           provider,
-          history: messages.map((message) => ({
-            sender: message.sender,
-            text: message.text,
-          })),
+          conversationId: conversationIdRef.current,
+          history: requestHistory,
         },
       });
 
@@ -395,15 +513,19 @@ const FeaturePage = () => {
       });
     } catch (submitError) {
       setError(submitError.message);
-      setMessages((current) => [
-        ...current,
-        createMessage('ai', {
-          text: `I could not complete that request: ${submitError.message}`,
-          error: true,
-          elements: [],
-          actions: [],
-        }),
-      ]);
+      setMessages((current) => {
+        const nextMessages = [
+          ...current,
+          createMessage('ai', {
+            text: `I could not complete that request: ${submitError.message}`,
+            error: true,
+            elements: [],
+            actions: [],
+          }),
+        ];
+        messagesRef.current = nextMessages;
+        return nextMessages;
+      });
     } finally {
       setIsLoading(false);
     }
@@ -413,21 +535,30 @@ const FeaturePage = () => {
     if (lastPrompt) submitPrompt(lastPrompt);
   };
 
-  const toggleListening = () => {
+  const endVoiceCall = (message = 'Voice call ended.') => {
+    callActiveRef.current = false;
+    setIsCallActive(false);
+    recognitionRef.current?.stop?.();
+    setIsListening(false);
+    stopSpeaking();
+    setMessages((current) => {
+      const nextMessages = [...current, createMessage('ai', { text: message, elements: [], actions: [] })];
+      messagesRef.current = nextMessages;
+      return nextMessages;
+    });
+  };
+
+  const startRecognition = () => {
     const Recognition = getSpeechRecognition();
     if (!Recognition) {
       setError('Speech-to-text is not supported in this browser.');
-      return;
+      return false;
     }
 
-    if (isListening) {
-      recognitionRef.current?.stop();
-      setIsListening(false);
-      return;
-    }
+    if (isListening || isLoading || isSpeaking) return false;
 
     const recognition = new Recognition();
-    recognition.lang = 'en-IN';
+    recognition.lang = 'hi-IN';
     recognition.continuous = false;
     recognition.interimResults = false;
     recognition.onstart = () => setIsListening(true);
@@ -438,6 +569,10 @@ const FeaturePage = () => {
     };
     recognition.onresult = async (event) => {
       const transcript = event.results?.[0]?.[0]?.transcript || '';
+      if (shouldEndCall(transcript)) {
+        endVoiceCall('Voice call ended by instruction.');
+        return;
+      }
       setInput(transcript);
       try {
         await apiFetch(`${AI_ENDPOINT}/voice/transcribe`, {
@@ -451,7 +586,34 @@ const FeaturePage = () => {
     };
     recognitionRef.current = recognition;
     recognition.start();
+    return true;
   };
+  startRecognitionRef.current = startRecognition;
+
+  const toggleListening = () => {
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
+      return;
+    }
+
+    startRecognition();
+  };
+
+  const startVoiceCall = () => {
+    setMode('voice');
+    callActiveRef.current = true;
+    setIsCallActive(true);
+    startRecognition();
+  };
+
+  useEffect(() => {
+    if (!isCallActive || mode !== 'voice' || isListening || isLoading || isSpeaking || pendingAction) return;
+    const timer = window.setTimeout(() => {
+      if (callActiveRef.current) startRecognitionRef.current?.();
+    }, 450);
+    return () => window.clearTimeout(timer);
+  }, [isCallActive, mode, isListening, isLoading, isSpeaking, pendingAction]);
 
   const searchStudent = async (event) => {
     event.preventDefault();
@@ -526,6 +688,43 @@ const FeaturePage = () => {
     doc.save(`${receipt.receiptNo}.pdf`);
   };
 
+  const resetChat = () => {
+    const freshMessages = [initialAiMessage()];
+    conversationIdRef.current = createConversationId();
+    messagesRef.current = freshMessages;
+    setMessages(freshMessages);
+    setError('');
+    setInput('');
+    setLastPrompt('');
+    setPendingAction(null);
+  };
+
+  const exportChatPdf = () => {
+    const doc = new jsPDF();
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.text(`${SCHOOL_NAME} - AI Assistant Transcript`, 14, 16);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+
+    let y = 28;
+    messages.forEach((message) => {
+      const label = `${message.sender === 'ai' ? 'AI' : 'User'} (${message.timestamp || ''})`;
+      const lines = doc.splitTextToSize(`${label}: ${message.text || ''}`, 182);
+      lines.forEach((line) => {
+        if (y > 282) {
+          doc.addPage();
+          y = 18;
+        }
+        doc.text(line, 14, y);
+        y += 6;
+      });
+      y += 2;
+    });
+
+    doc.save(`ai-chat-transcript-${Date.now()}.pdf`);
+  };
+
   const openConfirmation = (action) => {
     setPendingAction(action);
   };
@@ -545,13 +744,24 @@ const FeaturePage = () => {
         },
       });
       const result = payload.result || {};
+      const undoAction = payload.undoAction
+        ? [{ id: `undo-${Date.now()}`, sensitive: true, ...payload.undoAction }]
+        : [];
       appendAiMessage({
-        text:
-          pendingAction.type === 'finance_payment'
-            ? `Payment recorded successfully. Receipt ${result.receipt?.receiptNo} is ready.`
-            : 'Action completed successfully.',
+        text: (() => {
+          if (pendingAction.type === 'finance_payment') {
+            return `Payment recorded successfully. Receipt ${result.receipt?.receiptNo} is ready.`;
+          }
+          if (pendingAction.type === 'finance_ledger_charge') {
+            return `Ledger updated successfully. Pending fees are now ${formatCurrency(result.student?.pendingFees)}.`;
+          }
+          if (pendingAction.type === 'undo_last_ai_action') {
+            return `Undo completed. Reverted ${result.undoneAction || 'the selected AI action'}.`;
+          }
+          return 'Action completed successfully.';
+        })(),
         elements: [],
-        actions: [],
+        actions: undoAction,
         result,
       });
       setPendingAction(null);
@@ -574,9 +784,9 @@ const FeaturePage = () => {
   };
 
   return (
-    <div className="min-h-[calc(100vh-73px)] bg-[#F4F4F2] p-3 text-neutral-950 md:p-6">
-      <div className="mx-auto flex max-w-7xl flex-col gap-4">
-        <section className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
+    <div className="h-[calc(100vh-73px)] overflow-hidden bg-[#F4F4F2] p-3 text-neutral-950 md:p-6">
+      <div className="mx-auto flex h-full max-w-7xl min-h-0 flex-col gap-4">
+        <section className="shrink-0 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-start gap-3">
               <div className="rounded-2xl bg-neutral-950 p-3 text-[#E1FA6C]">
@@ -587,11 +797,12 @@ const FeaturePage = () => {
                   AI Assistant for {SCHOOL_NAME}
                 </h1>
                 <p className="mt-1 max-w-3xl text-xs font-semibold leading-relaxed text-neutral-600">
-                  School-specific ERP assistant with Groq for fast answers and Gemini for deeper reasoning.
+                  School-specific assistant for concise answers from live ERP context only.
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   <ProviderBadge enabled={config.providers?.gemini}>Gemini</ProviderBadge>
                   <ProviderBadge enabled={config.providers?.groq}>Groq</ProviderBadge>
+                  <ProviderBadge enabled={config.tts?.ready}>AI4Bharat TTS</ProviderBadge>
                   <span className="rounded-full border border-neutral-200 bg-neutral-50 px-2 py-0.5 text-[10px] font-black uppercase text-neutral-600">
                     Role: {config.role || 'Authenticated'}
                   </span>
@@ -600,6 +811,22 @@ const FeaturePage = () => {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={resetChat}
+                className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-xs font-black text-neutral-700"
+              >
+                <RotateCcw className="h-4 w-4" />
+                Reset
+              </button>
+              <button
+                type="button"
+                onClick={exportChatPdf}
+                className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-xs font-black text-neutral-700"
+              >
+                <FileText className="h-4 w-4" />
+                Export PDF
+              </button>
               <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-1">
                 {['chat', 'voice'].map((item) => (
                   <button
@@ -629,8 +856,8 @@ const FeaturePage = () => {
           </div>
         </section>
 
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
-          <aside className="space-y-4">
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
+          <aside className="min-h-0 space-y-4 overflow-y-auto pr-1">
             <section className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
               <h2 className="text-sm font-black">Student Search</h2>
               <p className="mt-1 text-xs font-semibold text-neutral-500">
@@ -659,8 +886,19 @@ const FeaturePage = () => {
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <button
                   type="button"
-                  onClick={toggleListening}
+                  onClick={isCallActive ? () => endVoiceCall('Voice call ended.') : startVoiceCall}
                   disabled={mode !== 'voice' || !speechSupported}
+                  className={`col-span-2 inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-black ${
+                    isCallActive ? 'bg-red-600 text-white' : 'bg-neutral-950 text-white'
+                  } disabled:opacity-40`}
+                >
+                  {isCallActive ? <PhoneOff className="h-4 w-4" /> : <PhoneCall className="h-4 w-4" />}
+                  {isCallActive ? 'End Call' : 'Start Call'}
+                </button>
+                <button
+                  type="button"
+                  onClick={toggleListening}
+                  disabled={mode !== 'voice' || !speechSupported || isCallActive}
                   className={`inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-xs font-black ${
                     isListening
                       ? 'border-red-200 bg-red-50 text-red-700'
@@ -688,6 +926,11 @@ const FeaturePage = () => {
                   Stop Speaking
                 </button>
               </div>
+              {isCallActive && (
+                <p className="mt-2 text-[11px] font-semibold text-emerald-700">
+                  Continuous call is active. Say "end call" to stop.
+                </p>
+              )}
               {!speechSupported && (
                 <p className="mt-2 text-[11px] font-semibold text-amber-700">
                   Browser microphone speech recognition is not available here.
@@ -709,8 +952,8 @@ const FeaturePage = () => {
             </section>
           </aside>
 
-          <main className="flex min-h-[680px] flex-col rounded-2xl border border-neutral-200 bg-white shadow-sm">
-            <div className="border-b border-neutral-200 p-4">
+          <main className="flex min-h-0 flex-col rounded-2xl border border-neutral-200 bg-white shadow-sm">
+            <div className="shrink-0 border-b border-neutral-200 p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h2 className="flex items-center gap-2 text-sm font-black">
@@ -736,7 +979,7 @@ const FeaturePage = () => {
               {error && <p className="mt-2 text-xs font-bold text-red-600">{error}</p>}
             </div>
 
-            <div className="flex-1 space-y-4 overflow-y-auto bg-neutral-50 p-4">
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-neutral-50 p-4">
               {messages.map((message) => {
                 const isAi = message.sender === 'ai';
                 return (
@@ -776,7 +1019,11 @@ const FeaturePage = () => {
                               onClick={() => openConfirmation(action)}
                               className="inline-flex items-center gap-2 rounded-xl bg-[#E1FA6C] px-3 py-2 text-xs font-black text-neutral-950"
                             >
-                              <CheckCircle2 className="h-4 w-4" />
+                              {action.type === 'undo_last_ai_action' ? (
+                                <Undo2 className="h-4 w-4" />
+                              ) : (
+                                <CheckCircle2 className="h-4 w-4" />
+                              )}
                               {action.label}
                             </button>
                           ))}
@@ -804,12 +1051,12 @@ const FeaturePage = () => {
               <div ref={chatEndRef} />
             </div>
 
-            <form onSubmit={(event) => { event.preventDefault(); submitPrompt(); }} className="border-t border-neutral-200 p-3">
+            <form onSubmit={(event) => { event.preventDefault(); submitPrompt(); }} className="shrink-0 border-t border-neutral-200 p-3">
               <div className="flex items-center gap-2 rounded-2xl border border-neutral-200 bg-neutral-50 p-2">
                 <button
                   type="button"
                   onClick={toggleListening}
-                  disabled={mode !== 'voice' || !speechSupported}
+                  disabled={mode !== 'voice' || !speechSupported || isCallActive}
                   className={`rounded-xl p-2.5 ${
                     isListening ? 'bg-red-100 text-red-700' : 'bg-white text-neutral-800'
                   } disabled:opacity-40`}

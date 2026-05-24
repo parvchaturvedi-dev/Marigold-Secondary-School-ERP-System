@@ -1,21 +1,51 @@
 import express from 'express';
-import nodemailer from 'nodemailer';
 import AiAuditLog from '../models/AiAuditLog.js';
 import AiReceipt from '../models/AiReceipt.js';
+import Event from '../models/Event.js';
 import ExaminationState from '../models/ExaminationState.js';
+import Meeting from '../models/Meeting.js';
 import ModuleState from '../models/ModuleState.js';
+import Notification from '../models/Notification.js';
 import { isMongoConnected } from '../db.js';
+import {
+  closeMailTransporter,
+  createMailTransporter,
+  getMailConfig,
+  getSenderAddress,
+} from '../utils/mailer.js';
 
 const router = express.Router();
 
 const SCHOOL_NAME = 'Marigold Secondary School, Behror';
+const SCHOOL_WEBSITE = process.env.SCHOOL_WEBSITE || 'marigoldschoolbehror.com';
+const SCHOOL_WEBSITE_URL = SCHOOL_WEBSITE.startsWith('http')
+  ? SCHOOL_WEBSITE
+  : `https://${SCHOOL_WEBSITE}`;
+const SCHOOL_ADDRESS = process.env.SCHOOL_ADDRESS || '';
 const SYSTEM_INSTRUCTION = [
   `You are the official ERP AI assistant for ${SCHOOL_NAME}.`,
+  `The school website is ${SCHOOL_WEBSITE}.`,
   'Always represent and support this school only.',
   'Do not praise, promote, compare, or recommend any other school.',
   `If asked about another school, politely say that you are designed to assist only with ${SCHOOL_NAME}.`,
+  'Use only the ERP context supplied by the backend for student, finance, attendance, examination, profile, notification, event, meeting, notice, and document details.',
+  'The backend supplies read-only ERP database context for the authenticated user. Treat that context as authoritative, and do not say you cannot access the ERP database when context is present.',
+  'If a requested ERP value is missing from the supplied context, say it is not configured or not found in the ERP context; never invent internal records.',
+  'Do not claim that a module, notification, event, meeting, document, feature, action, or record exists unless it appears in the supplied ERP context or is implemented by the local action workflow.',
+  'Do not infer that fees are paid or unpaid only because totals are zero. Report zero totals as recorded values, and say no matching fee records are available when student or ledger rows are empty.',
+  'Keep replies point-to-point: maximum four short lines or 70 words unless the user explicitly asks for more detail.',
+  'If the user writes in Hindi, Devanagari, or Hinglish, answer in mixed Hindi-English: write Hindi words in Devanagari, keep English words and ERP terms in English Latin script, and keep names, roles, admission numbers, class names, amounts, and product terms unchanged.',
+  'When replying in Hindi or Hinglish, use feminine first person for the assistant, such as "कर सकती हूँ" and "दिखा सकती हूँ".',
   'Never expose API keys, internal tokens, passwords, private configuration, or secrets.',
   'Never modify ERP records without explicit admin confirmation.',
+].join(' ');
+
+const ERP_GROUNDING_RULES = [
+  'ERP grounding rules: Treat the JSON below as the only source of truth.',
+  'Conversation history is only for resolving short follow-up references; never use it as a source of ERP facts.',
+  'If the requested data, module, feature, or record is not present in the JSON context, say it is not available in ERP context.',
+  'Do not mention notifications, events, meetings, documents, notices, actions, dashboards, or workflows unless the context includes them or the local backend action implements them.',
+  'Keep the answer concise: max four short lines or 70 words. No long explanation, no filler.',
 ].join(' ');
 
 const STUDENT_NAMESPACE = 'admin-student-management-students';
@@ -23,17 +53,27 @@ const CLASS_NAMESPACE = 'admin-class-management-classes';
 const FINANCE_NAMESPACE = 'admin-finance-class-ledgers';
 const NOTICE_NAMESPACE = 'admin-notices-list';
 const DOCUMENT_NAMESPACE = 'admin-document-requirements';
+const TEACHER_NAMESPACE = 'admin-teacher-management-list';
+const CLERK_NAMESPACE = 'admin-clerk-management-list';
+const SUBJECT_NAMESPACE = 'admin-subjects-global';
+const CLASS_SUBJECT_NAMESPACE = 'admin-subjects-class-mapping';
+const CLASS_PREFERENCES_NAMESPACE = 'admin-class-preferences';
+const DEFAULT_TTS_MODEL = 'ai4bharat/indic-parler-tts';
+const DEFAULT_TTS_DESCRIPTION =
+  "Divya's Hindi voice is clear, natural, close to the microphone, moderately paced, and easy to understand, with very clear audio and almost no background noise.";
 
 const SENSITIVE_ACTIONS = new Set([
   'finance_payment',
+  'finance_ledger_charge',
   'receipt_send',
   'notice_send',
   'meeting_create',
   'data_update',
+  'undo_last_ai_action',
 ]);
 
 const SCHOOL_ONLY_MESSAGE =
-  `I am designed to assist only with ${SCHOOL_NAME}. I can help with this school's ERP data, workflows, finance, attendance, examinations, notices, events, staff, classes, subjects, meetings, and documents.`;
+  `I am designed to assist only with ${SCHOOL_NAME}. I can answer only from this ERP's available data, such as students, classes, finance, attendance, examinations, staff, notices, events, meetings, notifications, and documents when matching records exist.`;
 
 const ensureMongo = (_request, response, next) => {
   if (!isMongoConnected()) {
@@ -94,8 +134,24 @@ const parseAmount = (value) => {
   return Number.isFinite(amount) ? amount : 0;
 };
 
+const getFirstAmount = (source = {}, keys = []) => {
+  for (const key of keys) {
+    if (source?.[key] !== undefined && source?.[key] !== null && source?.[key] !== '') {
+      return parseAmount(source[key]);
+    }
+  }
+  return 0;
+};
+
 const formatCurrency = (value) =>
   `Rs. ${Math.round(parseAmount(value)).toLocaleString('en-IN')}`;
+
+const getSchoolProfileContext = () => ({
+  name: SCHOOL_NAME,
+  website: SCHOOL_WEBSITE,
+  websiteUrl: SCHOOL_WEBSITE_URL,
+  address: SCHOOL_ADDRESS || null,
+});
 
 const getModuleValue = async (namespace, fallback) => {
   const record = await ModuleState.findOne({ namespace });
@@ -112,12 +168,102 @@ const setModuleValue = async (namespace, value) => {
 };
 
 const normalizeText = (value = '') => String(value || '').trim().toLowerCase();
+const QUERY_STOPWORDS = new Set([
+  'student',
+  'profile',
+  'details',
+  'detail',
+  'show',
+  'tell',
+  'about',
+  'of',
+  'name',
+  'please',
+  'ki',
+  'ka',
+  'ke',
+  'ko',
+  'kaun',
+  'bata',
+  'batao',
+  'dikha',
+  'dikhao',
+  'dikhana',
+  'uska',
+  'uski',
+  'kya',
+  'hai',
+  'की',
+  'का',
+  'के',
+  'को',
+  'है',
+  'बताओ',
+  'दिखाओ',
+  'प्रोफाइल',
+  'विवरण',
+]);
 
 const normalizeProvider = (value = '') => {
   const provider = normalizeText(value);
   if (provider === 'grok') return 'groq';
   return provider;
 };
+
+const prefersHindiResponse = (message = '') => {
+  const text = String(message || '');
+  const lower = normalizeText(text);
+  return /[\u0900-\u097F]/.test(text) || [
+    'hindi',
+    'hinglish',
+    'bata',
+    'batao',
+    'dikha',
+    'dikhao',
+    'ka',
+    'ki',
+    'ke',
+    'kya',
+    'hai',
+    'mera',
+    'uska',
+    'uski',
+  ].some((term) => lower.split(/\s+/).includes(term));
+};
+
+const getResponseLanguageInstruction = (message = '') =>
+  prefersHindiResponse(message)
+    ? 'Response language: Reply in mixed Hindi-English. Write Hindi words in Devanagari script, but keep common ERP words in English/Latin script. Do not translate words like finance, events, notification, meeting, fee, receipt, attendance, exam, student, class, profile, dashboard, ERP, Admin, Teacher, Clerk, Director, Principal, or AI. Use feminine first person for the assistant.'
+    : 'Response language: Reply in the same language as the user, using Indian school ERP wording.';
+
+const sanitizeHistory = (history = []) =>
+  (Array.isArray(history) ? history : [])
+    .filter((item = {}) => ['user', 'ai'].includes(item.sender))
+    .map((item = {}) => ({
+      sender: item.sender,
+      text: String(item.text || '').trim().slice(0, 500),
+    }))
+    .filter((item) => item.text)
+    .slice(-4);
+
+const compactAssistantText = (text = '') => {
+  const lines = String(text || '')
+    .replace(/\r/g, '')
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const compact = (lines.length ? lines.slice(0, 4) : [String(text || '').trim()]).join('\n');
+  return compact.length > 700 ? `${compact.slice(0, 697).trimEnd()}...` : compact;
+};
+
+const buildProviderPrompt = ({ message, history, context }) =>
+  [
+    ERP_GROUNDING_RULES,
+    `ERP context: ${JSON.stringify(context).slice(0, 12000)}`,
+    `Conversation history for reference only: ${JSON.stringify(sanitizeHistory(history)).slice(0, 2500)}`,
+    getResponseLanguageInstruction(message),
+    `User message: ${message}`,
+  ].join('\n\n');
 
 const getStudentAdmissionNumber = (student = {}) =>
   student.admissionNumber || student.admNo || student.id || student.rawProfile?.admissionNumber || '';
@@ -139,21 +285,36 @@ const getGuardianPhone = (student = {}) =>
 const getGuardianEmail = (student = {}) =>
   student.guardianEmail || student.email || student.rawProfile?.email || '';
 
+const getFamilyKey = (student = {}) => {
+  const explicit = student.familyId || student.parentId || student.siblingGroupId || student.rawProfile?.familyId;
+  if (explicit) return String(explicit);
+
+  const parts = [
+    student.fatherName || student.rawProfile?.fatherName,
+    student.motherName || student.rawProfile?.motherName,
+    getGuardianPhone(student),
+  ]
+    .filter(Boolean)
+    .map((part) => String(part).trim().toLowerCase());
+
+  return parts.length ? parts.join('|') : getStudentAdmissionNumber(student);
+};
+
 const getPaidFees = (student = {}) =>
-  parseAmount(student.paidFees || student.collectedFees || student.feesPaid || student.paid);
+  getFirstAmount(student, ['paidFees', 'collectedFees', 'feesPaid', 'paid']);
 
 const getPendingFees = (student = {}) =>
-  parseAmount(student.pendingFees || student.feePending || student.balanceFees || student.unpaidFees || student.dueAmount);
+  getFirstAmount(student, ['pendingFees', 'feePending', 'balanceFees', 'unpaidFees', 'dueAmount']);
 
 const getAssignedFees = (student = {}) => {
-  const explicit = parseAmount(
-    student.yearlyFee ||
-    student.annualFee ||
-    student.totalFees ||
-    student.assignedFees ||
-    student.feeAmount ||
-    student.totalAssigned
-  );
+  const explicit = getFirstAmount(student, [
+    'yearlyFee',
+    'annualFee',
+    'totalFees',
+    'assignedFees',
+    'feeAmount',
+    'totalAssigned',
+  ]);
   return explicit || getPaidFees(student) + getPendingFees(student);
 };
 
@@ -192,9 +353,11 @@ const getStudents = async () => {
 const findStudents = (students = [], query = '') => {
   const terms = normalizeText(query)
     .split(/\s+/)
+    .map((term) => term.replace(/[^\p{L}\p{N}@.+-]/gu, ''))
     .filter(Boolean);
+  const searchableTerms = terms.filter((term) => !QUERY_STOPWORDS.has(term));
 
-  if (!terms.length) return students.slice(0, 10).map(normalizeStudent);
+  if (!searchableTerms.length) return students.slice(0, 10).map(normalizeStudent);
 
   return students
     .map(normalizeStudent)
@@ -210,7 +373,7 @@ const findStudents = (students = [], query = '') => {
       ]
         .map(normalizeText)
         .join(' ');
-      return terms.every((term) => haystack.includes(term));
+      return searchableTerms.every((term) => haystack.includes(term));
     })
     .slice(0, 20);
 };
@@ -221,32 +384,208 @@ const findOneStudent = async (query = '') => {
   return { students, matches, student: matches[0] || null };
 };
 
+const findOneStudentFromConversation = async (message = '', history = []) => {
+  const direct = await findOneStudent(message);
+  if (direct.student) return direct;
+
+  const recentHistory = (Array.isArray(history) ? history : [])
+    .slice(-6)
+    .map((item) => item.text || '')
+    .join(' ');
+  return findOneStudent(`${message} ${recentHistory}`);
+};
+
+const getClassRecordName = (classRecord = {}) =>
+  classRecord.name || classRecord.className || classRecord.class || String(classRecord || '');
+
+const formatClassNameValue = (value = '') => {
+  const normalized = String(value || '').trim();
+  if (!normalized) return '';
+  const upper = normalized.toUpperCase();
+  if (['NURSERY', 'LKG', 'UKG'].includes(upper)) return upper.charAt(0) + upper.slice(1).toLowerCase();
+  const numeric = normalized.match(/\d{1,2}/)?.[0];
+  return numeric ? `Class ${Number(numeric)}` : normalized;
+};
+
+const normalizeClassKey = (className = '') => {
+  const normalized = String(className || '').trim().toLowerCase();
+  if (!normalized) return '';
+  if (normalized.includes('nursery')) return 'nursery';
+  if (normalized.includes('lkg')) return 'lkg';
+  if (normalized.includes('ukg')) return 'ukg';
+  const numeric = normalized.match(/\d{1,2}/)?.[0];
+  return numeric ? `class-${Number(numeric)}` : normalized.replace(/[^a-z0-9]+/g, '-');
+};
+
+const classNamesMatch = (left = '', right = '') => {
+  if (!right) return true;
+  return normalizeClassKey(left) === normalizeClassKey(right);
+};
+
 const readSchoolSnapshot = async () => {
-  const [students, classes, financeRecords, notices, documents, examinationRecord] =
+  const [
+    students,
+    classes,
+    financeRecords,
+    notices,
+    documents,
+    teachers,
+    clerks,
+    subjects,
+    classSubjects,
+    classPreferences,
+    examinationRecord,
+  ] =
     await Promise.all([
       getModuleValue(STUDENT_NAMESPACE, []),
       getModuleValue(CLASS_NAMESPACE, []),
       getModuleValue(FINANCE_NAMESPACE, []),
       getModuleValue(NOTICE_NAMESPACE, []),
       getModuleValue(DOCUMENT_NAMESPACE, {}),
+      getModuleValue(TEACHER_NAMESPACE, []),
+      getModuleValue(CLERK_NAMESPACE, []),
+      getModuleValue(SUBJECT_NAMESPACE, []),
+      getModuleValue(CLASS_SUBJECT_NAMESPACE, []),
+      getModuleValue(CLASS_PREFERENCES_NAMESPACE, []),
       ExaminationState.findOne().sort({ updatedAt: -1 }),
     ]);
 
   const normalizedStudents = (Array.isArray(students) ? students : []).map(normalizeStudent);
   const classNames = new Set();
   (Array.isArray(classes) ? classes : []).forEach((item) =>
-    classNames.add(item.name || item.className || item.class)
+    classNames.add(getClassRecordName(item))
+  );
+  (Array.isArray(classPreferences) ? classPreferences : []).forEach((item) =>
+    classNames.add(getClassRecordName(item))
+  );
+  (Array.isArray(classSubjects) ? classSubjects : []).forEach((item) =>
+    classNames.add(item.className)
   );
   normalizedStudents.forEach((student) => classNames.add(student.className));
 
   return {
+    schoolProfile: getSchoolProfileContext(),
     students: normalizedStudents,
     classes: [...classNames].filter(Boolean),
     financeRecords: Array.isArray(financeRecords) ? financeRecords : [],
     notices: Array.isArray(notices) ? notices : [],
     documents,
+    teachers: Array.isArray(teachers) ? teachers : [],
+    clerks: Array.isArray(clerks) ? clerks : [],
+    subjects: Array.isArray(subjects) ? subjects : [],
+    classSubjects: Array.isArray(classSubjects) ? classSubjects : [],
+    classPreferences: Array.isArray(classPreferences) ? classPreferences : [],
     examinationState: examinationRecord?.state || {},
   };
+};
+
+const getAuthClassName = (auth = {}) =>
+  auth.activeStudent?.className ||
+  auth.profile?.className ||
+  auth.profile?.targetClass ||
+  auth.profile?.studentProfiles?.[0]?.className ||
+  '';
+
+const getAuthStudentId = (auth = {}) =>
+  auth.activeStudent?.admissionNumber ||
+  auth.activeStudent?.id ||
+  auth.selectedStudentId ||
+  auth.profile?.studentProfiles?.[0]?.admissionNumber ||
+  auth.profile?.studentProfiles?.[0]?.id ||
+  String(auth.username || '').replace(/^STD-/i, '');
+
+const getAuthAllottedClasses = (auth = {}) => {
+  const direct = Array.isArray(auth.allottedClasses) ? auth.allottedClasses : [];
+  const profile = Array.isArray(auth.profile?.allottedClasses) ? auth.profile.allottedClasses : [];
+  const assignments = Array.isArray(auth.profile?.classAssignments)
+    ? auth.profile.classAssignments.map((item) => item.className || item.class || item.targetClass)
+    : [];
+  return [...new Set([...direct, ...profile, ...assignments].filter(Boolean))];
+};
+
+const buildNotificationRecipientQuery = (auth = {}) => {
+  const role = normalizeRole(auth.role);
+  const username = auth.username || '';
+  const className = getAuthClassName(auth);
+  const studentId = getAuthStudentId(auth);
+  const filters = [{ recipientRole: role, recipientUsername: username }];
+
+  if (role === 'student') {
+    filters.push({ recipientRole: 'student', recipientUsername: '' });
+    if (studentId) filters.push({ recipientRole: 'student', recipientStudentId: studentId });
+    if (className) filters.push({ recipientRole: 'student', recipientClassName: className });
+  }
+
+  if (role === 'teacher') filters.push({ recipientRole: 'teacher', recipientUsername: '' });
+  if (role === 'admin' || role === 'clerk') filters.push({ recipientRole: role, recipientUsername: '' });
+
+  return { $or: filters };
+};
+
+const canSeeMeetingForAuth = (meeting = {}, auth = {}) => {
+  const role = normalizeRole(auth.role);
+  const username = auth.username || '';
+  const className = getAuthClassName(auth);
+  const allottedClasses = getAuthAllottedClasses(auth);
+
+  if (role === 'admin' || role === 'clerk') return true;
+  if (role === 'student') {
+    if (meeting.scopeType === 'staff') return false;
+    if (meeting.scopeType === 'school') return true;
+    return (meeting.targetClasses || []).includes(className);
+  }
+  if (role === 'teacher') {
+    if (meeting.hostUsername === username) return true;
+    if (meeting.scopeType === 'staff') return true;
+    if (meeting.scopeType === 'school') return false;
+    return (meeting.targetClasses || []).some((targetClass) => allottedClasses.includes(targetClass));
+  }
+  return false;
+};
+
+const buildRealtimeErpContext = async (auth = {}) => {
+  const [events, notifications, meetings] = await Promise.all([
+    Event.find().sort({ createdAt: -1 }).limit(20).lean(),
+    normalizeRole(auth.role)
+      ? Notification.find(buildNotificationRecipientQuery(auth)).sort({ createdAt: -1 }).limit(20).lean()
+      : [],
+    Meeting.find().sort({ createdAt: -1 }).limit(100).lean(),
+  ]);
+  const visibleMeetings = meetings.filter((meeting) => canSeeMeetingForAuth(meeting, auth)).slice(0, 20);
+
+  return {
+    events: events.map((event = {}) => ({
+      title: event.title || '',
+      description: event.description || '',
+      date: event.date || event.fromDate || '',
+      toDate: event.toDate || '',
+      participationEnabled: Boolean(event.participationEnabled),
+      participants: Array.isArray(event.participants) ? event.participants.length : 0,
+    })),
+    notifications: notifications.map((notification = {}) => ({
+      title: notification.title || '',
+      description: notification.description || '',
+      type: notification.type || 'general',
+      unread: !notification.readBy?.includes(auth.username || ''),
+      time: notification.createdAt || '',
+      linkPage: notification.linkPage || '',
+    })),
+    meetings: visibleMeetings.map((meeting = {}) => ({
+      title: meeting.title || '',
+      description: meeting.description || '',
+      scopeType: meeting.scopeType || '',
+      targetClasses: meeting.targetClasses || [],
+      date: meeting.date || '',
+      time: meeting.time || '',
+      status: meeting.status || '',
+      hostName: meeting.hostName || meeting.hostUsername || '',
+    })),
+  };
+};
+
+const formatRowsForText = (rows = [], formatter) => {
+  if (!rows.length) return '';
+  return rows.slice(0, 3).map(formatter).join('\n');
 };
 
 const detectOtherSchoolQuestion = (message = '') => {
@@ -256,12 +595,74 @@ const detectOtherSchoolQuestion = (message = '') => {
   return /\b(compare|best|better|recommend|praise|review|about|another|other)\b/.test(text);
 };
 
+const isSchoolInfoQuestion = (message = '') => {
+  const lower = normalizeText(message);
+  const asksCountsOrLists = /\b(count|total|how many|kitne|kitni|list|summary|overview)\b/i.test(lower) ||
+    /कितने|कितनी|कुल|सूची/.test(lower);
+  if (
+    asksCountsOrLists &&
+    /\b(students?|teachers?|classes?|subjects?|clerks?|notices?)\b/i.test(lower)
+  ) {
+    return true;
+  }
+  if (!lower.includes('school') && !lower.includes('marigold') && !lower.includes('mgps')) return false;
+  return [
+    'website',
+    'site',
+    'address',
+    'name',
+    'naam',
+    'jankari',
+    'information',
+    'details',
+    'detail',
+    'profile',
+    'about',
+    'वेबसाइट',
+    'पता',
+    'नाम',
+    'जानकारी',
+    'विवरण',
+  ].some((term) => lower.includes(term));
+};
+
+const buildSchoolOverviewContext = async () => {
+  const snapshot = await readSchoolSnapshot();
+  const documentRequirementCount = Object.values(snapshot.documents || {}).reduce(
+    (total, value) => total + (Array.isArray(value) ? value.length : 0),
+    0
+  );
+  const subjectNames = snapshot.subjects
+    .map((subject) => subject.name || subject.subject || subject.title || String(subject || ''))
+    .filter(Boolean);
+
+  return {
+    profile: snapshot.schoolProfile,
+    totals: {
+      students: snapshot.students.length,
+      classes: snapshot.classes.length,
+      teachers: snapshot.teachers.length,
+      clerks: snapshot.clerks.length,
+      subjects: subjectNames.length,
+      notices: snapshot.notices.length,
+      documentRequirements: documentRequirementCount,
+    },
+    classes: snapshot.classes,
+    subjects: subjectNames,
+    recentNotices: snapshot.notices.slice(-5).map((notice) => ({
+      title: notice.title || notice.subject || notice.heading || 'Notice',
+      target: notice.target || notice.audience || '',
+      date: notice.date || notice.createdAt || notice.updatedAt || '',
+    })),
+  };
+};
+
 const extractClassName = (message = '') => {
-  const match = String(message).match(/\bclass\s*([0-9]{1,2}|nursery|lkg|ukg)\b/i);
+  const match = String(message).match(
+    /(?:\bclass|\bgrade|\bstd\.?|\bstandard|कक्षा)\s*[-:_]?\s*([0-9]{1,2}|nursery|lkg|ukg)\b/i
+  );
   if (!match) return '';
-  const value = match[1].toUpperCase();
-  if (['NURSERY', 'LKG', 'UKG'].includes(value)) return value.charAt(0) + value.slice(1).toLowerCase();
-  return `Class ${Number(value)}`;
+  return formatClassNameValue(match[1]);
 };
 
 const extractAmount = (message = '') => {
@@ -315,14 +716,102 @@ const buildStudentDetails = async (student = {}) => {
   };
 };
 
+const shouldLookupStudentForContext = (message = '') => {
+  const lower = normalizeText(message);
+  return [
+    'student',
+    'profile',
+    'details',
+    'detail',
+    'admission',
+    'father',
+    'mother',
+    'parent',
+    'guardian',
+    'mobile',
+    'phone',
+    'attendance',
+    'marks',
+    'exam',
+    'fee',
+    'fees',
+    'student',
+    'profile',
+    'bata',
+    'dikha',
+    'प्रोफाइल',
+    'विवरण',
+    'छात्र',
+  ].some((term) => lower.includes(term));
+};
+
+const buildRelevantStudentContext = async (message = '', auth = {}) => {
+  if (!shouldLookupStudentForContext(message)) return [];
+
+  const students = await getStudents();
+  const matches = findStudents(students, message)
+    .filter((student) => canReadStudent(auth, student, 'full'))
+    .slice(0, 5);
+
+  return Promise.all(
+    matches.map(async (student) => {
+      const details = await buildStudentDetails(student);
+      return {
+        profile: details.profile,
+        finance: {
+          assignedFees: details.finance.assignedFees,
+          paidFees: details.finance.paidFees,
+          pendingFees: details.finance.pendingFees,
+          recentPayments: details.finance.paymentHistory.slice(-5),
+        },
+        attendance: details.attendance,
+        examinations: Array.isArray(details.examinations) ? details.examinations.slice(-10) : [],
+        documents: Array.isArray(details.documents) ? details.documents : [],
+      };
+    })
+  );
+};
+
+const getFinanceRecordClassName = (record = {}) =>
+  record.className || record.class || record.targetClass || record.classTitle || '';
+
+const getFinanceRecordAdmissionNumber = (record = {}) =>
+  record.admissionNumber || record.studentId || record.admNo || record.studentAdmissionNumber || '';
+
+const normalizeFinanceRecord = (record = {}) => ({
+  ...record,
+  className: getFinanceRecordClassName(record),
+  admissionNumber: getFinanceRecordAdmissionNumber(record),
+  totalAssigned: getFirstAmount(record, ['totalAssigned', 'assignedFees', 'assigned', 'total', 'yearlyFee']),
+  paid: getFirstAmount(record, ['paid', 'recovered', 'totalPaid', 'paidFees', 'collected', 'collectedFees']),
+  pending: getFirstAmount(record, ['due', 'balance', 'pending', 'totalPending', 'pendingFees', 'dueAmount']),
+});
+
 const buildClassAnalytics = async (className = '') => {
   const snapshot = await readSchoolSnapshot();
   const classStudents = snapshot.students.filter(
-    (student) => !className || student.className.toLowerCase() === className.toLowerCase()
+    (student) => classNamesMatch(student.className, className)
   );
-  const totalAssigned = classStudents.reduce((sum, student) => sum + student.yearlyFee, 0);
-  const totalPaid = classStudents.reduce((sum, student) => sum + student.paidFees, 0);
-  const totalPending = classStudents.reduce((sum, student) => sum + student.pendingFees, 0);
+  const classFinanceRecords = snapshot.financeRecords
+    .map(normalizeFinanceRecord)
+    .filter((record) => classNamesMatch(record.className, className));
+  const studentTotals = {
+    totalAssigned: classStudents.reduce((sum, student) => sum + student.yearlyFee, 0),
+    totalPaid: classStudents.reduce((sum, student) => sum + student.paidFees, 0),
+    totalPending: classStudents.reduce((sum, student) => sum + student.pendingFees, 0),
+  };
+  const financeRecordTotals = classFinanceRecords.reduce(
+    (totals, record) => ({
+      totalAssigned: totals.totalAssigned + record.totalAssigned,
+      totalPaid: totals.totalPaid + record.paid,
+      totalPending: totals.totalPending + record.pending,
+    }),
+    { totalAssigned: 0, totalPaid: 0, totalPending: 0 }
+  );
+  const hasFinanceRecordTotals = Object.values(financeRecordTotals).some((value) => value > 0);
+  const totalAssigned = hasFinanceRecordTotals ? financeRecordTotals.totalAssigned : studentTotals.totalAssigned;
+  const totalPaid = hasFinanceRecordTotals ? financeRecordTotals.totalPaid : studentTotals.totalPaid;
+  const totalPending = hasFinanceRecordTotals ? financeRecordTotals.totalPending : studentTotals.totalPending;
   const averageAttendance = classStudents.length
     ? Math.round(
         classStudents.reduce((sum, student) => sum + Number(student.attendancePercentage || 0), 0) /
@@ -339,6 +828,7 @@ const buildClassAnalytics = async (className = '') => {
       totalPending,
       averageAttendance,
     },
+    summarySource: hasFinanceRecordTotals ? 'finance-ledger' : 'student-records',
     feeChart: [
       { name: 'Paid', value: totalPaid },
       { name: 'Pending', value: totalPending },
@@ -347,10 +837,19 @@ const buildClassAnalytics = async (className = '') => {
       { name: 'Present', value: averageAttendance },
       { name: 'Absent/Unmarked', value: Math.max(0, 100 - averageAttendance) },
     ],
+    financeRecords: classFinanceRecords.slice(0, 25).map((record) => ({
+      className: record.className,
+      admissionNumber: record.admissionNumber,
+      session: record.session || record.academicYear || '',
+      totalAssigned: record.totalAssigned,
+      paid: record.paid,
+      pending: record.pending,
+    })),
     table: classStudents.map((student) => ({
       admissionNumber: student.admissionNumber,
       name: student.name,
       className: student.className,
+      assignedFees: student.yearlyFee,
       paidFees: student.paidFees,
       pendingFees: student.pendingFees,
       attendancePercentage: student.attendancePercentage,
@@ -358,27 +857,260 @@ const buildClassAnalytics = async (className = '') => {
   };
 };
 
-const buildLocalAssistantResponse = async (message = '', auth = {}) => {
+const wantsAnyTerm = (message = '', terms = []) => {
+  const lower = normalizeText(message);
+  return terms.some((term) => {
+    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`\\b${escaped}\\b`, 'i').test(lower);
+  });
+};
+
+const buildModuleLookupResponse = async (message = '', auth = {}) => {
+  const hindi = prefersHindiResponse(message);
+
+  if (wantsAnyTerm(message, ['notification', 'notifications', 'alert', 'alerts'])) {
+    const { notifications } = await buildRealtimeErpContext(auth);
+    return {
+      grounded: true,
+      text: notifications.length
+        ? hindi
+          ? `ERP context में आपके लिए ${notifications.length} notification record मिले हैं:\n${formatRowsForText(
+              notifications,
+              (item) => `- ${item.title}${item.unread ? ' (unread)' : ''}`
+            )}`
+          : `I found ${notifications.length} notification records in ERP context:\n${formatRowsForText(
+              notifications,
+              (item) => `- ${item.title}${item.unread ? ' (unread)' : ''}`
+            )}`
+        : hindi
+          ? 'ERP context में आपके लिए कोई notification record नहीं मिला.'
+          : 'No notification records were found for you in ERP context.',
+      elements: notifications.length
+        ? [{ type: 'table', title: 'Notifications', rows: notifications.slice(0, 10) }]
+        : [],
+      actions: [],
+    };
+  }
+
+  if (wantsAnyTerm(message, ['event', 'events'])) {
+    const { events } = await buildRealtimeErpContext(auth);
+    return {
+      grounded: true,
+      text: events.length
+        ? hindi
+          ? `ERP context में ${events.length} event record मिले हैं:\n${formatRowsForText(
+              events,
+              (item) => `- ${item.title}${item.date ? ` (${item.date})` : ''}`
+            )}`
+          : `I found ${events.length} event records in ERP context:\n${formatRowsForText(
+              events,
+              (item) => `- ${item.title}${item.date ? ` (${item.date})` : ''}`
+            )}`
+        : hindi
+          ? 'ERP context में कोई event record नहीं मिला.'
+          : 'No event records were found in ERP context.',
+      elements: events.length ? [{ type: 'table', title: 'Events', rows: events.slice(0, 10) }] : [],
+      actions: [],
+    };
+  }
+
+  if (wantsAnyTerm(message, ['meeting', 'meetings', 'jitsi'])) {
+    const { meetings } = await buildRealtimeErpContext(auth);
+    return {
+      grounded: true,
+      text: meetings.length
+        ? hindi
+          ? `ERP context में आपके role के लिए ${meetings.length} meeting record मिले हैं:\n${formatRowsForText(
+              meetings,
+              (item) => `- ${item.title}${item.status ? ` (${item.status})` : ''}`
+            )}`
+          : `I found ${meetings.length} meeting records for your role in ERP context:\n${formatRowsForText(
+              meetings,
+              (item) => `- ${item.title}${item.status ? ` (${item.status})` : ''}`
+            )}`
+        : hindi
+          ? 'ERP context में आपके role के लिए कोई meeting record नहीं मिला.'
+          : 'No meeting records were found for your role in ERP context.',
+      elements: meetings.length ? [{ type: 'table', title: 'Meetings', rows: meetings.slice(0, 10) }] : [],
+      actions: [],
+    };
+  }
+
+  if (wantsAnyTerm(message, ['notice', 'notices'])) {
+    const snapshot = await readSchoolSnapshot();
+    const notices = snapshot.notices.slice(-10).reverse().map((notice = {}) => ({
+      title: notice.title || notice.subject || notice.heading || 'Notice',
+      target: notice.target || notice.audience || '',
+      date: notice.date || notice.createdAt || notice.updatedAt || '',
+    }));
+    return {
+      grounded: true,
+      text: notices.length
+        ? hindi
+          ? `ERP context में ${notices.length} notice record मिले हैं:\n${formatRowsForText(
+              notices,
+              (item) => `- ${item.title}${item.date ? ` (${item.date})` : ''}`
+            )}`
+          : `I found ${notices.length} notice records in ERP context:\n${formatRowsForText(
+              notices,
+              (item) => `- ${item.title}${item.date ? ` (${item.date})` : ''}`
+            )}`
+        : hindi
+          ? 'ERP context में कोई notice record नहीं मिला.'
+          : 'No notice records were found in ERP context.',
+      elements: notices.length ? [{ type: 'table', title: 'Notices', rows: notices }] : [],
+      actions: [],
+    };
+  }
+
+  if (wantsAnyTerm(message, ['document', 'documents'])) {
+    const snapshot = await readSchoolSnapshot();
+    const rows = Object.entries(snapshot.documents || {}).flatMap(([className, documents]) =>
+      (Array.isArray(documents) ? documents : []).map((document) => ({
+        className,
+        document: document.name || document.title || String(document || ''),
+      }))
+    );
+    return {
+      grounded: true,
+      text: rows.length
+        ? hindi
+          ? `ERP context में ${rows.length} document requirement record मिले हैं:\n${formatRowsForText(
+              rows,
+              (item) => `- ${item.className}: ${item.document}`
+            )}`
+          : `I found ${rows.length} document requirement records in ERP context:\n${formatRowsForText(
+              rows,
+              (item) => `- ${item.className}: ${item.document}`
+            )}`
+        : hindi
+          ? 'ERP context में कोई document requirement record नहीं मिला.'
+          : 'No document requirement records were found in ERP context.',
+      elements: rows.length ? [{ type: 'table', title: 'Document Requirements', rows: rows.slice(0, 10) }] : [],
+      actions: [],
+    };
+  }
+
+  return null;
+};
+
+const buildLocalAssistantResponse = async (message = '', auth = {}, history = []) => {
   if (detectOtherSchoolQuestion(message)) {
     return {
-      text: SCHOOL_ONLY_MESSAGE,
+      text: prefersHindiResponse(message)
+        ? `मैं केवल ${SCHOOL_NAME} के ERP data और school workflows में help करने के लिए बनाई गई हूँ.`
+        : SCHOOL_ONLY_MESSAGE,
       elements: [],
+      actions: [],
+    };
+  }
+
+  if (isSchoolInfoQuestion(message)) {
+    const overview = await buildSchoolOverviewContext();
+    const addressText = overview.profile.address || 'Not configured in ERP school profile';
+    return {
+      grounded: true,
+      text: prefersHindiResponse(message)
+        ? [
+            `${SCHOOL_NAME} की ERP profile मैंने database context से read कर ली है.`,
+            `School website: ${overview.profile.website}.`,
+            overview.profile.address
+              ? `School address: ${overview.profile.address}.`
+              : 'School address अभी ERP school profile में configured नहीं है, इसलिए मैं address invent नहीं करूँगी.',
+            `Current ERP snapshot: ${overview.totals.students} students, ${overview.totals.classes} classes, ${overview.totals.teachers} teachers, ${overview.totals.subjects} subjects, और ${overview.totals.notices} notices.`,
+          ].join(' ')
+        : [
+            `I read the ERP database context for ${SCHOOL_NAME}.`,
+            `School website: ${overview.profile.website}.`,
+            overview.profile.address
+              ? `School address: ${overview.profile.address}.`
+              : 'School address is not configured in the ERP school profile, so I will not invent it.',
+            `Current ERP snapshot: ${overview.totals.students} students, ${overview.totals.classes} classes, ${overview.totals.teachers} teachers, ${overview.totals.subjects} subjects, and ${overview.totals.notices} notices.`,
+          ].join(' '),
+      elements: [
+        {
+          type: 'table',
+          title: 'School ERP Snapshot',
+          rows: [
+            { item: 'School name', value: overview.profile.name },
+            { item: 'Website', value: overview.profile.website },
+            { item: 'Address', value: addressText },
+            { item: 'Students', value: overview.totals.students },
+            { item: 'Classes', value: overview.totals.classes },
+            { item: 'Teachers', value: overview.totals.teachers },
+            { item: 'Subjects', value: overview.totals.subjects },
+            { item: 'Notices', value: overview.totals.notices },
+          ],
+        },
+      ],
       actions: [],
     };
   }
 
   const lower = normalizeText(message);
   const className = extractClassName(message);
+  const wantsPaymentAction =
+    lower.includes('pay') ||
+    lower.includes('payment') ||
+    lower.includes('receipt') ||
+    lower.includes('भुगतान') ||
+    lower.includes('रसीद');
+  const wantsLedgerCharge =
+    (lower.includes('ledger') || lower.includes('pending') || lower.includes('fee')) &&
+    (lower.includes('add') || lower.includes('charge') || lower.includes('jod') || lower.includes('जोड़'));
+  const wantsFinanceLookup =
+    !wantsPaymentAction &&
+    !wantsLedgerCharge &&
+    (
+      lower.includes('pending fee') ||
+      lower.includes('pending fees') ||
+      lower.includes('finance') ||
+      lower.includes('fee') ||
+      lower.includes('fees') ||
+      lower.includes('dues') ||
+      lower.includes('ledger') ||
+      lower.includes('फीस') ||
+      lower.includes('शुल्क')
+    );
 
-  if (lower.includes('pending fee') || lower.includes('pending fees') || lower.includes('finance')) {
+  if (wantsFinanceLookup) {
+    if (!hasFinanceLookupAccess(auth)) {
+      return {
+        grounded: true,
+        text: prefersHindiResponse(message)
+          ? 'Finance records देखने की permission sirf Admin aur Clerk users ke paas hai.'
+          : 'Finance records can be viewed only by Admin and Clerk users.',
+        elements: [],
+        actions: [],
+      };
+    }
+
     const analytics = await buildClassAnalytics(className);
+    const hasRows = analytics.studentCount > 0 || analytics.financeRecords.length > 0;
+    const financeRows =
+      analytics.summarySource === 'finance-ledger' && analytics.financeRecords.length
+        ? analytics.financeRecords
+        : analytics.table;
     return {
+      grounded: true,
       text: className
-        ? `Here is the finance summary for ${className} at ${SCHOOL_NAME}. Pending fees are ${formatCurrency(analytics.summary.totalPending)}.`
-        : `Here is the finance summary for ${SCHOOL_NAME}. Pending fees across visible records are ${formatCurrency(analytics.summary.totalPending)}.`,
+        ? hasRows
+          ? prefersHindiResponse(message)
+            ? `${SCHOOL_NAME} में ${className} की finance summary ERP database से ready है. Assigned ${formatCurrency(analytics.summary.totalAssigned)}, paid ${formatCurrency(analytics.summary.totalPaid)}, और pending ${formatCurrency(analytics.summary.totalPending)} है.`
+            : `Here is the ERP finance summary for ${className} at ${SCHOOL_NAME}: assigned ${formatCurrency(analytics.summary.totalAssigned)}, paid ${formatCurrency(analytics.summary.totalPaid)}, and pending ${formatCurrency(analytics.summary.totalPending)}.`
+          : prefersHindiResponse(message)
+            ? `${className} के लिए ERP database में matching student या finance ledger rows नहीं मिलीं. मैं zero को paid/unpaid assumption नहीं मानूँगी.`
+            : `No matching student or finance ledger rows were found in the ERP database for ${className}. I will not treat zero totals as a paid/unpaid assumption.`
+        : prefersHindiResponse(message)
+          ? `${SCHOOL_NAME} की finance summary ERP database से ready है. Assigned ${formatCurrency(analytics.summary.totalAssigned)}, paid ${formatCurrency(analytics.summary.totalPaid)}, और pending ${formatCurrency(analytics.summary.totalPending)} है.`
+          : `Here is the ERP finance summary for ${SCHOOL_NAME}: assigned ${formatCurrency(analytics.summary.totalAssigned)}, paid ${formatCurrency(analytics.summary.totalPaid)}, and pending ${formatCurrency(analytics.summary.totalPending)}.`,
       elements: [
         { type: 'chart', chartType: 'pie', title: 'Fee Paid vs Pending', data: analytics.feeChart },
-        { type: 'table', title: 'Student Finance Rows', rows: analytics.table.slice(0, 12) },
+        {
+          type: 'table',
+          title: analytics.summarySource === 'finance-ledger' ? 'Class Finance Ledger Rows' : 'Student Finance Rows',
+          rows: financeRows.slice(0, 12),
+        },
       ],
       actions: [],
     };
@@ -387,7 +1119,10 @@ const buildLocalAssistantResponse = async (message = '', auth = {}) => {
   if (lower.includes('attendance')) {
     const analytics = await buildClassAnalytics(className);
     return {
-      text: `${analytics.className} average attendance is ${analytics.summary.averageAttendance}%.`,
+      grounded: true,
+      text: prefersHindiResponse(message)
+        ? `${analytics.className} की average attendance ${analytics.summary.averageAttendance}% है.`
+        : `${analytics.className} average attendance is ${analytics.summary.averageAttendance}%.`,
       elements: [
         { type: 'chart', chartType: 'pie', title: 'Attendance Percentage', data: analytics.attendanceChart },
         { type: 'table', title: 'Attendance Rows', rows: analytics.table.slice(0, 12) },
@@ -399,7 +1134,10 @@ const buildLocalAssistantResponse = async (message = '', auth = {}) => {
   if (lower.includes('pay') || lower.includes('receipt') || lower.includes('fee payment')) {
     if (!hasAdminActionAccess(auth)) {
       return {
-        text: 'Fee payment and receipt generation through AI action mode is available only to Admin users.',
+        grounded: true,
+        text: prefersHindiResponse(message)
+          ? 'AI action mode से fee payment और receipt generation सिर्फ Admin users के लिए available है.'
+          : 'Fee payment and receipt generation through AI action mode is available only to Admin users.',
         elements: [],
         actions: [],
       };
@@ -409,14 +1147,20 @@ const buildLocalAssistantResponse = async (message = '', auth = {}) => {
     const { student } = await findOneStudent(message);
     if (!student || !amount) {
       return {
-        text: 'Please provide the student admission number/name and the fee amount. I will show a confirmation modal before saving any payment.',
+        grounded: true,
+        text: prefersHindiResponse(message)
+          ? 'Please student का admission number/name और fee amount बताइए. Payment save करने से पहले मैं confirmation modal दिखाऊंगी.'
+          : 'Please provide the student admission number/name and the fee amount. I will show a confirmation modal before saving any payment.',
         elements: student ? [{ type: 'student-card', student }] : [],
         actions: [],
       };
     }
 
     return {
-      text: `I found ${student.name} (${student.admissionNumber}). I can record a payment of ${formatCurrency(amount)} and generate a receipt after confirmation.`,
+      grounded: true,
+      text: prefersHindiResponse(message)
+        ? `मुझे ${student.name} (${student.admissionNumber}) मिल गया. Confirmation के बाद मैं ${formatCurrency(amount)} का payment record करके receipt generate कर सकती हूँ.`
+        : `I found ${student.name} (${student.admissionNumber}). I can record a payment of ${formatCurrency(amount)} and generate a receipt after confirmation.`,
       elements: [{ type: 'student-card', student }],
       actions: [
         {
@@ -434,18 +1178,88 @@ const buildLocalAssistantResponse = async (message = '', auth = {}) => {
     };
   }
 
-  if (lower.includes('student') || lower.includes('admission') || lower.includes('father')) {
+  if (
+    wantsLedgerCharge
+  ) {
+    if (!hasAdminActionAccess(auth)) {
+      return {
+        grounded: true,
+        text: prefersHindiResponse(message)
+          ? 'Finance ledger में charge add करने की permission सिर्फ Admin users के पास है.'
+          : 'Adding a finance ledger charge is available only to Admin users.',
+        elements: [],
+        actions: [],
+      };
+    }
+
+    const amount = extractAmount(message);
+    const { student } = await findOneStudentFromConversation(message, history);
+    if (!student || !amount) {
+      return {
+        grounded: true,
+        text: prefersHindiResponse(message)
+          ? 'Please student का name/admission number और charge amount बताइए. Save करने से पहले मैं confirmation लूंगी.'
+          : 'Please provide the student name/admission number and charge amount. I will ask for confirmation before saving.',
+        elements: student ? [{ type: 'student-card', student }] : [],
+        actions: [],
+      };
+    }
+
+    return {
+      grounded: true,
+      text: prefersHindiResponse(message)
+        ? `मैं ${student.name} (${student.admissionNumber}) के finance ledger में ${formatCurrency(amount)} add कर सकती हूँ. Save करने से पहले confirmation चाहिए.`
+        : `I can add ${formatCurrency(amount)} to ${student.name} (${student.admissionNumber}) in the finance ledger after confirmation.`,
+      elements: [{ type: 'student-card', student }],
+      actions: [
+        {
+          id: `act-${Date.now()}`,
+          type: 'finance_ledger_charge',
+          label: `Add ${formatCurrency(amount)} to ledger`,
+          sensitive: true,
+          payload: {
+            admissionNumber: student.admissionNumber,
+            amount,
+            note: message,
+            mode: 'AI Assistant',
+          },
+        },
+      ],
+    };
+  }
+
+  if (
+    lower.includes('student') ||
+    lower.includes('admission') ||
+    lower.includes('father') ||
+    lower.includes('mother') ||
+    lower.includes('profile') ||
+    lower.includes('details') ||
+    lower.includes('detail') ||
+    lower.includes('guardian') ||
+    lower.includes('mobile') ||
+    lower.includes('phone') ||
+    lower.includes('प्रोफाइल') ||
+    lower.includes('विवरण') ||
+    lower.includes('छात्र')
+  ) {
     const { matches, student } = await findOneStudent(message);
     if (!student) {
       return {
-        text: 'I could not find a matching student in the Marigold ERP records. Try admission number, student name, father name, class, or mobile number.',
+        grounded: true,
+        text: prefersHindiResponse(message)
+          ? 'Marigold ERP records में matching student नहीं मिला. Admission number, student name, father name, class, या mobile number से try करें.'
+          : 'I could not find a matching student in the Marigold ERP records. Try admission number, student name, father name, class, or mobile number.',
         elements: [],
         actions: [],
       };
     }
     if (!canReadStudent(auth, student, 'full')) {
       return {
-        text: 'You do not have permission to view this student profile through the AI assistant.',
+        grounded: true,
+        text: prefersHindiResponse(message)
+          ? 'AI assistant के through इस student profile को देखने की permission आपके पास नहीं है.'
+          : 'You do not have permission to view this student profile through the AI assistant.',
         elements: [],
         actions: [],
       };
@@ -453,7 +1267,10 @@ const buildLocalAssistantResponse = async (message = '', auth = {}) => {
 
     const details = await buildStudentDetails(student);
     return {
-      text: `Here are the available ERP details for ${student.name} (${student.admissionNumber}) from ${SCHOOL_NAME}.`,
+      grounded: true,
+      text: prefersHindiResponse(message)
+        ? `${SCHOOL_NAME} के ERP में ${student.name} (${student.admissionNumber}) की available details ये हैं.`
+        : `Here are the available ERP details for ${student.name} (${student.admissionNumber}) from ${SCHOOL_NAME}.`,
       elements: [
         { type: 'student-card', student: details.profile },
         {
@@ -480,8 +1297,14 @@ const buildLocalAssistantResponse = async (message = '', auth = {}) => {
     };
   }
 
+  const moduleLookup = await buildModuleLookupResponse(message, auth);
+  if (moduleLookup) return moduleLookup;
+
   return {
-    text: `I am the AI assistant for ${SCHOOL_NAME}. I can help with students, parents, fees, attendance, examinations, assignments, notices, events, staff, classes, subjects, meetings, documents, and admin-confirmed ERP actions.`,
+    grounded: true,
+    text: prefersHindiResponse(message)
+      ? `मैं ${SCHOOL_NAME} की AI assistant हूँ. कृपया specific ERP query पूछें, जैसे student, class, finance, attendance, exam, staff, notice, event, meeting, notification, या document data. जो ERP context में नहीं होगा, मैं invent नहीं करूँगी.`
+      : `I am the AI assistant for ${SCHOOL_NAME}. Ask a specific ERP query for student, class, finance, attendance, exam, staff, notice, event, meeting, notification, or document data. I will not invent anything missing from ERP context.`,
     elements: [],
     actions: [],
   };
@@ -505,6 +1328,7 @@ const callGemini = async ({ message, history, context }) => {
   }
 
   const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+  const prompt = buildProviderPrompt({ message, history, context });
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
     {
@@ -517,16 +1341,17 @@ const callGemini = async ({ message, history, context }) => {
         systemInstruction: {
           parts: [{ text: SYSTEM_INSTRUCTION }],
         },
+        generationConfig: {
+          temperature: 0.1,
+          topP: 0.8,
+          maxOutputTokens: 220,
+        },
         contents: [
           {
             role: 'user',
             parts: [
               {
-                text: [
-                  `ERP context: ${JSON.stringify(context).slice(0, 12000)}`,
-                  `Conversation history: ${JSON.stringify(history || []).slice(0, 8000)}`,
-                  `Admin message: ${message}`,
-                ].join('\n\n'),
+                text: prompt,
               },
             ],
           },
@@ -542,7 +1367,7 @@ const callGemini = async ({ message, history, context }) => {
 
   const payload = await response.json();
   const text = payload?.candidates?.[0]?.content?.parts?.map((part) => part.text).filter(Boolean).join('\n');
-  return text || '';
+  return compactAssistantText(text || '');
 };
 
 const callGroq = async ({ message, history, context }) => {
@@ -552,6 +1377,7 @@ const callGroq = async ({ message, history, context }) => {
   }
 
   const model = process.env.GROQ_MODEL || process.env.GROK_MODEL || 'llama-3.1-8b-instant';
+  const prompt = buildProviderPrompt({ message, history, context });
   const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -561,15 +1387,13 @@ const callGroq = async ({ message, history, context }) => {
     body: JSON.stringify({
       model,
       stream: false,
+      temperature: 0.1,
+      max_tokens: 220,
       messages: [
         { role: 'system', content: SYSTEM_INSTRUCTION },
         {
           role: 'user',
-          content: [
-            `ERP context: ${JSON.stringify(context).slice(0, 12000)}`,
-            `Conversation history: ${JSON.stringify(history || []).slice(0, 8000)}`,
-            `Admin message: ${message}`,
-          ].join('\n\n'),
+          content: prompt,
         },
       ],
     }),
@@ -581,7 +1405,7 @@ const callGroq = async ({ message, history, context }) => {
   }
 
   const payload = await response.json();
-  return payload?.choices?.[0]?.message?.content || '';
+  return compactAssistantText(payload?.choices?.[0]?.message?.content || '');
 };
 
 const callProvider = async ({ provider, message, history, context }) => {
@@ -600,6 +1424,74 @@ const callProvider = async ({ provider, message, history, context }) => {
   }
 
   return { provider: 'development-fallback', text: '', attempts };
+};
+
+const getHuggingFaceToken = () =>
+  process.env.HUGGINGFACE_API_TOKEN || process.env.HF_TOKEN || process.env.HUGGING_FACE_TOKEN || '';
+
+const callHuggingFaceTts = async ({ text, description }) => {
+  const token = getHuggingFaceToken();
+  if (!token) {
+    throw new Error('Hugging Face API token is not configured.');
+  }
+
+  const model = process.env.HF_TTS_MODEL || process.env.HUGGINGFACE_TTS_MODEL || DEFAULT_TTS_MODEL;
+  const endpoint =
+    process.env.HF_TTS_ENDPOINT ||
+    process.env.HUGGINGFACE_TTS_ENDPOINT ||
+    `https://api-inference.huggingface.co/models/${model}`;
+  const requestBodies = [
+    {
+      inputs: {
+        prompt: text,
+        description,
+      },
+      options: { wait_for_model: true },
+    },
+    {
+      inputs: text,
+      parameters: { description },
+      options: { wait_for_model: true },
+    },
+  ];
+  const errors = [];
+
+  for (const body of requestBodies) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), Number(process.env.HF_TTS_TIMEOUT_MS || 45000));
+
+    try {
+      const hfResponse = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'audio/wav, audio/mpeg, audio/*, application/octet-stream',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+      const contentType = hfResponse.headers.get('content-type') || 'audio/wav';
+
+      if (hfResponse.ok && !contentType.includes('application/json')) {
+        const audioBuffer = Buffer.from(await hfResponse.arrayBuffer());
+        return {
+          audioBase64: audioBuffer.toString('base64'),
+          mimeType: contentType.split(';')[0] || 'audio/wav',
+          model,
+        };
+      }
+
+      const detail = await hfResponse.text();
+      errors.push(`status ${hfResponse.status}: ${detail.slice(0, 220)}`);
+    } catch (error) {
+      errors.push(error.name === 'AbortError' ? 'request timed out' : error.message);
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  throw new Error(`Hugging Face TTS failed: ${errors.join(' | ')}`);
 };
 
 const createAuditLog = async ({ actionType, status, auth, target = {}, payload = {}, result = {}, error = '' }) =>
@@ -708,11 +1600,95 @@ const applyPayment = async ({ admissionNumber, amount, mode }, auth = {}) => {
   };
 };
 
-const getMailConfig = () => {
-  const user = process.env.EMAIL_USER || process.env.GMAIL_USER;
-  const pass = process.env.EMAIL_PASS || process.env.GMAIL_APP_PASSWORD;
-  const fromName = process.env.EMAIL_FROM_NAME || process.env.GMAIL_FROM_NAME || 'MGPS ERP Portal';
-  return { user, pass, fromName, isReady: Boolean(user && pass) };
+const addFinanceLedgerCharge = async ({ admissionNumber, amount, note = '', mode }, auth = {}) => {
+  const normalizedAmount = parseAmount(amount);
+  if (!admissionNumber) throw new Error('Admission number is required.');
+  if (normalizedAmount <= 0) throw new Error('Ledger charge amount must be greater than zero.');
+
+  const students = await getStudents();
+  const index = students.findIndex((student) => getStudentAdmissionNumber(student) === admissionNumber);
+  if (index < 0) throw new Error('Student was not found.');
+
+  const student = normalizeStudent(students[index], index);
+  const pendingFees = student.pendingFees + normalizedAmount;
+  const yearlyFee = Math.max(student.yearlyFee + normalizedAmount, student.paidFees + pendingFees);
+  const chargeEntry = {
+    id: `LEDGER-${Date.now()}-${student.admissionNumber}`,
+    type: 'charge',
+    status: 'pending',
+    amount: normalizedAmount,
+    pending: normalizedAmount,
+    note: note || 'Added through AI assistant',
+    mode: mode || 'AI Assistant',
+    createdAt: new Date().toISOString(),
+    recordedBy: auth.username || '',
+  };
+
+  const nextStudents = students.map((rawStudent, rawIndex) => {
+    if (rawIndex !== index) return rawStudent;
+    return {
+      ...rawStudent,
+      id: student.id,
+      admissionNumber: student.admissionNumber,
+      displayName: student.displayName,
+      name: student.name,
+      className: student.className,
+      class: student.className,
+      guardianPhone: student.guardianPhone,
+      guardianEmail: student.guardianEmail,
+      pendingFees,
+      yearlyFee,
+      financeLedger: [
+        ...(Array.isArray(rawStudent.financeLedger) ? rawStudent.financeLedger : []),
+        chargeEntry,
+      ],
+    };
+  });
+
+  await setModuleValue(STUDENT_NAMESPACE, nextStudents);
+
+  return {
+    student: {
+      admissionNumber: student.admissionNumber,
+      name: student.name,
+      className: student.className,
+      paidFees: student.paidFees,
+      pendingFees,
+      yearlyFee,
+    },
+    charge: chargeEntry,
+  };
+};
+
+const undoAiAction = async ({ auditLogId = '' }, auth = {}) => {
+  const query = {
+    actionType: { $in: ['finance_payment', 'finance_ledger_charge'] },
+    status: 'completed',
+    'result.undo.previousStudents': { $exists: true },
+  };
+  if (auditLogId) query._id = auditLogId;
+
+  const log = await AiAuditLog.findOne(query).sort({ createdAt: -1 });
+  if (!log) throw new Error('No undoable AI action was found.');
+
+  const previousStudents = log.result?.undo?.previousStudents;
+  if (!Array.isArray(previousStudents)) throw new Error('This AI action cannot be undone.');
+
+  await setModuleValue(STUDENT_NAMESPACE, previousStudents);
+
+  await createAuditLog({
+    actionType: 'undo_last_ai_action',
+    status: 'completed',
+    auth,
+    target: { auditLogId: String(log._id), actionType: log.actionType },
+    payload: { auditLogId },
+    result: { restoredNamespace: STUDENT_NAMESPACE },
+  });
+
+  return {
+    undoneAction: log.actionType,
+    auditLogId: String(log._id),
+  };
 };
 
 const sendReceipt = async ({ receiptNo, channels = ['gmail', 'whatsapp'] }, auth = {}) => {
@@ -730,28 +1706,27 @@ const sendReceipt = async ({ receiptNo, channels = ['gmail', 'whatsapp'] }, auth
     } else if (!mailConfig.isReady) {
       result.gmail = { status: 'mock', message: 'Gmail is not configured; receipt send was simulated.' };
     } else {
-      const transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-          user: mailConfig.user,
-          pass: mailConfig.pass,
-        },
-      });
-      const info = await transporter.sendMail({
-        from: `"${mailConfig.fromName}" <${mailConfig.user}>`,
-        to: guardianEmail,
-        subject: `Fee Receipt ${receipt.receiptNo} - ${SCHOOL_NAME}`,
-        text: [
-          `Dear ${receipt.familyDetails?.fatherName || 'Parent/Guardian'},`,
-          '',
-          `${SCHOOL_NAME} has received ${formatCurrency(receipt.amountPaid)}.`,
-          `Receipt number: ${receipt.receiptNo}.`,
-          '',
-          'Regards,',
-          'Accounts Department',
-          SCHOOL_NAME,
-        ].join('\n'),
-      });
+      const transporter = await createMailTransporter(mailConfig);
+      let info;
+      try {
+        info = await transporter.sendMail({
+          from: getSenderAddress(mailConfig),
+          to: guardianEmail,
+          subject: `Fee Receipt ${receipt.receiptNo} - ${SCHOOL_NAME}`,
+          text: [
+            `Dear ${receipt.familyDetails?.fatherName || 'Parent/Guardian'},`,
+            '',
+            `${SCHOOL_NAME} has received ${formatCurrency(receipt.amountPaid)}.`,
+            `Receipt number: ${receipt.receiptNo}.`,
+            '',
+            'Regards,',
+            'Accounts Department',
+            SCHOOL_NAME,
+          ].join('\n'),
+        });
+      } finally {
+        closeMailTransporter(transporter);
+      }
       receipt.sent.gmail = true;
       receipt.sent.gmailMessageId = info.messageId || '';
       result.gmail = { status: 'sent', messageId: info.messageId };
@@ -787,6 +1762,8 @@ router.get('/config', (request, response) => {
   const defaultProvider = normalizeProvider(process.env.DEFAULT_AI_PROVIDER);
   response.json({
     schoolName: SCHOOL_NAME,
+    schoolWebsite: SCHOOL_WEBSITE,
+    schoolWebsiteUrl: SCHOOL_WEBSITE_URL,
     defaultProvider: defaultProvider === 'gemini' || defaultProvider === 'groq' ? defaultProvider : 'groq',
     providers: {
       gemini: Boolean(process.env.GEMINI_API_KEY),
@@ -796,6 +1773,11 @@ router.get('/config', (request, response) => {
       groq: 'fast',
       gemini: 'brain',
     },
+    tts: {
+      provider: getHuggingFaceToken() ? 'huggingface-ai4bharat' : 'browser-fallback',
+      model: process.env.HF_TTS_MODEL || process.env.HUGGINGFACE_TTS_MODEL || DEFAULT_TTS_MODEL,
+      ready: Boolean(getHuggingFaceToken()),
+    },
     role: request.auth?.role || '',
   });
 });
@@ -803,24 +1785,78 @@ router.get('/config', (request, response) => {
 router.post('/chat', async (request, response) => {
   const message = String(request.body.message || '').trim();
   const provider = request.body.provider;
-  const history = Array.isArray(request.body.history) ? request.body.history.slice(-12) : [];
+  const history = sanitizeHistory(request.body.history);
 
   if (!message) {
     response.status(400).json({ message: 'Message is required.' });
     return;
   }
 
-  const local = await buildLocalAssistantResponse(message, request.auth);
+  const local = await buildLocalAssistantResponse(message, request.auth, history);
   const snapshot = await readSchoolSnapshot();
+  const relevantStudents = await buildRelevantStudentContext(message, request.auth);
+  const requestedClassName = extractClassName(message);
+  const canSeeFinance = hasFinanceLookupAccess(request.auth);
+  const financeTotals = canSeeFinance ? (await buildClassAnalytics()).summary : null;
+  const requestedClassAnalytics =
+    requestedClassName && canSeeFinance ? await buildClassAnalytics(requestedClassName) : null;
+  const realtimeContext = await buildRealtimeErpContext(request.auth);
   const providerContext = {
+    schoolProfile: snapshot.schoolProfile,
     schoolName: SCHOOL_NAME,
+    schoolWebsite: SCHOOL_WEBSITE,
     role: request.auth?.role,
+    databaseAccess: {
+      connected: true,
+      mode: 'read-only',
+      note: 'This context was read from MongoDB ModuleState and examination records for the authenticated ERP user.',
+    },
     studentCount: snapshot.students.length,
     classCount: snapshot.classes.length,
+    teacherCount: snapshot.teachers.length,
+    clerkCount: snapshot.clerks.length,
+    noticeCount: snapshot.notices.length,
+    eventCount: realtimeContext.events.length,
+    notificationCount: realtimeContext.notifications.length,
+    meetingCount: realtimeContext.meetings.length,
+    availableModules: {
+      students: snapshot.students.length > 0,
+      classes: snapshot.classes.length > 0,
+      finance: canSeeFinance,
+      attendance: snapshot.students.some((student) => student.totalWorkingDays > 0 || student.presentDays > 0),
+      examinations: Boolean(snapshot.examinationState?.marks?.length),
+      notices: snapshot.notices.length > 0,
+      events: realtimeContext.events.length > 0,
+      meetings: realtimeContext.meetings.length > 0,
+      notifications: realtimeContext.notifications.length > 0,
+      documents: Object.values(snapshot.documents || {}).some((value) => Array.isArray(value) && value.length > 0),
+    },
     classes: snapshot.classes,
-    financeTotals: (await buildClassAnalytics()).summary,
+    recentEvents: realtimeContext.events.slice(0, 8),
+    recentNotifications: realtimeContext.notifications.slice(0, 8),
+    recentMeetings: realtimeContext.meetings.slice(0, 8),
+    financeTotals,
+    requestedClassAnalytics: requestedClassAnalytics
+      ? {
+          className: requestedClassAnalytics.className,
+          studentCount: requestedClassAnalytics.studentCount,
+          summary: requestedClassAnalytics.summary,
+          summarySource: requestedClassAnalytics.summarySource,
+          studentFinanceRows: requestedClassAnalytics.table.slice(0, 20),
+          financeLedgerRows: requestedClassAnalytics.financeRecords.slice(0, 20),
+        }
+      : null,
+    relevantStudents,
   };
-  const providerResult = await callProvider({ provider, message, history, context: providerContext });
+  const useLocalOnly = Boolean(
+    local.grounded ||
+    local.elements?.length ||
+    local.actions?.length ||
+    detectOtherSchoolQuestion(message)
+  );
+  const providerResult = useLocalOnly
+    ? { provider: 'erp-grounded', text: '', attempts: [] }
+    : await callProvider({ provider, message, history, context: providerContext });
   const providerText = providerResult.text && !detectOtherSchoolQuestion(message) ? providerResult.text : '';
 
   await createAuditLog({
@@ -855,17 +1891,53 @@ router.post('/voice/transcribe', async (request, response) => {
 });
 
 router.post('/voice/speak', async (request, response) => {
-  const text = String(request.body.text || '').slice(0, 4000);
+  const text = String(request.body.text || '').slice(0, 1200);
+  const description = String(
+    request.body.description || process.env.HF_TTS_DESCRIPTION || DEFAULT_TTS_DESCRIPTION
+  ).slice(0, 600);
+
+  if (!text) {
+    response.status(400).json({ message: 'Text is required.' });
+    return;
+  }
+
+  try {
+    const tts = await callHuggingFaceTts({ text, description });
+    await createAuditLog({
+      actionType: 'voice_speak',
+      status: 'completed',
+      auth: request.auth,
+      payload: { textLength: text.length, provider: 'huggingface-ai4bharat' },
+      result: { model: tts.model, mimeType: tts.mimeType },
+    });
+    response.json({
+      text,
+      voice: 'huggingface-ai4bharat-indic-tts',
+      ...tts,
+    });
+    return;
+  } catch (error) {
+    if (getHuggingFaceToken()) {
+      await createAuditLog({
+        actionType: 'voice_speak',
+        status: 'failed',
+        auth: request.auth,
+        payload: { textLength: text.length, provider: 'huggingface-ai4bharat' },
+        error: error.message,
+      });
+    }
+  }
+
   await createAuditLog({
     actionType: 'voice_speak',
     status: 'completed',
     auth: request.auth,
-    payload: { textLength: text.length },
+    payload: { textLength: text.length, provider: 'browser-fallback' },
   });
   response.json({
     text,
     voice: 'browser-speech-synthesis',
-    message: 'Use the browser SpeechSynthesis API for secure client-side text-to-speech.',
+    message: 'Hugging Face TTS is not configured or unavailable. Use browser SpeechSynthesis as fallback.',
   });
 });
 
@@ -931,16 +2003,27 @@ router.post('/finance/payment', async (request, response) => {
   }
 
   try {
+    const previousStudents = await getStudents();
     const result = await applyPayment(request.body, request.auth);
-    await createAuditLog({
+    const log = await createAuditLog({
       actionType: 'finance_payment',
       status: 'completed',
       auth: request.auth,
       target: { admissionNumber: request.body.admissionNumber },
       payload: { amount: request.body.amount, mode: request.body.mode },
-      result,
+      result: {
+        ...result,
+        undo: { previousStudents },
+      },
     });
-    response.json(result);
+    response.json({
+      ...result,
+      undoAction: {
+        type: 'undo_last_ai_action',
+        label: 'Undo this payment',
+        payload: { auditLogId: String(log._id) },
+      },
+    });
   } catch (error) {
     await createAuditLog({
       actionType: 'finance_payment',
@@ -1012,16 +2095,59 @@ router.post('/actions/execute', async (request, response) => {
 
   try {
     if (action === 'finance_payment') {
+      const previousStudents = await getStudents();
       const result = await applyPayment(payload, request.auth);
-      await createAuditLog({
+      const log = await createAuditLog({
         actionType: action,
         status: 'completed',
         auth: request.auth,
         target: { admissionNumber: payload.admissionNumber },
         payload,
-        result,
+        result: {
+          ...result,
+          undo: { previousStudents },
+        },
       });
-      response.json({ action, result });
+      response.json({
+        action,
+        result,
+        undoAction: {
+          type: 'undo_last_ai_action',
+          label: 'Undo this payment',
+          payload: { auditLogId: String(log._id) },
+        },
+      });
+      return;
+    }
+
+    if (action === 'finance_ledger_charge') {
+      const previousStudents = await getStudents();
+      const result = await addFinanceLedgerCharge(payload, request.auth);
+      const log = await createAuditLog({
+        actionType: action,
+        status: 'completed',
+        auth: request.auth,
+        target: { admissionNumber: payload.admissionNumber },
+        payload,
+        result: {
+          ...result,
+          undo: { previousStudents },
+        },
+      });
+      response.json({
+        action,
+        result,
+        undoAction: {
+          type: 'undo_last_ai_action',
+          label: 'Undo this ledger charge',
+          payload: { auditLogId: String(log._id) },
+        },
+      });
+      return;
+    }
+
+    if (action === 'undo_last_ai_action') {
+      response.json({ action, result: await undoAiAction(payload, request.auth) });
       return;
     }
 

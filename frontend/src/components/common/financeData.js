@@ -284,6 +284,136 @@ export const applyPaymentToStudents = (students = [], allocations = []) => {
   });
 };
 
+export const buildFeeAssignmentPayload = (student = {}, totalFees = 0, note = '') => {
+  const normalized = normalizeFinanceStudent(student);
+  const assignedFees = parseAmount(totalFees);
+  const pendingFees = Math.max(0, assignedFees - normalized.paidFees);
+
+  return {
+    id: `FEE-${Date.now()}-${normalized.admissionNumber}`,
+    admissionNumber: normalized.admissionNumber,
+    name: normalized.name,
+    className: normalized.className,
+    fatherName: normalized.fatherName,
+    guardianEmail: normalized.guardianEmail,
+    guardianPhone: normalized.guardianPhone,
+    totalFees: assignedFees,
+    previousTotalFees: normalized.yearlyFee,
+    paidFees: normalized.paidFees,
+    pendingFees,
+    note: String(note || '').trim(),
+    assignedAt: new Date().toLocaleString(),
+  };
+};
+
+export const applyFeeAssignmentToStudents = (students = [], assignment = {}) =>
+  students.map((student, index) => {
+    const normalized = normalizeFinanceStudent(student, index);
+    if (normalized.admissionNumber !== assignment.admissionNumber) return student;
+
+    const totalFees = parseAmount(assignment.totalFees);
+    const paidFees = normalized.paidFees;
+    const pendingFees = Math.max(0, totalFees - paidFees);
+    const assignmentEntry = {
+      ...assignment,
+      totalFees,
+      paidFees,
+      pendingFees,
+      previousTotalFees: normalized.yearlyFee,
+    };
+
+    return {
+      ...student,
+      id: normalized.id,
+      admissionNumber: normalized.admissionNumber,
+      displayName: normalized.displayName,
+      name: normalized.name,
+      className: normalized.className,
+      class: normalized.class,
+      guardianPhone: normalized.guardianPhone,
+      guardianEmail: normalized.guardianEmail,
+      paidFees,
+      pendingFees,
+      yearlyFee: totalFees,
+      annualFee: totalFees,
+      assignedFees: totalFees,
+      feeAssignments: [
+        ...(Array.isArray(student.feeAssignments) ? student.feeAssignments : []),
+        assignmentEntry,
+      ],
+      rawProfile: {
+        ...(student.rawProfile || {}),
+        yearlyFee: totalFees,
+        annualFee: totalFees,
+        assignedFees: totalFees,
+        paidFees,
+        pendingFees,
+      },
+    };
+  });
+
+const escapeHtml = (value = '') =>
+  String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+export const buildFeeAssignmentNoticeMessage = (assignment = {}) => {
+  const totalFees = formatCurrency(assignment.totalFees);
+  const paidFees = formatCurrency(assignment.paidFees);
+  const pendingFees = formatCurrency(assignment.pendingFees);
+  const studentLine = `${assignment.name || 'Student'} (${assignment.admissionNumber || 'Admission No. pending'})`;
+  const noteLine = assignment.note ? `Accounts note: ${assignment.note}` : '';
+  const safeStudentLine = escapeHtml(studentLine);
+  const safeClassName = escapeHtml(assignment.className || '-');
+  const safeNote = escapeHtml(assignment.note || '');
+  const safeAssignedAt = escapeHtml(assignment.assignedAt || new Date().toLocaleString());
+  const text = [
+    `Dear ${assignment.fatherName || 'Parent/Guardian'},`,
+    '',
+    'This is an official fee assignment notice from Marigold Secondary School, Behror.',
+    '',
+    `Student: ${studentLine}`,
+    `Class: ${assignment.className || '-'}`,
+    `Total fee fixed: ${totalFees}`,
+    `Already paid: ${paidFees}`,
+    `Current pending balance: ${pendingFees}`,
+    `Assignment date: ${assignment.assignedAt || new Date().toLocaleString()}`,
+    noteLine,
+    '',
+    'Please keep this message for your records. For any clarification, contact the school accounts office.',
+    '',
+    'Regards,',
+    'Accounts Department',
+    'Marigold Secondary School, Behror',
+  ].filter(Boolean).join('\n');
+
+  return {
+    to: assignment.guardianEmail,
+    subject: `Fee Assigned: ${studentLine}`,
+    text,
+    html: `
+      <div style="font-family:Arial,sans-serif;color:#111827;line-height:1.5">
+        <h2 style="margin:0 0 8px">Marigold Secondary School, Behror</h2>
+        <p style="margin:0 0 16px">Official fee assignment notice</p>
+        <table style="border-collapse:collapse;width:100%;max-width:560px">
+          <tr><td style="padding:8px;border:1px solid #e5e7eb"><strong>Student</strong></td><td style="padding:8px;border:1px solid #e5e7eb">${safeStudentLine}</td></tr>
+          <tr><td style="padding:8px;border:1px solid #e5e7eb"><strong>Class</strong></td><td style="padding:8px;border:1px solid #e5e7eb">${safeClassName}</td></tr>
+          <tr><td style="padding:8px;border:1px solid #e5e7eb"><strong>Total fee fixed</strong></td><td style="padding:8px;border:1px solid #e5e7eb">${totalFees}</td></tr>
+          <tr><td style="padding:8px;border:1px solid #e5e7eb"><strong>Already paid</strong></td><td style="padding:8px;border:1px solid #e5e7eb">${paidFees}</td></tr>
+          <tr><td style="padding:8px;border:1px solid #e5e7eb"><strong>Pending balance</strong></td><td style="padding:8px;border:1px solid #e5e7eb">${pendingFees}</td></tr>
+          <tr><td style="padding:8px;border:1px solid #e5e7eb"><strong>Date</strong></td><td style="padding:8px;border:1px solid #e5e7eb">${safeAssignedAt}</td></tr>
+        </table>
+        ${assignment.note ? `<p style="margin-top:14px"><strong>Accounts note:</strong> ${safeNote}</p>` : ''}
+        <p style="margin-top:16px">Please keep this message for your records. For any clarification, contact the school accounts office.</p>
+        <p style="margin-top:20px">Regards,<br/>Accounts Department<br/>Marigold Secondary School, Behror</p>
+      </div>
+    `,
+  };
+};
+
 export const buildReceiptPayload = (familyLedger, amount, breakdown, mode) => ({
   receiptNo: `REC-${Date.now().toString().slice(-6)}`,
   timestamp: new Date().toLocaleString(),

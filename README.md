@@ -130,6 +130,10 @@ Open your browser and navigate to `http://127.0.0.1:5173/` or `http://localhost:
 | `AUTH_AUTO_PROVISION` | Automatically creates ADM-001 admin | `false` | No |
 | `EMAIL_USER` | NodeMailer school sender Gmail address | *None* | No |
 | `EMAIL_PASS` | Google App Password credentials | *None* | No |
+| `GMAIL_SMTP_PORT` | Gmail SMTP port for live mail dispatch | `587` | No |
+| `GMAIL_FORCE_IPV4` | Force IPv4 SMTP DNS resolution to avoid IPv6 `ENETUNREACH` | `true` | No |
+| `GMAIL_CONNECTION_TIMEOUT_MS` | SMTP connection timeout | `10000` | No |
+| `GMAIL_MAX_CONNECTIONS` | Parallel SMTP connections for Gmail batches | `3` | No |
 | `GEMINI_API_KEY` | Server-side Gemini key for the Admin Feature Page AI assistant | *None* | No |
 | `GROQ_API_KEY` | Server-side Groq key for the Admin Feature Page AI assistant | *None* | No |
 | `DEFAULT_AI_PROVIDER` | Default AI provider used by `/api/ai/chat` (`gemini` or `groq`) | `groq` | No |

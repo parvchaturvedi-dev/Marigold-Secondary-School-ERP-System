@@ -85,13 +85,14 @@ const ClassFinanceList = () => {
 
       <div className="w-full bg-white border border-neutral-300 rounded-2xl shadow-md overflow-hidden box-border">
         <div className="w-full overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[800px]">
+          <table className="w-full text-left border-collapse min-w-[900px]">
             <thead>
               <tr className="bg-neutral-50 border-b border-neutral-200 text-[10px] font-black uppercase tracking-wider text-neutral-500 font-mono">
                 <th className="py-3 px-4">Adm. Number</th>
                 <th className="py-3 px-4">Student Name</th>
                 <th className="py-3 px-4">Father's Name</th>
                 <th className="py-3 px-4">Contact Link</th>
+                <th className="py-3 px-4 text-right">Total Fees</th>
                 <th className="py-3 px-4 text-right">Paid Fees</th>
                 <th className="py-3 px-4 text-right">Pending Fees</th>
                 <th className="py-3 px-4 text-center">Action</th>
@@ -113,6 +114,9 @@ const ClassFinanceList = () => {
                     </td>
                     <td className="py-3.5 px-4 text-neutral-600">{student.fatherName || '-'}</td>
                     <td className="py-3.5 px-4 font-mono text-neutral-500">{student.guardianPhone || '-'}</td>
+                    <td className="py-3.5 px-4 text-right font-mono font-bold text-neutral-800">
+                      {formatCurrency(student.yearlyFee)}
+                    </td>
                     <td className="py-3.5 px-4 text-right font-mono font-bold text-emerald-600">
                       {formatCurrency(student.paidFees)}
                     </td>
@@ -134,7 +138,7 @@ const ClassFinanceList = () => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan="7" className="py-10 text-center font-mono text-[10px] font-bold text-neutral-400 uppercase tracking-widest">
+                  <td colSpan="8" className="py-10 text-center font-mono text-[10px] font-bold text-neutral-400 uppercase tracking-widest">
                     No financial records matched the specified search criteria.
                   </td>
                 </tr>

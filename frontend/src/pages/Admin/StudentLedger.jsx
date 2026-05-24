@@ -17,7 +17,10 @@ import { sendGmailMessages } from '../../components/common/gmail';
 import { useMasterData } from '../../components/common/masterData';
 import {
   allocatePayment,
+  applyFeeAssignmentToStudents,
   applyPaymentToStudents,
+  buildFeeAssignmentNoticeMessage,
+  buildFeeAssignmentPayload,
   buildFamilyLedger,
   buildReceiptPayload,
   formatCurrency,
@@ -57,6 +60,10 @@ const StudentLedger = () => {
   const [isSendingMail, setIsSendingMail] = useState(false);
   const [paymentMode, setPaymentMode] = useState('family');
   const [selectedIndividualId, setSelectedIndividualId] = useState('');
+  const [feeAssignmentStudentId, setFeeAssignmentStudentId] = useState('');
+  const [feeAssignmentAmount, setFeeAssignmentAmount] = useState('');
+  const [feeAssignmentNote, setFeeAssignmentNote] = useState('');
+  const [isSendingFeeAssignmentMail, setIsSendingFeeAssignmentMail] = useState(false);
   const [inputAmount, setInputAmount] = useState('');
   const [latestReceipt, setLatestReceipt] = useState(null);
   const selectedAdmissionNumber = getRouteAdmissionNumber();
@@ -72,6 +79,16 @@ const StudentLedger = () => {
       setSelectedIndividualId(firstStudent.id);
     }
   }, [familyProfile.students, selectedIndividualId]);
+
+  useEffect(() => {
+    const firstStudent = familyProfile.students[0];
+    const hasSelected = familyProfile.students.some(
+      (student) => student.id === feeAssignmentStudentId || student.admissionNumber === feeAssignmentStudentId
+    );
+    if (firstStudent && !hasSelected) {
+      setFeeAssignmentStudentId(firstStudent.id);
+    }
+  }, [familyProfile.students, feeAssignmentStudentId]);
 
   const sendReceiptMail = async (receipt, mode = 'manual') => {
     const message = buildReceiptMessage(receipt);
@@ -90,6 +107,44 @@ const StudentLedger = () => {
       alert(`${prefix}: ${error.message}`);
     } finally {
       setIsSendingMail(false);
+    }
+  };
+
+  const executeFeeAssignment = async (event) => {
+    event.preventDefault();
+    const amount = parseAmount(feeAssignmentAmount);
+    const targetStudent = familyProfile.students.find(
+      (student) => student.id === feeAssignmentStudentId || student.admissionNumber === feeAssignmentStudentId
+    );
+
+    if (!targetStudent) {
+      alert('Select a student before assigning fees.');
+      return;
+    }
+
+    if (amount <= 0) {
+      alert('Enter a valid total fee amount.');
+      return;
+    }
+
+    const assignment = buildFeeAssignmentPayload(targetStudent, amount, feeAssignmentNote);
+    masterData.actions.setStudents(applyFeeAssignmentToStudents(masterData.raw.students, assignment));
+    setFeeAssignmentAmount('');
+    setFeeAssignmentNote('');
+
+    if (!assignment.guardianEmail) {
+      alert('Total fee saved, but guardian Gmail is missing for this student.');
+      return;
+    }
+
+    setIsSendingFeeAssignmentMail(true);
+    try {
+      await sendGmailMessages(buildFeeAssignmentNoticeMessage(assignment));
+      alert(`Total fee saved and Gmail notice sent to ${assignment.guardianEmail}.`);
+    } catch (error) {
+      alert(`Total fee saved, but Gmail notice failed: ${error.message}`);
+    } finally {
+      setIsSendingFeeAssignmentMail(false);
     }
   };
 
@@ -176,12 +231,13 @@ const StudentLedger = () => {
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse min-w-[700px]">
+              <table className="w-full text-left border-collapse min-w-[820px]">
                 <thead>
                   <tr className="bg-neutral-50 border-b border-neutral-200 text-[9px] font-black uppercase tracking-wider text-neutral-400 font-mono">
                     <th className="p-3">Student Name</th>
                     <th className="p-3">Class</th>
                     <th className="p-3 text-center">Status</th>
+                    <th className="p-3 text-right">Total Fees</th>
                     <th className="p-3 text-right">Cumulative Paid</th>
                     <th className="p-3 text-right">Unpaid Balance</th>
                   </tr>
@@ -196,6 +252,7 @@ const StudentLedger = () => {
                           {student.status}
                         </span>
                       </td>
+                      <td className="p-3 text-right font-mono font-bold text-neutral-800">{formatCurrency(student.yearlyFee)}</td>
                       <td className="p-3 text-right font-mono font-bold text-emerald-600">{formatCurrency(student.paidFees)}</td>
                       <td className={`p-3 text-right font-mono font-bold ${student.pendingFees > 0 ? 'text-red-500' : 'text-neutral-400'}`}>
                         {student.pendingFees > 0 ? formatCurrency(student.pendingFees) : 'Cleared'}
@@ -204,7 +261,7 @@ const StudentLedger = () => {
                   ))}
                   {!familyProfile.students.length && (
                     <tr>
-                      <td colSpan="5" className="py-10 text-center text-[10px] font-black uppercase tracking-widest text-neutral-400">
+                      <td colSpan="6" className="py-10 text-center text-[10px] font-black uppercase tracking-widest text-neutral-400">
                         No live student ledger found.
                       </td>
                     </tr>
@@ -213,6 +270,59 @@ const StudentLedger = () => {
               </table>
             </div>
           </div>
+
+          <form onSubmit={executeFeeAssignment} className="bg-white p-5 rounded-2xl border border-neutral-300 shadow-md space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+              <div>
+                <h4 className="text-xs font-black uppercase tracking-widest text-neutral-900 flex items-center gap-1.5">
+                  <DollarSign className="w-4 h-4 text-neutral-700" /> Add / Set Total Fees
+                </h4>
+                <p className="mt-1 text-[11px] text-neutral-600 leading-relaxed font-semibold">
+                  Fix the student's total fee here. Existing paid amount is deducted automatically and pending balance is recalculated.
+                </p>
+              </div>
+              <span className="text-[10px] font-black text-red-600 bg-red-50 border border-red-100 px-2 py-1 rounded-lg">
+                Gmail notice auto-sends
+              </span>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_1fr_1.4fr_auto] gap-3">
+              <select
+                value={feeAssignmentStudentId}
+                onChange={(event) => setFeeAssignmentStudentId(event.target.value)}
+                className="w-full p-2.5 bg-neutral-50 border border-neutral-300 rounded-xl text-xs font-bold outline-none text-neutral-800"
+              >
+                {familyProfile.students.map((student) => (
+                  <option key={student.id} value={student.id}>
+                    {student.name} ({student.className}) - Current total {formatCurrency(student.yearlyFee)}
+                  </option>
+                ))}
+              </select>
+              <div className="relative flex items-center bg-neutral-50 border border-neutral-300 rounded-xl px-3 py-1">
+                <span className="text-sm font-black text-neutral-500 font-mono mr-2">Rs.</span>
+                <input
+                  type="number"
+                  value={feeAssignmentAmount}
+                  onChange={(event) => setFeeAssignmentAmount(event.target.value)}
+                  placeholder="Total fee"
+                  className="w-full bg-transparent p-2 outline-none font-mono text-sm font-bold text-neutral-900"
+                />
+              </div>
+              <input
+                type="text"
+                value={feeAssignmentNote}
+                onChange={(event) => setFeeAssignmentNote(event.target.value)}
+                placeholder="Optional accounts note"
+                className="w-full p-2.5 bg-neutral-50 border border-neutral-300 rounded-xl text-xs font-bold outline-none text-neutral-800"
+              />
+              <button
+                type="submit"
+                disabled={isSendingFeeAssignmentMail}
+                className="px-4 py-2.5 bg-neutral-900 hover:bg-neutral-800 text-white font-black text-[10px] uppercase tracking-widest rounded-xl transition-all shadow-md disabled:opacity-60 flex items-center justify-center gap-2"
+              >
+                <Mail className="w-3.5 h-3.5" /> {isSendingFeeAssignmentMail ? 'Sending' : 'Save Fee'}
+              </button>
+            </div>
+          </form>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-white p-5 rounded-2xl border border-neutral-300 shadow-md md:col-span-2 space-y-4">

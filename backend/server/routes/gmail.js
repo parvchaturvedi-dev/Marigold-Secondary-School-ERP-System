@@ -1,32 +1,13 @@
 import express from 'express';
-import nodemailer from 'nodemailer';
+import {
+  buildMailErrorPayload,
+  closeMailTransporter,
+  createMailTransporter,
+  getMailConfig,
+  getSenderAddress,
+} from '../utils/mailer.js';
 
 const router = express.Router();
-
-const getMailConfig = () => {
-  const user = process.env.EMAIL_USER || process.env.GMAIL_USER;
-  const pass = process.env.EMAIL_PASS || process.env.GMAIL_APP_PASSWORD;
-  const fromName = process.env.EMAIL_FROM_NAME || process.env.GMAIL_FROM_NAME || 'MGPS ERP Portal';
-
-  return {
-    user,
-    pass,
-    fromName,
-    isReady: Boolean(user && pass),
-  };
-};
-
-const createTransporter = () => {
-  const { user, pass } = getMailConfig();
-
-  return nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user,
-      pass,
-    },
-  });
-};
 
 const normalizeMessage = (message) => ({
   to: Array.isArray(message.to) ? message.to.filter(Boolean) : message.to,
@@ -34,6 +15,23 @@ const normalizeMessage = (message) => ({
   text: String(message.text || '').trim(),
   html: message.html ? String(message.html) : undefined,
 });
+
+const mapWithConcurrency = async (items, limit, worker) => {
+  const results = new Array(items.length);
+  let cursor = 0;
+
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, async () => {
+      while (cursor < items.length) {
+        const currentIndex = cursor;
+        cursor += 1;
+        results[currentIndex] = await worker(items[currentIndex], currentIndex);
+      }
+    })
+  );
+
+  return results;
+};
 
 const validateMessage = (message) => {
   if (!message.to || (Array.isArray(message.to) && message.to.length === 0)) {
@@ -51,12 +49,29 @@ const validateMessage = (message) => {
   return '';
 };
 
+router.get('/status', (_request, response) => {
+  const mailConfig = getMailConfig();
+  response.json({
+    service: 'gmail',
+    configured: mailConfig.isReady,
+    hasUser: Boolean(mailConfig.user),
+    hasPassword: Boolean(mailConfig.pass),
+    fromName: mailConfig.fromName,
+    host: mailConfig.host,
+    port: mailConfig.port,
+    secure: mailConfig.secure,
+    forceIPv4: mailConfig.forceIPv4,
+    maxConnections: mailConfig.maxConnections,
+    requiredEnv: ['GMAIL_USER', 'GMAIL_APP_PASSWORD'],
+  });
+});
+
 router.post('/send', async (request, response) => {
   const mailConfig = getMailConfig();
 
   if (!mailConfig.isReady) {
     response.status(503).json({
-      message: 'Email is not configured. Set EMAIL_USER and EMAIL_PASS in .env.',
+      message: 'Email is not configured. Set GMAIL_USER and GMAIL_APP_PASSWORD in backend/.env.',
     });
     return;
   }
@@ -74,34 +89,36 @@ router.post('/send', async (request, response) => {
   }
 
   try {
-    const transporter = createTransporter();
-    const results = [];
+    const transporter = await createMailTransporter(mailConfig);
+    const sender = getSenderAddress(mailConfig);
 
-    for (const message of messages) {
-      const info = await transporter.sendMail({
-        from: `"${mailConfig.fromName}" <${mailConfig.user}>`,
-        to: message.to,
-        subject: message.subject,
-        text: message.text,
-        html: message.html,
+    try {
+      const results = await mapWithConcurrency(messages, mailConfig.maxConnections, async (message) => {
+        const info = await transporter.sendMail({
+          from: sender,
+          to: message.to,
+          subject: message.subject,
+          text: message.text,
+          html: message.html,
+        });
+
+        return {
+          to: message.to,
+          subject: message.subject,
+          messageId: info.messageId,
+        };
       });
 
-      results.push({
-        to: message.to,
-        subject: message.subject,
-        messageId: info.messageId,
+      response.json({
+        sent: results.length,
+        results,
       });
+    } finally {
+      closeMailTransporter(transporter);
     }
-
-    response.json({
-      sent: results.length,
-      results,
-    });
   } catch (error) {
-    response.status(502).json({
-      message: 'Gmail dispatch failed.',
-      detail: error.message,
-    });
+    const failure = buildMailErrorPayload(error);
+    response.status(failure.status).json(failure.body);
   }
 });
 

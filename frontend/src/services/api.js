@@ -106,7 +106,8 @@ export const apiFetch = async (path, options = {}) => {
   const payload = await response.json();
 
   if (!response.ok) {
-    throw new Error(payload?.message || `API request failed with status ${response.status}`);
+    const detail = payload?.detail ? ` ${payload.detail}` : '';
+    throw new Error(`${payload?.message || `API request failed with status ${response.status}`}${detail}`);
   }
 
   return payload;
