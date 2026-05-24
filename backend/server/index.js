@@ -21,16 +21,24 @@ const app = express();
 const server = createServer(app);
 const port = process.env.PORT || 5000;
 
+const normalizeOrigin = (origin = '') => String(origin).trim().replace(/\/+$/, '');
+
 const parseOriginList = (value = '') =>
   String(value)
     .split(',')
-    .map((origin) => origin.trim())
+    .map(normalizeOrigin)
     .filter(Boolean);
 const localDevOriginPattern = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
-const vercelOrigin = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '';
+const vercelOrigin = process.env.VERCEL_URL ? `https://${normalizeOrigin(process.env.VERCEL_URL)}` : '';
 const frontendUrl = process.env.FRONTEND_URL || process.env.FRONTEND_ORIGIN || '';
+const defaultAllowedOrigins = [
+  'https://marigold-secondary-school-erp-system-frontend-dhuizf172.vercel.app',
+];
+const schoolVercelPreviewPattern =
+  /^https:\/\/marigold-secondary-school-erp-system-frontend-[a-z0-9-]+\.vercel\.app$/;
 const configuredOrigins = new Set(
   [
+    ...defaultAllowedOrigins,
     ...parseOriginList(process.env.CORS_ORIGINS),
     ...parseOriginList(process.env.CLIENT_ORIGIN),
     ...parseOriginList(frontendUrl),
@@ -39,7 +47,10 @@ const configuredOrigins = new Set(
 );
 
 const isAllowedOrigin = (origin) =>
-  !origin || configuredOrigins.has(origin) || localDevOriginPattern.test(origin);
+  !origin ||
+  configuredOrigins.has(normalizeOrigin(origin)) ||
+  localDevOriginPattern.test(origin) ||
+  schoolVercelPreviewPattern.test(origin);
 
 const corsOrigin = (origin, callback) => {
   if (isAllowedOrigin(origin)) {
