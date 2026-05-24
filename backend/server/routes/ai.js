@@ -113,6 +113,12 @@ const setModuleValue = async (namespace, value) => {
 
 const normalizeText = (value = '') => String(value || '').trim().toLowerCase();
 
+const normalizeProvider = (value = '') => {
+  const provider = normalizeText(value);
+  if (provider === 'grok') return 'groq';
+  return provider;
+};
+
 const getStudentAdmissionNumber = (student = {}) =>
   student.admissionNumber || student.admNo || student.id || student.rawProfile?.admissionNumber || '';
 
@@ -485,11 +491,11 @@ const getProviderSequence = (requestedProvider = '') => {
   const values = [
     requestedProvider,
     process.env.DEFAULT_AI_PROVIDER,
+    'groq',
     'gemini',
-    'grok',
   ]
-    .map((value) => normalizeText(value))
-    .filter((value) => value === 'gemini' || value === 'grok');
+    .map((value) => normalizeProvider(value))
+    .filter((value) => value === 'gemini' || value === 'groq');
   return [...new Set(values)];
 };
 
@@ -539,16 +545,17 @@ const callGemini = async ({ message, history, context }) => {
   return text || '';
 };
 
-const callGrok = async ({ message, history, context }) => {
-  if (!process.env.GROK_API_KEY) {
-    throw new Error('Grok API key is not configured.');
+const callGroq = async ({ message, history, context }) => {
+  const apiKey = process.env.GROQ_API_KEY || process.env.GROK_API_KEY;
+  if (!apiKey) {
+    throw new Error('Groq API key is not configured.');
   }
 
-  const model = process.env.GROK_MODEL || 'grok-4.3';
-  const response = await fetch('https://api.x.ai/v1/chat/completions', {
+  const model = process.env.GROQ_MODEL || process.env.GROK_MODEL || 'llama-3.1-8b-instant';
+  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${process.env.GROK_API_KEY}`,
+      Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
@@ -570,7 +577,7 @@ const callGrok = async ({ message, history, context }) => {
 
   if (!response.ok) {
     const detail = await response.text();
-    throw new Error(`Grok request failed with status ${response.status}: ${detail.slice(0, 300)}`);
+    throw new Error(`Groq request failed with status ${response.status}: ${detail.slice(0, 300)}`);
   }
 
   const payload = await response.json();
@@ -584,7 +591,7 @@ const callProvider = async ({ provider, message, history, context }) => {
       const text =
         candidate === 'gemini'
           ? await callGemini({ message, history, context })
-          : await callGrok({ message, history, context });
+          : await callGroq({ message, history, context });
       if (text) return { provider: candidate, text, attempts };
       attempts.push({ provider: candidate, error: 'Provider returned an empty response.' });
     } catch (error) {
@@ -777,12 +784,17 @@ const sendReceipt = async ({ receiptNo, channels = ['gmail', 'whatsapp'] }, auth
 };
 
 router.get('/config', (request, response) => {
+  const defaultProvider = normalizeProvider(process.env.DEFAULT_AI_PROVIDER);
   response.json({
     schoolName: SCHOOL_NAME,
-    defaultProvider: normalizeText(process.env.DEFAULT_AI_PROVIDER) || 'development-fallback',
+    defaultProvider: defaultProvider === 'gemini' || defaultProvider === 'groq' ? defaultProvider : 'groq',
     providers: {
       gemini: Boolean(process.env.GEMINI_API_KEY),
-      grok: Boolean(process.env.GROK_API_KEY),
+      groq: Boolean(process.env.GROQ_API_KEY || process.env.GROK_API_KEY),
+    },
+    providerRoles: {
+      groq: 'fast',
+      gemini: 'brain',
     },
     role: request.auth?.role || '',
   });

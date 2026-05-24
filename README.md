@@ -131,10 +131,10 @@ Open your browser and navigate to `http://127.0.0.1:5173/` or `http://localhost:
 | `EMAIL_USER` | NodeMailer school sender Gmail address | *None* | No |
 | `EMAIL_PASS` | Google App Password credentials | *None* | No |
 | `GEMINI_API_KEY` | Server-side Gemini key for the Admin Feature Page AI assistant | *None* | No |
-| `GROK_API_KEY` | Server-side xAI Grok key for the Admin Feature Page AI assistant | *None* | No |
-| `DEFAULT_AI_PROVIDER` | Default AI provider used by `/api/ai/chat` (`gemini` or `grok`) | `gemini` | No |
+| `GROQ_API_KEY` | Server-side Groq key for the Admin Feature Page AI assistant | *None* | No |
+| `DEFAULT_AI_PROVIDER` | Default AI provider used by `/api/ai/chat` (`gemini` or `groq`) | `groq` | No |
 | `GEMINI_MODEL` | Gemini model override for provider calls | `gemini-2.5-flash` | No |
-| `GROK_MODEL` | Grok model override for provider calls | `grok-4.3` | No |
+| `GROQ_MODEL` | Groq model override for provider calls | `llama-3.1-8b-instant` | No |
 
 ### Admin Feature Page AI Assistant
 
@@ -151,7 +151,7 @@ Backend AI routes are mounted under `/api/ai`:
 - `/api/ai/receipt/send`
 - `/api/ai/analytics`
 
-API keys stay on the backend only. If `GEMINI_API_KEY` or `GROK_API_KEY` is missing, the assistant uses safe development fallback responses from ERP data instead of exposing secrets or failing the page.
+API keys stay on the backend only. If `GEMINI_API_KEY` or `GROQ_API_KEY` is missing, the assistant uses safe development fallback responses from ERP data instead of exposing secrets or failing the page.
 
 ---
 

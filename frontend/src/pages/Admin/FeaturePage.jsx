@@ -67,6 +67,11 @@ const ProviderBadge = ({ enabled, children }) => (
   </span>
 );
 
+const providerOptions = [
+  { value: 'groq', label: 'Groq Fast', description: 'Fast replies' },
+  { value: 'gemini', label: 'Gemini Brain', description: 'Reasoning' },
+];
+
 const DataTable = ({ element }) => {
   const rows = Array.isArray(element.rows) ? element.rows : [];
   const columns = rows.length ? Object.keys(rows[0]).slice(0, 7) : [];
@@ -270,7 +275,7 @@ const FeaturePage = () => {
   const recognitionRef = useRef(null);
   const [config, setConfig] = useState({
     defaultProvider: 'development-fallback',
-    providers: { gemini: false, grok: false },
+    providers: { gemini: false, groq: false },
     role: '',
   });
   const [provider, setProvider] = useState('gemini');
@@ -301,7 +306,7 @@ const FeaturePage = () => {
       .then((payload) => {
         if (!active) return;
         setConfig(payload);
-        setProvider(payload.defaultProvider === 'grok' ? 'grok' : 'gemini');
+        setProvider(payload.defaultProvider === 'gemini' ? 'gemini' : 'groq');
       })
       .catch((fetchError) => {
         if (active) setError(fetchError.message);
@@ -347,10 +352,12 @@ const FeaturePage = () => {
     setIsSpeaking(false);
   };
 
-  const appendAiMessage = (payload) => {
+  const appendAiMessage = (payload, options = {}) => {
     const nextMessage = createMessage('ai', payload);
     setMessages((current) => [...current, nextMessage]);
-    speak(payload.text);
+    if (options.speak ?? mode === 'voice') {
+      speak(payload.text);
+    }
   };
 
   const submitPrompt = async (prompt = input) => {
@@ -580,11 +587,11 @@ const FeaturePage = () => {
                   AI Assistant for {SCHOOL_NAME}
                 </h1>
                 <p className="mt-1 max-w-3xl text-xs font-semibold leading-relaxed text-neutral-600">
-                  School-specific ERP assistant for secure lookup, analytics, and admin-confirmed actions.
+                  School-specific ERP assistant with Groq for fast answers and Gemini for deeper reasoning.
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   <ProviderBadge enabled={config.providers?.gemini}>Gemini</ProviderBadge>
-                  <ProviderBadge enabled={config.providers?.grok}>Grok</ProviderBadge>
+                  <ProviderBadge enabled={config.providers?.groq}>Groq</ProviderBadge>
                   <span className="rounded-full border border-neutral-200 bg-neutral-50 px-2 py-0.5 text-[10px] font-black uppercase text-neutral-600">
                     Role: {config.role || 'Authenticated'}
                   </span>
@@ -603,7 +610,7 @@ const FeaturePage = () => {
                       mode === item ? 'bg-neutral-950 text-white' : 'text-neutral-600'
                     }`}
                   >
-                    {item}
+                    {item === 'voice' ? 'Speaking Assistant' : 'Chatting Assistant'}
                   </button>
                 ))}
               </div>
@@ -612,8 +619,11 @@ const FeaturePage = () => {
                 onChange={(event) => setProvider(event.target.value)}
                 className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-xs font-black outline-none"
               >
-                <option value="gemini">Gemini</option>
-                <option value="grok">Grok</option>
+                {providerOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
@@ -708,7 +718,8 @@ const FeaturePage = () => {
                     Conversation
                   </h2>
                   <p className="mt-1 text-xs font-semibold text-neutral-500">
-                    Ask for student details, pending fees, attendance reports, exam graphs, receipts, notices, and meetings.
+                    {providerOptions.find((option) => option.value === provider)?.description || 'AI'} mode.
+                    {' '}Use chat for typed messages or speaking assistant for microphone input and spoken replies.
                   </p>
                 </div>
                 {error && (
