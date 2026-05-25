@@ -15,6 +15,7 @@ const DEFAULT_MAX_CONNECTIONS = 3;
 const DEFAULT_MAX_MESSAGES = 100;
 const IPV4_CACHE_TTL_MS = 5 * 60 * 1000;
 const GMAIL_HOSTS = new Set(['smtp.gmail.com', 'gmail-smtp-msa.l.google.com']);
+const BREVO_HOSTS = new Set(['smtp-relay.brevo.com', 'smtp-relay.sendinblue.com']);
 
 const ipv4Cache = new Map();
 
@@ -41,6 +42,7 @@ const parseBoolean = (value, fallback) => {
 const normalizePassword = (value = '') => String(value).replace(/\s+/g, '');
 
 const isGmailHost = (host = '') => GMAIL_HOSTS.has(String(host).trim().toLowerCase());
+const isBrevoHost = (host = '') => BREVO_HOSTS.has(String(host).trim().toLowerCase());
 
 const isEmailAddress = (value = '') => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value).trim());
 
@@ -124,28 +126,31 @@ export const getMailConfig = () => {
     host,
     port,
     secure,
-    forceIPv4: parseBoolean(firstEnv('GMAIL_FORCE_IPV4', 'EMAIL_FORCE_IPV4'), true),
+    forceIPv4: parseBoolean(firstEnv('BREVO_FORCE_IPV4', 'GMAIL_FORCE_IPV4', 'EMAIL_FORCE_IPV4'), true),
     connectionTimeoutMs: parsePositiveInteger(
-      firstEnv('GMAIL_CONNECTION_TIMEOUT_MS', 'EMAIL_CONNECTION_TIMEOUT_MS'),
+      firstEnv('BREVO_CONNECTION_TIMEOUT_MS', 'GMAIL_CONNECTION_TIMEOUT_MS', 'EMAIL_CONNECTION_TIMEOUT_MS'),
       DEFAULT_TIMEOUT_MS.connection
     ),
     greetingTimeoutMs: parsePositiveInteger(
-      firstEnv('GMAIL_GREETING_TIMEOUT_MS', 'EMAIL_GREETING_TIMEOUT_MS'),
+      firstEnv('BREVO_GREETING_TIMEOUT_MS', 'GMAIL_GREETING_TIMEOUT_MS', 'EMAIL_GREETING_TIMEOUT_MS'),
       DEFAULT_TIMEOUT_MS.greeting
     ),
     socketTimeoutMs: parsePositiveInteger(
-      firstEnv('GMAIL_SOCKET_TIMEOUT_MS', 'EMAIL_SOCKET_TIMEOUT_MS'),
+      firstEnv('BREVO_SOCKET_TIMEOUT_MS', 'GMAIL_SOCKET_TIMEOUT_MS', 'EMAIL_SOCKET_TIMEOUT_MS'),
       DEFAULT_TIMEOUT_MS.socket
     ),
     dnsTimeoutMs: parsePositiveInteger(
-      firstEnv('GMAIL_DNS_TIMEOUT_MS', 'EMAIL_DNS_TIMEOUT_MS'),
+      firstEnv('BREVO_DNS_TIMEOUT_MS', 'GMAIL_DNS_TIMEOUT_MS', 'EMAIL_DNS_TIMEOUT_MS'),
       DEFAULT_TIMEOUT_MS.dns
     ),
     maxConnections: parsePositiveInteger(
-      firstEnv('GMAIL_MAX_CONNECTIONS', 'EMAIL_MAX_CONNECTIONS'),
+      firstEnv('BREVO_MAX_CONNECTIONS', 'GMAIL_MAX_CONNECTIONS', 'EMAIL_MAX_CONNECTIONS'),
       DEFAULT_MAX_CONNECTIONS
     ),
-    maxMessages: parsePositiveInteger(firstEnv('GMAIL_MAX_MESSAGES', 'EMAIL_MAX_MESSAGES'), DEFAULT_MAX_MESSAGES),
+    maxMessages: parsePositiveInteger(
+      firstEnv('BREVO_MAX_MESSAGES', 'GMAIL_MAX_MESSAGES', 'EMAIL_MAX_MESSAGES'),
+      DEFAULT_MAX_MESSAGES
+    ),
     isReady: Boolean(user && pass),
   };
 };
@@ -170,6 +175,21 @@ const getMailConnectionAttempts = (mailConfig) => {
       secure: mailConfig.port === 465 ? true : mailConfig.secure,
     },
   ];
+
+  if (isBrevoHost(mailConfig.host)) {
+    attempts.push(
+      {
+        ...mailConfig,
+        port: 2525,
+        secure: false,
+      },
+      {
+        ...mailConfig,
+        port: 465,
+        secure: true,
+      }
+    );
+  }
 
   if (mailConfig.forceIPv4) {
     attempts.push(
