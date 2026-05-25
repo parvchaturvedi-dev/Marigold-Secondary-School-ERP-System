@@ -34,6 +34,66 @@ import {
   UserPlus
 } from 'lucide-react';
 
+// --- Typing Animation Component ---
+const TypingLogo = () => {
+  const words = [
+    "MARIGOLD",
+    "M - Minds",
+    "A - Achievers",
+    "R - Radiant",
+    "I - Inspire",
+    "G - Guidance",
+    "O - Opportunity",
+    "L - Leadership",
+    "D - Discipline"
+  ];
+
+  const [currentWordIndex, setCurrentWordIndex] = useState(0);
+  const [currentText, setCurrentText] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [typingSpeed, setTypingSpeed] = useState(100);
+
+  useEffect(() => {
+    const handleTyping = () => {
+      const fullWord = words[currentWordIndex];
+      
+      if (!isDeleting) {
+        // Character type karna
+        setCurrentText(fullWord.substring(0, currentText.length + 1));
+        setTypingSpeed(100); // Typing ki speed
+
+        // Agar poora word type ho gaya to rukna
+        if (currentText === fullWord) {
+          setTypingSpeed(1500); // Poora word type hone ke baad pause duration (1.5s)
+          setIsDeleting(true);
+        }
+      } else {
+        // Character mitana (Erase karna)
+        setCurrentText(fullWord.substring(0, currentText.length - 1));
+        setTypingSpeed(50); // Erase hone ki speed
+
+        // Agar word poora mit gaya to agla word chalana
+        if (currentText === '') {
+          setIsDeleting(false);
+          setCurrentWordIndex((prevIndex) => (prevIndex + 1) % words.length);
+          setTypingSpeed(500); // Agla word shuru hone se pehle pause
+        }
+      }
+    };
+
+    const timer = setTimeout(handleTyping, typingSpeed);
+    return () => clearTimeout(timer);
+  }, [currentText, isDeleting, currentWordIndex]);
+
+  return (
+    <span className="inline-flex items-center text-md font-bold tracking-wider text-[#1A1A1A] whitespace-nowrap">
+      {currentText}
+      <span className="w-[2px] h-5 bg-[#1A1A1A] ml-0.5 animate-pulse"></span>
+    </span>
+  );
+};
+
+// --- Main Sidebar Component ---
 const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
   // Screen width track controllers
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
@@ -71,15 +131,13 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
     }));
   };
 
-  // Master menu configuration. Each portal only receives the pages its role can open.
+  // Master menu configuration
   const adminMenuItems = [
     { name: 'Dashboard', icon: LayoutGrid },
     { name: 'Academic Calender', icon: Calendar },
     { name: 'Application', icon: FileText },
     { name: 'Assignment', icon: ClipboardList },
     { name: 'Attendance', icon: CheckSquare },
-    
-    // 1. CLASS DESK SUB-MENU GROUP MESH
     { 
       name: 'Class Desk', 
       icon: Layers, 
@@ -89,17 +147,14 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
         { name: 'Class Preferences', icon: GitCommit },
       ]
     },
-    
     { 
       name: 'Clerk Desk', 
       icon: Computer, 
       hasSub: true,
       subItems: [
-    { name: 'Clerk Management', icon: UserCheck },
+        { name: 'Clerk Management', icon: UserCheck },
       ]
     },
-
-
     { name: 'Communication', icon: MessageSquare },
     { name: 'Documents Management', icon: FileText },
     { name: 'Events', icon: PartyPopper },
@@ -118,8 +173,6 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
     },
     { name: 'Feature Page', icon: Sparkles },
     { name: 'Finance', icon: Wallet },
-    
-    // 2. FACULTY DESK SUB-MENU GROUP MESH
     {
       name: 'Faculty Desk',
       icon: GraduationCap,
@@ -129,14 +182,11 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
         { name: 'Teacher Assignment', icon: UserCheck }
       ]
     },
-
     { name: 'Id Card', icon: IdCard },
     { name: 'Leave Requests', icon: LogOut },
     { name: 'Meetings', icon: Video },
     { name: 'Notices', icon: Bell },
     { name: 'Profile', icon: User },
-    
-    // 3. STUDENT DESK SUB-MENU GROUP MESH
     {
       name: 'Student Desk',
       icon: User,
@@ -147,7 +197,6 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
         { name: 'Sibling Assigning', icon: GitCommit }
       ]
     },
-
     { name: 'Users Management', icon: Lock },
     { name: 'Subject Management', icon: BookOpen },
     { name: 'Settings', icon: Settings }
@@ -265,7 +314,6 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
 
   const menuItems = roleMenuItems[role] || adminMenuItems;
 
-  // Helper routine to look down the context child items to toggle active flags
   const isGroupActive = (item) => {
     if (!item.hasSub) return currentActive === item.name;
     return item.subItems.some(sub => sub.name === currentActive);
@@ -284,7 +332,7 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
               toggleSubMenu(item.name);
             } else {
               if (onPageChange) onPageChange(item.name);
-              if (windowWidth <= 500) setIsMobileOpen(false); // Mobile screen drawer auto closer
+              if (windowWidth <= 500) setIsMobileOpen(false);
             }
           }}
           className={`
@@ -309,7 +357,6 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
             </span>
           </div>
 
-          {/* ACCORDION EXPANSION CHEVRON ICON INDICATOR */}
           {item.hasSub && (
             <ChevronDown className={`w-4 h-4 text-[#666666] transition-transform duration-200 shrink-0
               ${isDropdownOpen ? 'rotate-180' : ''}
@@ -318,14 +365,12 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
           )}
         </button>
 
-        {/* COLLAPSED FLOATING MODAL TEXT TOOLTIPS ON HOVER (> 500px AND <= 920px) */}
         {isCollapsed && windowWidth > 500 && (
           <div className="absolute left-full top-1/2 -translate-y-1/2 ml-4 px-3 py-1.5 bg-[#1A1A1A] text-white text-[12px] font-bold rounded-lg opacity-0 invisible -translate-x-2 group-hover/item:opacity-100 group-hover/item:visible group-hover/item:translate-x-0 transition-all shadow-md pointer-events-none z-50 whitespace-nowrap">
             {item.name}
           </div>
         )}
 
-        {/* SUB ITEM RENDER LOOP */}
         {item.hasSub && (
           <div 
             className={`overflow-hidden transition-all duration-300 ease-in-out pl-4 flex flex-col gap-1 mt-1
@@ -352,6 +397,13 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
           -ms-overflow-style: none;
           scrollbar-width: none;
         }
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0; }
+        }
+        .animate-pulse {
+          animation: pulse 1s infinite;
+        }
       `}</style>
 
       {/* FIXED FLOATING HAMBURGER TRIGGER SWITCH FOR SMALL SCREENS (< 500px) */}
@@ -366,7 +418,7 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
         </div>
       )}
 
-      {/* SEMI-TRANSLUCENT SCREEN BACKDROP OVERLAY FOR CLOSING THE MOBILE NAVIGATION DRAWER */}
+      {/* SEMI-TRANSLUCENT SCREEN BACKDROP OVERLAY */}
       {windowWidth <= 500 && isMobileOpen && (
         <div 
           onClick={() => setIsMobileOpen(false)}
@@ -384,13 +436,21 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
       `}>
         
         {/* BRAND LOGO FRAME CONTAINER */}
-        <div className="sticky top-0 bg-[#D9D9D9] z-10 flex items-center gap-3 px-3 pt-6 pb-4 mb-2 shrink-0">
-          <img src="/src/assets/logo.png" alt="Logo" className={`w-8 h-8 ${isCollapsed ? 'mx-auto' : ''}`} />
-          <span className={`text-xl font-bold tracking-wider text-[#1A1A1A] transition-opacity duration-200
-            ${isCollapsed ? 'opacity-0 lg:group-hover/sidebar:opacity-100' : 'opacity-100'}
+        <div className="sticky top-0 bg-[#D9D9D9] z-10 flex items-center gap-3 px-3 pt-6 pb-4 mb-2 shrink-0 min-h-[64px]">
+          <img src="/src/assets/logo.png" alt="Logo" className="w-8 h-8 shrink-0" />
+          
+          <div className={`transition-opacity duration-200 overflow-hidden
+            ${isCollapsed ? 'opacity-0 w-0 lg:group-hover/sidebar:opacity-100 lg:group-hover/sidebar:w-auto' : 'opacity-100 w-auto'}
           `}>
-            MGPS
-          </span>
+            <TypingLogo />
+          </div>
+
+          {/* Jab sidebar collapsed ho aur mouse hover na ho tab short text 'MGPS' dikhega */}
+          {isCollapsed && (
+            <span className="absolute left-14 text-xl font-bold tracking-wider text-[#1A1A1A] lg:group-hover/sidebar:opacity-0 transition-opacity duration-200">
+              MGPS
+            </span>
+          )}
         </div>
 
         {/* COMPREHENSIVE NAVIGATION SCROLL LINK LIST */}

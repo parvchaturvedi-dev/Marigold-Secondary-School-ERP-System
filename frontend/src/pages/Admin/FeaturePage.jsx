@@ -96,14 +96,16 @@ const ProviderBadge = ({ enabled, children }) => (
   </span>
 );
 
-const providerOptions = [
-  { value: 'groq', label: 'Groq Fast', description: 'Fast replies' },
-  { value: 'gemini', label: 'Gemini Brain', description: 'Reasoning' },
-];
+const providerLabels = {
+  groq: 'Groq Quick',
+  gemini: 'Gemini Detailed',
+  'erp-grounded': 'ERP Grounded',
+  'development-fallback': 'Fallback',
+};
 
 const initialAiMessage = () =>
   createMessage('ai', {
-    text: `Namaste. Main ${SCHOOL_NAME} ki AI assistant hoon. Main sirf live ERP context se short, point-to-point answers dungi.`,
+    text: `Namaste. Main ${SCHOOL_NAME} ki AI assistant hoon. Main short answers dungi, aur ERP records ke liye live context use karungi.`,
     elements: [],
     actions: [],
     isGreeting: true,
@@ -120,6 +122,26 @@ const buildHistoryPayload = (items = []) =>
 
 const shouldEndCall = (text = '') =>
   /(\bend call\b|\bstop call\b|\bhang up\b|call\s*(band|bund|बंद)|बात\s*बंद|कॉल\s*बंद)/i.test(String(text || ''));
+
+const getPuterSpeechOptions = (text = '') => {
+  const lower = String(text || '').toLowerCase();
+  const language = /[\u0900-\u097F]/.test(text) || /\b(hindi|hinglish|namaste|kaise|kya|hai|school|bachcha|fees?)\b/.test(lower)
+    ? 'hi-IN'
+    : 'en-IN';
+
+  return {
+    provider: 'gemini',
+    model: 'gemini-2.5-flash-preview-tts',
+    voice: language === 'hi-IN' ? 'Puck' : 'Kore',
+    language,
+    instructions: language === 'hi-IN'
+      ? 'Speak naturally in Hindi/Hinglish with a friendly Indian school assistant tone.'
+      : 'Speak naturally in Indian English with a friendly school assistant tone.',
+  };
+};
+
+const normalizeAnswerText = (text = '') =>
+  String(text || '').replace(/\s+/g, ' ').trim().toLowerCase();
 
 const DataTable = ({ element }) => {
   const rows = Array.isArray(element.rows) ? element.rows : [];
@@ -332,7 +354,6 @@ const FeaturePage = () => {
     providers: { gemini: false, groq: false },
     role: '',
   });
-  const [provider, setProvider] = useState('gemini');
   const [mode, setMode] = useState('chat');
   const [input, setInput] = useState('');
   const [studentQuery, setStudentQuery] = useState('');
@@ -359,7 +380,6 @@ const FeaturePage = () => {
       .then((payload) => {
         if (!active) return;
         setConfig(payload);
-        setProvider(payload.defaultProvider === 'gemini' ? 'gemini' : 'groq');
       })
       .catch((fetchError) => {
         if (active) setError(fetchError.message);
@@ -395,6 +415,38 @@ const FeaturePage = () => {
     speechAudioRef.current?.pause?.();
     speechAudioRef.current = null;
     setIsSpeaking(true);
+
+    try {
+      const puterSpeech = window.puter?.ai?.txt2speech;
+      if (puterSpeech) {
+        const audio = await puterSpeech(speechText, getPuterSpeechOptions(speechText));
+        speechAudioRef.current = audio;
+        audio.onplay = () => setIsSpeaking(true);
+        audio.onended = () => {
+          setIsSpeaking(false);
+          speechAudioRef.current = null;
+        };
+        audio.onerror = () => {
+          setIsSpeaking(false);
+          speechAudioRef.current = null;
+        };
+        await audio.play();
+        return new Promise((resolve) => {
+          audio.onended = () => {
+            setIsSpeaking(false);
+            speechAudioRef.current = null;
+            resolve();
+          };
+          audio.onerror = () => {
+            setIsSpeaking(false);
+            speechAudioRef.current = null;
+            resolve();
+          };
+        });
+      }
+    } catch {
+      // Server and browser voices remain available if Puter TTS cannot play.
+    }
 
     try {
       const payload = await apiFetch(`${AI_ENDPOINT}/voice/speak`, {
@@ -475,6 +527,17 @@ const FeaturePage = () => {
     }
   };
 
+  const requestAiProvider = (providerName, message, history) =>
+    apiFetch(`${AI_ENDPOINT}/chat`, {
+      method: 'POST',
+      body: {
+        message,
+        provider: providerName,
+        conversationId: conversationIdRef.current,
+        history,
+      },
+    });
+
   const submitPrompt = async (prompt = input) => {
     const trimmed = String(prompt || '').trim();
     if (!trimmed || isLoading) return;
@@ -493,24 +556,61 @@ const FeaturePage = () => {
     });
     setIsLoading(true);
 
-    try {
-      const payload = await apiFetch(`${AI_ENDPOINT}/chat`, {
-        method: 'POST',
-        body: {
-          message: trimmed,
-          provider,
-          conversationId: conversationIdRef.current,
-          history: requestHistory,
-        },
-      });
-
+    const appendProviderPayload = (payload, label, options = {}) => {
       appendAiMessage({
         text: payload.text,
-        provider: payload.provider,
-        elements: payload.elements || [],
-        actions: payload.actions || [],
+        provider: payload.provider || label,
+        elements: options.includeRichPayload ? payload.elements || [] : [],
+        actions: options.includeRichPayload ? payload.actions || [] : [],
         fallbackAttempts: payload.fallbackAttempts || [],
-      });
+      }, { speak: options.speak });
+    };
+
+    try {
+      const enabledProviders = ['groq', 'gemini'].filter((name) => config.providers?.[name]);
+      const providersToCall = enabledProviders.length ? enabledProviders : [config.defaultProvider === 'gemini' ? 'gemini' : 'groq'];
+      const responses = {};
+      let hasAppended = false;
+      let quickText = '';
+
+      await Promise.allSettled(
+        providersToCall.map(async (providerName) => {
+          const payload = await requestAiProvider(providerName, trimmed, requestHistory);
+          responses[providerName] = payload;
+
+          if (providerName === 'groq') {
+            quickText = payload.text || '';
+            appendProviderPayload(payload, 'groq', { includeRichPayload: true, speak: mode === 'voice' });
+            hasAppended = true;
+          }
+        })
+      );
+
+      const geminiPayload = responses.gemini;
+      const groqPayload = responses.groq;
+
+      if (geminiPayload) {
+        const sameAsQuick = normalizeAnswerText(geminiPayload.text) === normalizeAnswerText(quickText);
+        const duplicateErp = geminiPayload.provider === 'erp-grounded' && groqPayload?.provider === 'erp-grounded';
+        if (!hasAppended) {
+          appendProviderPayload(geminiPayload, 'gemini', { includeRichPayload: true, speak: mode === 'voice' });
+          hasAppended = true;
+        } else if (!sameAsQuick && !duplicateErp) {
+          appendProviderPayload(geminiPayload, 'gemini', { includeRichPayload: false, speak: false });
+        }
+      }
+
+      if (!hasAppended) {
+        const firstPayload = Object.values(responses)[0];
+        if (firstPayload) {
+          appendProviderPayload(firstPayload, firstPayload.provider || 'ai', { includeRichPayload: true, speak: mode === 'voice' });
+          hasAppended = true;
+        }
+      }
+
+      if (!hasAppended) {
+        throw new Error('No AI provider returned a response.');
+      }
     } catch (submitError) {
       setError(submitError.message);
       setMessages((current) => {
@@ -538,6 +638,7 @@ const FeaturePage = () => {
   const endVoiceCall = (message = 'Voice call ended.') => {
     callActiveRef.current = false;
     setIsCallActive(false);
+    setMode('chat');
     recognitionRef.current?.stop?.();
     setIsListening(false);
     stopSpeaking();
@@ -555,7 +656,8 @@ const FeaturePage = () => {
       return false;
     }
 
-    if (isListening || isLoading || isSpeaking) return false;
+    if (isListening || isLoading) return false;
+    if (isSpeaking) stopSpeaking();
 
     const recognition = new Recognition();
     recognition.lang = 'hi-IN';
@@ -597,7 +699,16 @@ const FeaturePage = () => {
       return;
     }
 
+    setMode('voice');
     startRecognition();
+  };
+
+  const toggleVoiceCall = () => {
+    if (isCallActive) {
+      endVoiceCall('Voice call ended.');
+      return;
+    }
+    startVoiceCall();
   };
 
   const startVoiceCall = () => {
@@ -797,12 +908,12 @@ const FeaturePage = () => {
                   AI Assistant for {SCHOOL_NAME}
                 </h1>
                 <p className="mt-1 max-w-3xl text-xs font-semibold leading-relaxed text-neutral-600">
-                  School-specific assistant for concise answers from live ERP context only.
+                  Fast Groq replies first, then Gemini adds a concise detailed answer when ready.
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   <ProviderBadge enabled={config.providers?.gemini}>Gemini</ProviderBadge>
                   <ProviderBadge enabled={config.providers?.groq}>Groq</ProviderBadge>
-                  <ProviderBadge enabled={config.tts?.ready}>AI4Bharat TTS</ProviderBadge>
+                  <ProviderBadge enabled>Gemini Puter TTS</ProviderBadge>
                   <span className="rounded-full border border-neutral-200 bg-neutral-50 px-2 py-0.5 text-[10px] font-black uppercase text-neutral-600">
                     Role: {config.role || 'Authenticated'}
                   </span>
@@ -825,39 +936,14 @@ const FeaturePage = () => {
                 className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-xs font-black text-neutral-700"
               >
                 <FileText className="h-4 w-4" />
-                Export PDF
+                Export Chat as PDF
               </button>
-              <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-1">
-                {['chat', 'voice'].map((item) => (
-                  <button
-                    key={item}
-                    type="button"
-                    onClick={() => setMode(item)}
-                    className={`rounded-lg px-3 py-2 text-xs font-black capitalize ${
-                      mode === item ? 'bg-neutral-950 text-white' : 'text-neutral-600'
-                    }`}
-                  >
-                    {item === 'voice' ? 'Speaking Assistant' : 'Chatting Assistant'}
-                  </button>
-                ))}
-              </div>
-              <select
-                value={provider}
-                onChange={(event) => setProvider(event.target.value)}
-                className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-xs font-black outline-none"
-              >
-                {providerOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
             </div>
           </div>
         </section>
 
         <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
-          <aside className="min-h-0 space-y-4 overflow-y-auto pr-1">
+          <aside className="min-h-0 space-y-4 pr-1">
             <section className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
               <h2 className="text-sm font-black">Student Search</h2>
               <p className="mt-1 text-xs font-semibold text-neutral-500">
@@ -882,72 +968,15 @@ const FeaturePage = () => {
             </section>
 
             <section className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
-              <h2 className="text-sm font-black">Voice Controls</h2>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={isCallActive ? () => endVoiceCall('Voice call ended.') : startVoiceCall}
-                  disabled={mode !== 'voice' || !speechSupported}
-                  className={`col-span-2 inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-black ${
-                    isCallActive ? 'bg-red-600 text-white' : 'bg-neutral-950 text-white'
-                  } disabled:opacity-40`}
-                >
-                  {isCallActive ? <PhoneOff className="h-4 w-4" /> : <PhoneCall className="h-4 w-4" />}
-                  {isCallActive ? 'End Call' : 'Start Call'}
-                </button>
-                <button
-                  type="button"
-                  onClick={toggleListening}
-                  disabled={mode !== 'voice' || !speechSupported || isCallActive}
-                  className={`inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-xs font-black ${
-                    isListening
-                      ? 'border-red-200 bg-red-50 text-red-700'
-                      : 'border-neutral-200 bg-neutral-50 text-neutral-800'
-                  } disabled:opacity-40`}
-                >
-                  {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-                  {isListening ? 'Stop' : 'Speak'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsMuted((value) => !value)}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs font-black"
-                >
-                  {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-                  {isMuted ? 'Muted' : 'Voice'}
-                </button>
-                <button
-                  type="button"
-                  onClick={stopSpeaking}
-                  disabled={!isSpeaking}
-                  className="col-span-2 inline-flex items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs font-black disabled:opacity-40"
-                >
-                  <PauseCircle className="h-4 w-4" />
-                  Stop Speaking
-                </button>
-              </div>
-              {isCallActive && (
-                <p className="mt-2 text-[11px] font-semibold text-emerald-700">
-                  Continuous call is active. Say "end call" to stop.
-                </p>
-              )}
-              {!speechSupported && (
-                <p className="mt-2 text-[11px] font-semibold text-amber-700">
-                  Browser microphone speech recognition is not available here.
-                </p>
-              )}
-            </section>
-
-            <section className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
               <h2 className="flex items-center gap-2 text-sm font-black">
                 <ShieldCheck className="h-4 w-4" />
-                Security Rules
+                Assistant Rules
               </h2>
               <div className="mt-3 space-y-2 text-xs font-semibold text-neutral-600">
-                <p>Only Admin can run full AI action mode.</p>
+                <p>General questions are answered normally.</p>
+                <p>ERP records are answered from live ERP context.</p>
                 <p>Sensitive actions always require confirmation.</p>
-                <p>API keys and secrets never leave the backend.</p>
-                <p>The assistant is limited to {SCHOOL_NAME}.</p>
+                <p>School recommendation stays with {SCHOOL_NAME}.</p>
               </div>
             </section>
           </aside>
@@ -961,8 +990,7 @@ const FeaturePage = () => {
                     Conversation
                   </h2>
                   <p className="mt-1 text-xs font-semibold text-neutral-500">
-                    {providerOptions.find((option) => option.value === provider)?.description || 'AI'} mode.
-                    {' '}Use chat for typed messages or speaking assistant for microphone input and spoken replies.
+                    Groq answers quickly; Gemini follows with a concise second pass when available.
                   </p>
                 </div>
                 {error && (
@@ -1000,7 +1028,7 @@ const FeaturePage = () => {
                         <p className="whitespace-pre-wrap">{message.text}</p>
                         {message.provider && (
                           <p className="mt-2 text-[10px] font-black uppercase text-neutral-400">
-                            Provider: {message.provider}
+                            {providerLabels[message.provider] || message.provider}
                           </p>
                         )}
                       </div>
@@ -1045,18 +1073,18 @@ const FeaturePage = () => {
               {isLoading && (
                 <div className="flex items-center gap-3 text-xs font-black uppercase tracking-wide text-neutral-500">
                   <RefreshCw className="h-4 w-4 animate-spin" />
-                  AI is reading ERP data...
+                  Groq and Gemini are thinking...
                 </div>
               )}
               <div ref={chatEndRef} />
             </div>
 
             <form onSubmit={(event) => { event.preventDefault(); submitPrompt(); }} className="shrink-0 border-t border-neutral-200 p-3">
-              <div className="flex items-center gap-2 rounded-2xl border border-neutral-200 bg-neutral-50 p-2">
+              <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-neutral-200 bg-neutral-50 p-2">
                 <button
                   type="button"
                   onClick={toggleListening}
-                  disabled={mode !== 'voice' || !speechSupported || isCallActive}
+                  disabled={!speechSupported || isCallActive}
                   className={`rounded-xl p-2.5 ${
                     isListening ? 'bg-red-100 text-red-700' : 'bg-white text-neutral-800'
                   } disabled:opacity-40`}
@@ -1071,6 +1099,38 @@ const FeaturePage = () => {
                   placeholder="Ask: Show pending fees of Class 8, or Pay Rs. 5000 for ADM-001..."
                   className="min-w-0 flex-1 bg-transparent px-2 py-2 text-sm font-semibold outline-none placeholder:text-neutral-400"
                 />
+                <button
+                  type="button"
+                  onClick={toggleVoiceCall}
+                  disabled={!speechSupported}
+                  className={`inline-flex min-w-[154px] items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-black transition ${
+                    isCallActive
+                      ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-200'
+                      : 'border border-neutral-200 bg-white text-neutral-800'
+                  } disabled:opacity-40`}
+                  title="Toggle calling assistant"
+                >
+                  {isCallActive ? <PhoneOff className="h-4 w-4" /> : <PhoneCall className="h-4 w-4" />}
+                  Calling Assistant
+                  <span className={`h-2 w-2 rounded-full ${isListening ? 'animate-ping bg-white' : isCallActive ? 'bg-white' : 'bg-neutral-300'}`} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsMuted((value) => !value)}
+                  className="rounded-xl border border-neutral-200 bg-white p-2.5 text-neutral-800"
+                  title={isMuted ? 'Unmute replies' : 'Mute replies'}
+                >
+                  {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={stopSpeaking}
+                  disabled={!isSpeaking}
+                  className="rounded-xl border border-neutral-200 bg-white p-2.5 text-neutral-800 disabled:opacity-40"
+                  title="Pause speaking"
+                >
+                  <PauseCircle className="h-4 w-4" />
+                </button>
                 <button
                   type="submit"
                   disabled={!input.trim() || isLoading}

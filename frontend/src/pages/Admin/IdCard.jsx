@@ -1,186 +1,190 @@
-import React, { useMemo, useState } from 'react';
-import { Contact2, GraduationCap, Search, ShieldCheck, UserRound } from 'lucide-react';
-import { useMasterData } from '../../components/common/masterData';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Download, IdCard as IdCardIcon, Printer, Search, UsersRound } from 'lucide-react';
+import { apiFetch } from '../../components/common/api';
+import { useMasterData, sortClassNames } from '../../components/common/masterData';
+import {
+  IdCardStyles,
+  ResponsiveIdCardPair,
+  exportIdCardsPdf,
+  normalizeStaffCard,
+  normalizeStudentCard,
+} from '../../components/common/idCardKit';
+
+const roleTabs = [
+  ['students', 'Students'],
+  ['teachers', 'Teachers'],
+  ['clerks', 'Clerks'],
+  ['admins', 'Admins'],
+];
 
 const IdCard = () => {
   const masterData = useMasterData();
-  const [directoryType, setDirectoryType] = useState('students');
+  const [users, setUsers] = useState([]);
+  const [role, setRole] = useState('students');
+  const [classFilter, setClassFilter] = useState('all');
   const [selectedId, setSelectedId] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
 
-  const directory = useMemo(() => {
-    if (directoryType === 'teachers') {
-      return masterData.teachers.map((teacher) => ({
-        id: teacher.id || teacher.empId || teacher.name,
-        name: teacher.name || teacher.displayName || 'Teacher',
-        subtitle: teacher.id || teacher.empId || 'Teacher',
-        className: teacher.assignedClassTeacherFor || teacher.classAssignments?.[0]?.className || 'Faculty',
-        contact: teacher.mobile || teacher.phone || teacher.email || '',
-        role: teacher.isClassTeacher === 'Yes' ? 'Class Teacher' : 'Faculty',
-        photoDataUrl: teacher.photoDataUrl || '',
-      }));
-    }
+  useEffect(() => {
+    let mounted = true;
+    apiFetch('/auth/users')
+      .then((payload) => mounted && setUsers(Array.isArray(payload) ? payload : []))
+      .catch(() => mounted && setUsers([]));
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
-    return masterData.students.map((student) => ({
-      id: student.id || student.admissionNumber,
-      name: student.displayName || student.name,
-      subtitle: student.admissionNumber || student.id,
-      className: student.className,
-      contact: student.guardianPhone || student.guardianEmail || '',
-      role: 'Student',
-      fatherName: student.fatherName,
-      photoDataUrl: student.photoDataUrl || student.rawProfile?.photoDataUrl || '',
-    }));
-  }, [directoryType, masterData.students, masterData.teachers]);
+  const records = useMemo(() => {
+    if (role === 'students') return masterData.students.map(normalizeStudentCard);
+    if (role === 'teachers') return masterData.teachers.map((teacher, index) => normalizeStaffCard(teacher, 'teacher', index));
+    if (role === 'clerks') return masterData.clerks.map((clerk, index) => normalizeStaffCard(clerk, 'clerk', index));
+    return users.filter((user) => user.role === 'admin').map((user, index) => normalizeStaffCard(user, 'admin', index));
+  }, [masterData.clerks, masterData.students, masterData.teachers, role, users]);
 
-  const visibleDirectory = useMemo(() => {
-    const normalizedSearch = searchTerm.trim().toLowerCase();
-    return directory.filter((item) => {
-      const haystack = [item.name, item.subtitle, item.className, item.role].join(' ').toLowerCase();
-      return !normalizedSearch || haystack.includes(normalizedSearch);
+  const classNames = useMemo(
+    () => sortClassNames(records.filter((record) => record.type === 'student').map((record) => record.primaryLine.split('-')[0])),
+    [records]
+  );
+
+  const visibleRecords = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    return records.filter((record) => {
+      const classMatch = role !== 'students' || classFilter === 'all' || record.primaryLine.startsWith(classFilter);
+      const haystack = [record.displayName, record.id, record.roleLabel, record.primaryLine].join(' ').toLowerCase();
+      return classMatch && (!query || haystack.includes(query));
     });
-  }, [directory, searchTerm]);
+  }, [classFilter, records, role, searchTerm]);
 
-  const selectedProfile =
-    directory.find((item) => item.id === selectedId) ||
-    visibleDirectory[0] ||
-    directory[0] ||
+  const activeRecord =
+    records.find((record) => record.id === selectedId) ||
+    visibleRecords[0] ||
+    records[0] ||
     null;
 
+  const fileBase = `mgps-${role}-${classFilter === 'all' ? 'all' : classFilter.toLowerCase().replace(/\s+/g, '-')}-id-cards`;
+
   return (
-    <div className="space-y-6 p-6 font-sans select-none text-[#1A1A1A]">
-      <div className="bg-white border border-[#C8C8C8] rounded-2xl p-5 shadow-sm">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="space-y-6 p-6 font-sans text-[#1A1A1A]">
+      <IdCardStyles />
+      <section className="no-print bg-white border border-[#C8C8C8] rounded-2xl p-5 shadow-sm">
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
           <div>
             <h2 className="text-xl font-black uppercase tracking-widest flex items-center gap-2">
-              <Contact2 className="w-5 h-5 text-blue-700" /> ID Card Generation
+              <IdCardIcon className="w-5 h-5 text-blue-700" /> ID Card Generation
             </h2>
             <p className="text-xs text-[#555555] font-semibold mt-1">
-              Live student and faculty identity cards from shared master records.
+              One-click student, teacher, clerk, and admin ID cards from live ERP records. Principal signature is removed.
             </p>
           </div>
-          <div className="flex bg-[#F8F8F8] border border-[#EAEAEA] rounded-xl p-1">
-            {[
-              ['students', 'Students'],
-              ['teachers', 'Faculty'],
-            ].map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => {
-                  setDirectoryType(id);
-                  setSelectedId('');
-                }}
-                className={`px-4 py-2 rounded-lg text-xs font-black transition ${
-                  directoryType === id ? 'bg-[#1A1A1A] text-white' : 'text-[#555555]'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => exportIdCardsPdf(activeRecord ? [activeRecord] : [], `${activeRecord?.id || 'single'}-id-card.pdf`)}
+              disabled={!activeRecord}
+              className="inline-flex items-center gap-2 rounded-lg border border-[#1A1A1A] bg-white px-4 py-2 text-xs font-black disabled:opacity-50"
+            >
+              <Download className="w-4 h-4" /> Export Selected PDF
+            </button>
+            <button
+              type="button"
+              onClick={() => exportIdCardsPdf(visibleRecords, `${fileBase}.pdf`)}
+              disabled={!visibleRecords.length}
+              className="inline-flex items-center gap-2 rounded-lg bg-[#1A1A1A] px-4 py-2 text-xs font-black text-white disabled:opacity-50"
+            >
+              <Printer className="w-4 h-4" /> Generate All Visible
+            </button>
           </div>
         </div>
-      </div>
+      </section>
 
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
-        <div className="lg:col-span-2 bg-white border border-[#C8C8C8] rounded-2xl shadow-sm overflow-hidden">
-          <div className="p-4 border-b border-[#EAEAEA]">
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-5">
+        <aside className="no-print xl:col-span-4 bg-white border border-[#C8C8C8] rounded-2xl shadow-sm overflow-hidden">
+          <div className="p-4 border-b border-[#EAEAEA] space-y-3">
+            <div className="flex bg-[#F8F8F8] border border-[#EAEAEA] rounded-xl p-1">
+              {roleTabs.map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => {
+                    setRole(id);
+                    setClassFilter('all');
+                    setSelectedId('');
+                  }}
+                  className={`flex-1 px-3 py-2 rounded-lg text-[11px] font-black transition ${
+                    role === id ? 'bg-[#1A1A1A] text-white' : 'text-[#555555]'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {role === 'students' && (
+              <select
+                value={classFilter}
+                onChange={(event) => {
+                  setClassFilter(event.target.value);
+                  setSelectedId('');
+                }}
+                className="w-full rounded-xl border border-[#D9D9D9] bg-[#F8F8F8] px-3 py-2 text-xs font-bold outline-none"
+              >
+                <option value="all">All Classes</option>
+                {classNames.map((className) => (
+                  <option key={className} value={className}>{className}</option>
+                ))}
+              </select>
+            )}
             <div className="relative bg-[#F8F8F8] rounded-xl border border-[#D9D9D9] flex items-center px-3 py-2">
               <Search className="w-4 h-4 text-[#555555] mr-2" />
               <input
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Search identity"
+                placeholder="Search name, ID, class, role"
                 className="bg-transparent outline-none text-xs font-semibold w-full"
               />
             </div>
           </div>
 
           <div className="max-h-[68vh] overflow-y-auto divide-y divide-[#EAEAEA]">
-            {visibleDirectory.map((item) => (
+            {visibleRecords.map((record) => (
               <button
-                key={item.id}
+                key={record.id}
                 type="button"
-                onClick={() => setSelectedId(item.id)}
+                onClick={() => setSelectedId(record.id)}
                 className={`w-full text-left p-4 transition flex items-center gap-3 ${
-                  selectedProfile?.id === item.id ? 'bg-[#F8F8F8]' : 'hover:bg-[#F8F8F8]'
+                  activeRecord?.id === record.id ? 'bg-[#F8F8F8]' : 'hover:bg-[#F8F8F8]'
                 }`}
               >
                 <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-700 border border-blue-100 flex items-center justify-center shrink-0">
-                  {directoryType === 'students' ? <GraduationCap className="w-5 h-5" /> : <UserRound className="w-5 h-5" />}
+                  <UsersRound className="w-5 h-5" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-xs font-black truncate">{item.name}</p>
+                  <p className="text-xs font-black truncate">{record.displayName}</p>
                   <p className="text-[10px] text-[#555555] font-semibold truncate">
-                    {item.subtitle} - {item.className}
+                    {record.id} - {record.primaryLine || record.roleLabel}
                   </p>
                 </div>
               </button>
             ))}
-            {!visibleDirectory.length && (
+            {!visibleRecords.length && (
               <div className="p-8 text-center text-[10px] font-black uppercase tracking-widest text-neutral-400">
                 No synced identities found.
               </div>
             )}
           </div>
-        </div>
+        </aside>
 
-        <div className="lg:col-span-3 bg-white border border-[#C8C8C8] rounded-2xl shadow-sm p-6">
-          {selectedProfile ? (
-            <div className="max-w-sm mx-auto bg-[#F8F8F8] border border-[#D9D9D9] rounded-2xl overflow-hidden shadow-md">
-              <div className="bg-[#1A1A1A] text-white p-4 flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] uppercase tracking-widest font-black text-blue-200">Marigold Secondary School</p>
-                  <h3 className="text-lg font-black">MGPS ERP ID</h3>
-                </div>
-                <ShieldCheck className="w-6 h-6 text-[#E1FA6C]" />
-              </div>
-
-              <div className="p-5 space-y-5">
-                <div className="flex items-start gap-4">
-                  <div className="w-24 h-28 bg-white border border-[#D9D9D9] rounded-xl flex items-center justify-center overflow-hidden">
-                    {selectedProfile.photoDataUrl ? (
-                      <img src={selectedProfile.photoDataUrl} alt={selectedProfile.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <Contact2 className="w-10 h-10 text-neutral-300" />
-                    )}
-                  </div>
-                  <div className="min-w-0 pt-1">
-                    <p className="text-[10px] uppercase tracking-wider font-black text-[#555555]">{selectedProfile.role}</p>
-                    <h4 className="text-xl font-black leading-tight">{selectedProfile.name}</h4>
-                    <p className="text-xs font-mono text-[#555555] mt-1">{selectedProfile.subtitle}</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 gap-2 text-xs">
-                  <div className="bg-white border border-[#EAEAEA] rounded-xl p-3">
-                    <p className="text-[9px] uppercase tracking-wider font-black text-[#555555]">Class / Role</p>
-                    <p className="font-black">{selectedProfile.className || '-'}</p>
-                  </div>
-                  {selectedProfile.fatherName && (
-                    <div className="bg-white border border-[#EAEAEA] rounded-xl p-3">
-                      <p className="text-[9px] uppercase tracking-wider font-black text-[#555555]">Father Name</p>
-                      <p className="font-black">{selectedProfile.fatherName}</p>
-                    </div>
-                  )}
-                  <div className="bg-white border border-[#EAEAEA] rounded-xl p-3">
-                    <p className="text-[9px] uppercase tracking-wider font-black text-[#555555]">Contact</p>
-                    <p className="font-black">{selectedProfile.contact || '-'}</p>
-                  </div>
-                </div>
-
-                <div className="bg-white border border-dashed border-[#C8C8C8] rounded-xl p-4 text-center">
-                  <p className="text-[9px] uppercase tracking-widest font-black text-[#555555]">QR Identifier</p>
-                  <p className="text-lg font-mono font-black tracking-widest mt-1">{selectedProfile.id}</p>
-                </div>
-              </div>
+        <main className="xl:col-span-8 bg-white border border-[#C8C8C8] rounded-2xl shadow-sm p-6">
+          {activeRecord ? (
+            <div className="id-print-area flex justify-center pb-2">
+              <ResponsiveIdCardPair record={activeRecord} />
             </div>
           ) : (
             <div className="h-80 flex items-center justify-center text-xs font-black text-neutral-400 uppercase tracking-widest">
-              Add students or teachers to generate ID cards.
+              Add ERP users to generate ID cards.
             </div>
           )}
-        </div>
+        </main>
       </div>
     </div>
   );

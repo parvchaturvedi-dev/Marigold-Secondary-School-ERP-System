@@ -11,6 +11,7 @@ import {
   createMailTransporter,
   getMailConfig,
   getSenderAddress,
+  logSmtpError,
 } from '../utils/mailer.js';
 import {
   createPasswordHash,
@@ -44,6 +45,14 @@ const sendMail = async ({ to, subject, text }) => {
     closeMailTransporter(transporter);
   }
 };
+
+const sendCredentialMail = (transporter, mailConfig, user, email) =>
+  transporter.sendMail({
+    from: getSenderAddress(mailConfig),
+    to: email,
+    subject: `MGPS ERP login credentials - ${user.username}`,
+    text: buildCredentialMessage(user),
+  });
 
 const handleMailError = (response, error) => {
   const failure = buildMailErrorPayload(error);
@@ -94,6 +103,31 @@ const normalizeStudent = (student = {}, index = 0) => ({
 
 const getEmailForUser = (user = {}) =>
   user.profile?.email || user.profile?.studentProfiles?.[0]?.guardianEmail || '';
+
+const normalizeAdminUsername = (value = '') => {
+  const raw = String(value || '').trim().toUpperCase().replace(/\s+/g, '-');
+  if (!raw) return '';
+  return raw.startsWith('ADM-') ? raw : `ADM-${raw}`;
+};
+
+const buildAdminPayload = (body = {}) => {
+  const username = normalizeAdminUsername(body.username);
+  const displayName = String(body.displayName || body.name || '').trim();
+  const email = String(body.email || '').trim();
+  const mobile = String(body.mobile || body.phone || '').trim();
+  const designation = String(body.designation || 'Administrator').trim();
+  const initialPassword = String(body.password || body.initialPassword || `${username}@MGPS`);
+
+  return {
+    username,
+    displayName,
+    email,
+    mobile,
+    designation,
+    initialPassword,
+    isActive: body.isActive !== false,
+  };
+};
 
 const buildCredentialMessage = (user = {}) => {
   const linkedStudents = user.profile?.studentProfiles || [];
@@ -222,6 +256,164 @@ router.get('/users', ensureMongo, requireAuth, requireRole('admin', 'clerk'), as
   response.json(await listIdentityUsers());
 });
 
+router.post('/users/admins', ensureMongo, requireAuth, requireRole('admin'), async (request, response) => {
+  const payload = buildAdminPayload(request.body);
+
+  if (!payload.username || !payload.displayName || payload.initialPassword.length < 6) {
+    response.status(400).json({ message: 'Admin ID, display name, and password with at least 6 characters are required.' });
+    return;
+  }
+
+  const existing = await User.findOne({ username: payload.username }).lean();
+  if (existing) {
+    response.status(409).json({ message: 'This admin username already exists.' });
+    return;
+  }
+
+  await User.create({
+    username: payload.username,
+    role: 'admin',
+    displayName: payload.displayName,
+    passwordHash: createPasswordHash(payload.initialPassword),
+    isActive: payload.isActive,
+    profile: {
+      displayName: payload.displayName,
+      accountDisplayName: `${payload.displayName} (${payload.username})`,
+      email: payload.email,
+      mobile: payload.mobile,
+      designation: payload.designation,
+      initialPassword: payload.initialPassword,
+      managedByAdminPanel: true,
+    },
+  });
+
+  response.status(201).json({ message: 'Admin user created.', users: await listIdentityUsers() });
+});
+
+router.patch('/users/:username', ensureMongo, requireAuth, requireRole('admin'), async (request, response) => {
+  const username = String(request.params.username || '').trim().toUpperCase();
+  const user = await User.findOne({ username });
+
+  if (!user) {
+    response.status(404).json({ message: 'User not found.' });
+    return;
+  }
+
+  const nextPassword = String(request.body.password || request.body.initialPassword || '');
+  const nextProfile = {
+    ...(user.profile || {}),
+    displayName: String(request.body.displayName || request.body.name || user.displayName || '').trim(),
+    email: String(request.body.email ?? user.profile?.email ?? '').trim(),
+    mobile: String(request.body.mobile ?? user.profile?.mobile ?? '').trim(),
+    designation: String(request.body.designation ?? user.profile?.designation ?? '').trim(),
+    managedByAdminPanel: user.role === 'admin' ? true : user.profile?.managedByAdminPanel,
+  };
+
+  user.displayName = nextProfile.displayName || user.displayName;
+  user.isActive = request.body.isActive === undefined ? user.isActive : Boolean(request.body.isActive);
+  user.profile = nextProfile;
+
+  if (nextPassword) {
+    if (nextPassword.length < 6) {
+      response.status(400).json({ message: 'Password must contain at least 6 characters.' });
+      return;
+    }
+    user.passwordHash = createPasswordHash(nextPassword);
+    user.profile = {
+      ...user.profile,
+      initialPassword: nextPassword,
+    };
+  }
+
+  await user.save();
+  response.json({ message: 'User updated.', users: await listIdentityUsers() });
+});
+
+router.delete('/users/:username', ensureMongo, requireAuth, requireRole('admin'), async (request, response) => {
+  const username = String(request.params.username || '').trim().toUpperCase();
+
+  if (username === request.auth.username) {
+    response.status(400).json({ message: 'You cannot remove the admin account currently in use.' });
+    return;
+  }
+
+  const user = await User.findOne({ username });
+  if (!user) {
+    response.status(404).json({ message: 'User not found.' });
+    return;
+  }
+
+  if (user.profile?.managedByIdentitySync) {
+    response.status(400).json({ message: 'Synced identities must be removed from their source management page.' });
+    return;
+  }
+
+  await User.deleteOne({ username });
+  response.json({ message: 'User removed.', users: await listIdentityUsers() });
+});
+
+router.post('/users/send-credentials-all', ensureMongo, requireAuth, requireRole('admin', 'clerk'), async (_request, response) => {
+  await syncIdentityUsersFromState();
+  const mailConfig = getMailConfig();
+  if (!mailConfig.isReady) {
+    handleMailError(response, new Error('Email is not configured. Set Gmail credentials in .env.'));
+    return;
+  }
+
+  const users = await User.find().sort({ role: 1, username: 1 }).lean();
+  let transporter;
+  const sent = [];
+  const skipped = [];
+  const failed = [];
+
+  try {
+    transporter = await createMailTransporter(mailConfig);
+
+    for (const user of users) {
+      const email = getEmailForUser(user);
+
+      if (!user.isActive) {
+        skipped.push({ username: user.username, reason: 'Account is inactive.' });
+        continue;
+      }
+
+      if (!email) {
+        skipped.push({ username: user.username, reason: 'Linked Gmail address is missing.' });
+        continue;
+      }
+
+      try {
+        const info = await sendCredentialMail(transporter, mailConfig, user, email);
+        sent.push({ username: user.username, email, messageId: info.messageId || '' });
+      } catch (error) {
+        logSmtpError(error, { phase: 'send', username: user.username, to: email });
+        failed.push({ username: user.username, email, error: error?.message || 'Gmail dispatch failed.' });
+      }
+    }
+  } catch (error) {
+    handleMailError(response, error);
+    return;
+  } finally {
+    if (transporter) closeMailTransporter(transporter);
+  }
+
+  response.json({
+    message:
+      failed.length > 0
+        ? `Credentials sent to ${sent.length} users. ${failed.length} failed and ${skipped.length} skipped.`
+        : `Credentials sent to ${sent.length} users. ${skipped.length} skipped.`,
+    counts: {
+      total: users.length,
+      sent: sent.length,
+      skipped: skipped.length,
+      failed: failed.length,
+    },
+    sent,
+    skipped,
+    failed,
+  });
+});
+
 router.post('/users/:username/request-password-otp', ensureMongo, requireAuth, requireRole('admin', 'clerk'), async (request, response) => {
   await syncIdentityUsersFromState();
   const username = String(request.params.username || '').trim().toUpperCase();
@@ -281,11 +473,13 @@ router.post('/users/:username/send-credentials', ensureMongo, requireAuth, requi
   }
 
   try {
-    await sendMail({
-      to: email,
-      subject: `MGPS ERP login credentials - ${username}`,
-      text: buildCredentialMessage(user),
-    });
+    const mailConfig = getMailConfig();
+    const transporter = await createMailTransporter(mailConfig);
+    try {
+      await sendCredentialMail(transporter, mailConfig, user, email);
+    } finally {
+      closeMailTransporter(transporter);
+    }
   } catch (error) {
     handleMailError(response, error);
     return;

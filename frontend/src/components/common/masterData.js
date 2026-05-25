@@ -6,6 +6,7 @@ export const MASTER_NAMESPACES = {
   classes: 'admin-class-management-classes',
   students: 'admin-student-management-students',
   teachers: 'admin-teacher-management-list',
+  clerks: 'admin-clerk-management-list',
   subjects: 'admin-subjects-global',
   classSubjects: 'admin-subjects-class-mapping',
   documents: 'admin-document-requirements',
@@ -103,6 +104,7 @@ export const deriveMasterData = ({
   classRecords = [],
   students = [],
   teachers = [],
+  clerks = [],
   subjects = [],
   classSubjects = [],
   classPreferences = [],
@@ -156,6 +158,7 @@ export const deriveMasterData = ({
     classes,
     students: normalizedStudents,
     teachers: Array.isArray(teachers) ? teachers : [],
+    clerks: Array.isArray(clerks) ? clerks : [],
     subjects: Array.isArray(subjects) ? subjects : [],
     globalSubjectNames,
     classSubjects: Array.isArray(classSubjects) ? classSubjects : [],
@@ -171,6 +174,7 @@ export const useMasterData = () => {
   const [classRecords, setClassRecords, classMeta] = useMongoState(MASTER_NAMESPACES.classes, []);
   const [students, setStudents, studentMeta] = useMongoState(MASTER_NAMESPACES.students, []);
   const [teachers, setTeachers, teacherMeta] = useMongoState(MASTER_NAMESPACES.teachers, []);
+  const [clerks, setClerks, clerkMeta] = useMongoState(MASTER_NAMESPACES.clerks, []);
   const [subjects, setSubjects, subjectMeta] = useMongoState(MASTER_NAMESPACES.subjects, []);
   const [classSubjects, setClassSubjects, classSubjectMeta] = useMongoState(
     MASTER_NAMESPACES.classSubjects,
@@ -178,19 +182,21 @@ export const useMasterData = () => {
   );
 
   const data = useMemo(
-    () => deriveMasterData({ classRecords, students, teachers, subjects, classSubjects, classPreferences }),
-    [classRecords, students, teachers, subjects, classSubjects, classPreferences]
+    () => deriveMasterData({ classRecords, students, teachers, clerks, subjects, classSubjects, classPreferences }),
+    [classRecords, students, teachers, subjects, classSubjects, classPreferences, clerks]
   );
 
   return {
     ...data,
-    raw: { classPreferences, classRecords, students, teachers, subjects, classSubjects },
-    actions: { setClassPreferences, setClassRecords, setStudents, setTeachers, setSubjects, setClassSubjects },
+    clerks: Array.isArray(clerks) ? clerks : [],
+    raw: { classPreferences, classRecords, students, teachers, clerks, subjects, classSubjects },
+    actions: { setClassPreferences, setClassRecords, setStudents, setTeachers, setClerks, setSubjects, setClassSubjects },
     isLoading:
       classPreferenceMeta.isLoading ||
       classMeta.isLoading ||
       studentMeta.isLoading ||
       teacherMeta.isLoading ||
+      clerkMeta.isLoading ||
       subjectMeta.isLoading ||
       classSubjectMeta.isLoading,
     errors: [
@@ -198,6 +204,7 @@ export const useMasterData = () => {
       classMeta.error,
       studentMeta.error,
       teacherMeta.error,
+      clerkMeta.error,
       subjectMeta.error,
       classSubjectMeta.error,
     ].filter(Boolean),

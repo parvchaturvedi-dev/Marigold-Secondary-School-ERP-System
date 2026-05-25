@@ -63,6 +63,7 @@ router.get('/status', (_request, response) => {
     forceIPv4: mailConfig.forceIPv4,
     maxConnections: mailConfig.maxConnections,
     requiredEnv: ['GMAIL_USER', 'GMAIL_APP_PASSWORD'],
+    smtpEnvAliases: ['GMAIL_SMTP_HOST/GMAIL_SMTP_PORT', 'EMAIL_SMTP_HOST/EMAIL_SMTP_PORT', 'SMTP_HOST/SMTP_PORT'],
   });
 });
 

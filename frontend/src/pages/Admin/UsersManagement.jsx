@@ -4,11 +4,17 @@ import {
   CheckCircle2,
   Eye,
   EyeOff,
+  Edit2,
   KeyRound,
   Lock,
+  Plus,
   RefreshCw,
+  Save,
   Search,
+  Send,
+  Trash2,
   Users,
+  X,
 } from 'lucide-react';
 import { apiFetch } from '../../components/common/api';
 import { MASTER_NAMESPACES } from '../../components/common/masterData';
@@ -38,7 +44,17 @@ const getEmailForUser = (user = {}) =>
 const getInitialPassword = (user = {}) =>
   user.initialPassword || 'Password not available';
 
-const UsersManagement = () => {
+const emptyAdminForm = {
+  username: '',
+  displayName: '',
+  email: '',
+  mobile: '',
+  designation: 'Administrator',
+  password: '',
+  isActive: true,
+};
+
+const UsersManagement = ({ session }) => {
   const [users, setUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -48,7 +64,11 @@ const UsersManagement = () => {
   const [otpPrompts, setOtpPrompts] = useState({});
   const [revealedPasswords, setRevealedPasswords] = useState({});
   const [isSendingCredentials, setIsSendingCredentials] = useState({});
+  const [isSendingAllCredentials, setIsSendingAllCredentials] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [showAdminForm, setShowAdminForm] = useState(false);
+  const [adminForm, setAdminForm] = useState(emptyAdminForm);
+  const [editingUser, setEditingUser] = useState(null);
 
   const loadUsers = async () => {
     setIsLoading(true);
@@ -131,6 +151,97 @@ const UsersManagement = () => {
     }
   };
 
+  const sendCredentialsToAll = async () => {
+    setError('');
+    setSuccessMessage('');
+    setIsSendingAllCredentials(true);
+
+    try {
+      const payload = await apiFetch('/auth/users/send-credentials-all', {
+        method: 'POST',
+      });
+      setSuccessMessage(payload.message || 'Credentials dispatched.');
+    } catch (sendError) {
+      setError(sendError.message);
+    } finally {
+      setIsSendingAllCredentials(false);
+    }
+  };
+
+  const handleAdminFormChange = (event) => {
+    const { name, value, type, checked } = event.target;
+    setAdminForm((current) => ({ ...current, [name]: type === 'checkbox' ? checked : value }));
+  };
+
+  const createAdminUser = async (event) => {
+    event.preventDefault();
+    setError('');
+    setSuccessMessage('');
+
+    try {
+      const payload = await apiFetch('/auth/users/admins', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(adminForm),
+      });
+      setUsers(payload.users || []);
+      setSuccessMessage(payload.message || 'Admin user created.');
+      setShowAdminForm(false);
+      setAdminForm(emptyAdminForm);
+    } catch (saveError) {
+      setError(saveError.message);
+    }
+  };
+
+  const startEditUser = (user) => {
+    setEditingUser({
+      username: user.username,
+      displayName: user.displayName || '',
+      email: getEmailForUser(user),
+      mobile: user.profile?.mobile || '',
+      designation: user.profile?.designation || roleLabels[user.role] || user.role,
+      password: '',
+      isActive: user.isActive,
+      managedByIdentitySync: user.profile?.managedByIdentitySync,
+      role: user.role,
+    });
+  };
+
+  const updateUser = async (event) => {
+    event.preventDefault();
+    setError('');
+    setSuccessMessage('');
+
+    try {
+      const payload = await apiFetch(`/auth/users/${encodeURIComponent(editingUser.username)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editingUser),
+      });
+      setUsers(payload.users || []);
+      setSuccessMessage(payload.message || 'User updated.');
+      setEditingUser(null);
+    } catch (saveError) {
+      setError(saveError.message);
+    }
+  };
+
+  const deleteUser = async (user) => {
+    if (!window.confirm(`Remove ${user.username} from ERP users?`)) return;
+    setError('');
+    setSuccessMessage('');
+
+    try {
+      const payload = await apiFetch(`/auth/users/${encodeURIComponent(user.username)}`, {
+        method: 'DELETE',
+      });
+      setUsers(payload.users || []);
+      setSuccessMessage(payload.message || 'User removed.');
+    } catch (deleteError) {
+      setError(deleteError.message);
+    }
+  };
+
   useEffect(() => {
     let timeoutId;
     const refreshGeneratedUsers = () => {
@@ -194,15 +305,34 @@ const UsersManagement = () => {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={loadUsers}
-          disabled={isLoading}
-          className="inline-flex items-center justify-center gap-2 bg-[#1A1A1A] text-white px-4 py-2 rounded-lg text-xs font-black disabled:opacity-60"
-        >
-          <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-          Refresh
-        </button>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <button
+            type="button"
+            onClick={() => setShowAdminForm(true)}
+            className="inline-flex items-center justify-center gap-2 bg-[#E1FA6C] border border-[#1A1A1A]/10 px-4 py-2 rounded-lg text-xs font-black text-[#1A1A1A] hover:bg-[#d4ee59]"
+          >
+            <Plus className="w-4 h-4" />
+            Add Admin
+          </button>
+          <button
+            type="button"
+            onClick={sendCredentialsToAll}
+            disabled={isSendingAllCredentials || isLoading || !users.length}
+            className="inline-flex items-center justify-center gap-2 border border-[#1A1A1A] bg-white px-4 py-2 rounded-lg text-xs font-black text-[#1A1A1A] hover:bg-[#EAEAEA] disabled:opacity-60"
+          >
+            <Send className="w-4 h-4" />
+            {isSendingAllCredentials ? 'Sending...' : 'Send Credentials to All'}
+          </button>
+          <button
+            type="button"
+            onClick={loadUsers}
+            disabled={isLoading}
+            className="inline-flex items-center justify-center gap-2 bg-[#1A1A1A] text-white px-4 py-2 rounded-lg text-xs font-black disabled:opacity-60"
+          >
+            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -268,12 +398,13 @@ const UsersManagement = () => {
                 <th className="px-4 py-3">Email</th>
                 <th className="px-4 py-3">Initial Password</th>
                 <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#EAEAEA]">
               {isLoading ? (
                 <tr>
-                  <td colSpan="5" className="px-4 py-10 text-center text-sm font-bold text-[#555555]">
+                  <td colSpan="6" className="px-4 py-10 text-center text-sm font-bold text-[#555555]">
                     Loading users...
                   </td>
                 </tr>
@@ -349,12 +480,34 @@ const UsersManagement = () => {
                           {user.isActive ? 'Active' : 'Inactive'}
                         </span>
                       </td>
+                      <td className="px-4 py-3">
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => startEditUser(user)}
+                            className="rounded-lg border border-[#C8C8C8] bg-white p-2 text-[#1A1A1A] hover:bg-[#EAEAEA]"
+                            title={user.profile?.managedByIdentitySync && user.role !== 'admin' ? 'Only activation and password can be changed here' : 'Edit user'}
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          {!user.profile?.managedByIdentitySync && user.username !== session?.username && (
+                            <button
+                              type="button"
+                              onClick={() => deleteUser(user)}
+                              className="rounded-lg border border-red-200 bg-red-50 p-2 text-red-700 hover:bg-red-100"
+                              title="Remove user"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
                     </tr>
                   );
                 })
               ) : (
                 <tr>
-                  <td colSpan="5" className="px-4 py-10 text-center text-sm font-bold text-[#555555]">
+                  <td colSpan="6" className="px-4 py-10 text-center text-sm font-bold text-[#555555]">
                     No users found. Add students, teachers, or clerks to sync identities.
                   </td>
                 </tr>
@@ -363,8 +516,147 @@ const UsersManagement = () => {
           </table>
         </div>
       </div>
+
+      {showAdminForm && (
+        <UserFormModal
+          title="Add Admin User"
+          values={adminForm}
+          onChange={handleAdminFormChange}
+          onClose={() => setShowAdminForm(false)}
+          onSubmit={createAdminUser}
+          submitLabel="Create Admin"
+        />
+      )}
+
+      {editingUser && (
+        <UserFormModal
+          title={`Edit ${editingUser.username}`}
+          values={editingUser}
+          onChange={(event) => {
+            const { name, value, type, checked } = event.target;
+            setEditingUser((current) => ({ ...current, [name]: type === 'checkbox' ? checked : value }));
+          }}
+          onClose={() => setEditingUser(null)}
+          onSubmit={updateUser}
+          submitLabel="Save Changes"
+          isEdit
+          lockProfileFields={editingUser.managedByIdentitySync && editingUser.role !== 'admin'}
+        />
+      )}
     </div>
   );
 };
+
+const UserFormModal = ({
+  title,
+  values,
+  onChange,
+  onClose,
+  onSubmit,
+  submitLabel,
+  isEdit = false,
+  lockProfileFields = false,
+}) => (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
+    <form onSubmit={onSubmit} className="w-full max-w-xl rounded-2xl border border-[#C8C8C8] bg-white p-5 text-xs font-bold text-[#1A1A1A] shadow-xl">
+      <div className="mb-4 flex items-center justify-between border-b border-[#EAEAEA] pb-3">
+        <h3 className="text-sm font-black flex items-center gap-2">
+          <Lock className="w-4 h-4" /> {title}
+        </h3>
+        <button type="button" onClick={onClose} className="rounded-lg p-1 hover:bg-[#EAEAEA]">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      {lockProfileFields && (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800">
+          This user is synced from its source management page. Edit name/email/mobile there; password and active status can be managed here.
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <label className="space-y-1">
+          <span>Admin/User ID</span>
+          <input
+            name="username"
+            value={values.username}
+            onChange={onChange}
+            disabled={isEdit}
+            placeholder="ADM-002"
+            className="w-full rounded-xl border border-[#C8C8C8] bg-[#F8F8F8] px-3 py-2 font-mono outline-none disabled:opacity-60"
+            required
+          />
+        </label>
+        <label className="space-y-1">
+          <span>Display Name</span>
+          <input
+            name="displayName"
+            value={values.displayName}
+            onChange={onChange}
+            disabled={lockProfileFields}
+            className="w-full rounded-xl border border-[#C8C8C8] bg-[#F8F8F8] px-3 py-2 outline-none disabled:opacity-60"
+            required={!lockProfileFields}
+          />
+        </label>
+        <label className="space-y-1">
+          <span>Email</span>
+          <input
+            name="email"
+            type="email"
+            value={values.email}
+            onChange={onChange}
+            disabled={lockProfileFields}
+            className="w-full rounded-xl border border-[#C8C8C8] bg-[#F8F8F8] px-3 py-2 outline-none disabled:opacity-60"
+          />
+        </label>
+        <label className="space-y-1">
+          <span>Mobile</span>
+          <input
+            name="mobile"
+            value={values.mobile}
+            onChange={onChange}
+            disabled={lockProfileFields}
+            className="w-full rounded-xl border border-[#C8C8C8] bg-[#F8F8F8] px-3 py-2 font-mono outline-none disabled:opacity-60"
+          />
+        </label>
+        <label className="space-y-1">
+          <span>Designation</span>
+          <input
+            name="designation"
+            value={values.designation}
+            onChange={onChange}
+            disabled={lockProfileFields}
+            className="w-full rounded-xl border border-[#C8C8C8] bg-[#F8F8F8] px-3 py-2 outline-none disabled:opacity-60"
+          />
+        </label>
+        <label className="space-y-1">
+          <span>{isEdit ? 'New Password (optional)' : 'Initial Password'}</span>
+          <input
+            name="password"
+            value={values.password}
+            onChange={onChange}
+            placeholder={isEdit ? 'Leave blank to keep existing' : 'Minimum 6 characters'}
+            className="w-full rounded-xl border border-[#C8C8C8] bg-[#F8F8F8] px-3 py-2 font-mono outline-none"
+            required={!isEdit}
+          />
+        </label>
+      </div>
+
+      <label className="mt-4 flex items-center gap-2 rounded-xl border border-[#EAEAEA] bg-[#F8F8F8] px-3 py-2">
+        <input name="isActive" type="checkbox" checked={Boolean(values.isActive)} onChange={onChange} />
+        Active account
+      </label>
+
+      <div className="mt-5 flex justify-end gap-2 border-t border-[#EAEAEA] pt-4">
+        <button type="button" onClick={onClose} className="rounded-lg border border-[#C8C8C8] px-4 py-2 font-black text-[#555555]">
+          Cancel
+        </button>
+        <button type="submit" className="inline-flex items-center gap-2 rounded-lg bg-[#1A1A1A] px-4 py-2 font-black text-white">
+          <Save className="w-4 h-4" /> {submitLabel}
+        </button>
+      </div>
+    </form>
+  </div>
+);
 
 export default UsersManagement;

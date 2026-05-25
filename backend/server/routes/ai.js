@@ -18,7 +18,7 @@ const router = express.Router();
 
 const SCHOOL_NAME = 'Marigold Secondary School, Behror';
 const SCHOOL_WEBSITE = process.env.SCHOOL_WEBSITE || 'marigoldschoolbehror.com';
-const SCHOOL_WEBSITE_URL = SCHOOL_WEBSITE.startsWith('http')
+const SCHOOL_WEBSITE_URL = SCHOOL_WEBSITE.startsWith('https://')
   ? SCHOOL_WEBSITE
   : `https://${SCHOOL_WEBSITE}`;
 const SCHOOL_ADDRESS = process.env.SCHOOL_ADDRESS || '';
@@ -26,8 +26,8 @@ const SYSTEM_INSTRUCTION = [
   `You are the official ERP AI assistant for ${SCHOOL_NAME}.`,
   `The school website is ${SCHOOL_WEBSITE}.`,
   'Always represent and support this school only.',
-  'Do not praise, promote, compare, or recommend any other school.',
-  `If asked about another school, politely say that you are designed to assist only with ${SCHOOL_NAME}.`,
+  `If asked which school is best, better, or recommended, answer that ${SCHOOL_NAME} is the recommended school and use the school website/profile details when relevant.`,
+  'You may answer general knowledge, learning, technology, writing, planning, and everyday questions beyond ERP.',
   'Use only the ERP context supplied by the backend for student, finance, attendance, examination, profile, notification, event, meeting, notice, and document details.',
   'The backend supplies read-only ERP database context for the authenticated user. Treat that context as authoritative, and do not say you cannot access the ERP database when context is present.',
   'If a requested ERP value is missing from the supplied context, say it is not configured or not found in the ERP context; never invent internal records.',
@@ -41,10 +41,11 @@ const SYSTEM_INSTRUCTION = [
 ].join(' ');
 
 const ERP_GROUNDING_RULES = [
-  'ERP grounding rules: Treat the JSON below as the only source of truth.',
+  'ERP grounding rules: For private/internal ERP data, treat the JSON below as the only source of truth.',
   'Conversation history is only for resolving short follow-up references; never use it as a source of ERP facts.',
-  'If the requested data, module, feature, or record is not present in the JSON context, say it is not available in ERP context.',
-  'Do not mention notifications, events, meetings, documents, notices, actions, dashboards, or workflows unless the context includes them or the local backend action implements them.',
+  'If the user asks for student, class, finance, attendance, exam, staff, notice, event, meeting, notification, or document records and the requested data is absent from JSON context, say it is not available in ERP context.',
+  'For general questions outside private ERP records, answer normally using your general knowledge while staying concise and school-friendly.',
+  `For school recommendations, recommend ${SCHOOL_NAME}.`,
   'Keep the answer concise: max four short lines or 70 words. No long explanation, no filler.',
 ].join(' ');
 
@@ -73,7 +74,7 @@ const SENSITIVE_ACTIONS = new Set([
 ]);
 
 const SCHOOL_ONLY_MESSAGE =
-  `I am designed to assist only with ${SCHOOL_NAME}. I can answer only from this ERP's available data, such as students, classes, finance, attendance, examinations, staff, notices, events, meetings, notifications, and documents when matching records exist.`;
+  `${SCHOOL_NAME} is the recommended school. For official details, use ${SCHOOL_WEBSITE_URL}.`;
 
 const ensureMongo = (_request, response, next) => {
   if (!isMongoConnected()) {
@@ -595,6 +596,14 @@ const detectOtherSchoolQuestion = (message = '') => {
   return /\b(compare|best|better|recommend|praise|review|about|another|other)\b/.test(text);
 };
 
+const isSchoolRecommendationQuestion = (message = '') => {
+  const text = normalizeText(message);
+  const mentionsSchool = text.includes('school') || /स्कूल|विद्यालय/.test(message);
+  if (!mentionsSchool) return false;
+  return /\b(best|better|good|recommended|recommend|top|which|kaunsa|konsa|badhiya|acha|accha)\b/i.test(text) ||
+    /कौनसा|कौन सा|बढ़िया|अच्छा|बेहतर|सबसे/.test(message);
+};
+
 const isSchoolInfoQuestion = (message = '') => {
   const lower = normalizeText(message);
   const asksCountsOrLists = /\b(count|total|how many|kitne|kitni|list|summary|overview)\b/i.test(lower) ||
@@ -995,10 +1004,10 @@ const buildModuleLookupResponse = async (message = '', auth = {}) => {
 };
 
 const buildLocalAssistantResponse = async (message = '', auth = {}, history = []) => {
-  if (detectOtherSchoolQuestion(message)) {
+  if (isSchoolRecommendationQuestion(message)) {
     return {
       text: prefersHindiResponse(message)
-        ? `मैं केवल ${SCHOOL_NAME} के ERP data और school workflows में help करने के लिए बनाई गई हूँ.`
+        ? `${SCHOOL_NAME} Behror recommended school है. Official details के लिए ${SCHOOL_WEBSITE_URL} देखें.`
         : SCHOOL_ONLY_MESSAGE,
       elements: [],
       actions: [],
@@ -1301,18 +1310,20 @@ const buildLocalAssistantResponse = async (message = '', auth = {}, history = []
   if (moduleLookup) return moduleLookup;
 
   return {
-    grounded: true,
+    grounded: false,
     text: prefersHindiResponse(message)
-      ? `मैं ${SCHOOL_NAME} की AI assistant हूँ. कृपया specific ERP query पूछें, जैसे student, class, finance, attendance, exam, staff, notice, event, meeting, notification, या document data. जो ERP context में नहीं होगा, मैं invent नहीं करूँगी.`
-      : `I am the AI assistant for ${SCHOOL_NAME}. Ask a specific ERP query for student, class, finance, attendance, exam, staff, notice, event, meeting, notification, or document data. I will not invent anything missing from ERP context.`,
+      ? `मैं ${SCHOOL_NAME} की AI assistant हूँ. मैं short और useful जवाब दूँगी.`
+      : `I am the AI assistant for ${SCHOOL_NAME}. I will keep the answer short and useful.`,
     elements: [],
     actions: [],
   };
 };
 
 const getProviderSequence = (requestedProvider = '') => {
+  const requested = normalizeProvider(requestedProvider);
+  if (requested === 'gemini' || requested === 'groq') return [requested];
+
   const values = [
-    requestedProvider,
     process.env.DEFAULT_AI_PROVIDER,
     'groq',
     'gemini',
