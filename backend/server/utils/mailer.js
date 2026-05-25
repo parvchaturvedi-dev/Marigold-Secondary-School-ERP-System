@@ -171,16 +171,6 @@ const getMailConnectionAttempts = (mailConfig) => {
     },
   ];
 
-  if (isGmailHost(mailConfig.host)) {
-    attempts.unshift(
-      {
-        ...mailConfig,
-        port: 587,
-        secure: false,
-      }
-    );
-  }
-
   if (mailConfig.forceIPv4) {
     attempts.push(
       ...attempts.map((attempt) => ({
@@ -224,11 +214,11 @@ const createTransportForAttempt = async (attempt) => {
 
 export const createMailTransporter = async (mailConfig = getMailConfig()) => {
   if (!mailConfig.isReady) {
-    throw new Error('Email is not configured. Set Gmail credentials in .env.');
+    throw new Error('Email is not configured. Set Brevo SMTP credentials in .env.');
   }
 
   if (!isEmailAddress(mailConfig.user)) {
-    throw new Error('SMTP username must be the full Gmail email address from GMAIL_USER.');
+    throw new Error('SMTP username must be the full email address.');
   }
 
   const failures = [];
@@ -254,7 +244,7 @@ export const createMailTransporter = async (mailConfig = getMailConfig()) => {
       });
 
       if (isAuthError(error)) break;
-      if (!isNetworkError(error) && !isGmailHost(attempt.host)) break;
+      if (!isNetworkError(error)) break;
     }
   }
 
@@ -264,7 +254,7 @@ export const createMailTransporter = async (mailConfig = getMailConfig()) => {
         `${failure.host}:${failure.port} secure=${failure.secure} ipv4=${failure.forceIPv4} - ${failure.message}`
     )
     .join(' | ');
-  throw new Error(`Gmail SMTP connection failed after ${failures.length} attempt(s). ${details}`);
+  throw new Error(`Email SMTP connection failed after ${failures.length} attempt(s). ${details}`);
 };
 
 export const closeMailTransporter = (transporter) => {
@@ -282,7 +272,7 @@ export const buildMailErrorPayload = (error) => {
     return {
       status: 503,
       body: {
-        message: 'Email is not configured. Set GMAIL_USER and GMAIL_APP_PASSWORD in backend/.env.',
+        message: 'Email is not configured. Set BREVO_SMTP_USER and BREVO_SMTP_KEY in backend/.env.',
         detail,
       },
     };
@@ -295,10 +285,10 @@ export const buildMailErrorPayload = (error) => {
     status: 502,
     body: {
       message: isAuthFailure
-        ? 'Gmail authentication failed. Use a Google App Password for GMAIL_APP_PASSWORD, not the normal Gmail password.'
+        ? 'Email authentication failed. Please check your Brevo SMTP User and Key.'
         : isNetworkFailure
-          ? 'Gmail SMTP connection failed. Check the server internet/firewall and SMTP port setting.'
-          : 'Gmail dispatch failed.',
+          ? 'Email SMTP connection failed. Check the server internet/firewall and SMTP port setting.'
+          : 'Email dispatch failed.',
       detail,
     },
   };

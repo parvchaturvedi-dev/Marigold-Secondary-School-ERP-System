@@ -138,6 +138,7 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
     { name: 'Application', icon: FileText },
     { name: 'Assignment', icon: ClipboardList },
     { name: 'Attendance', icon: CheckSquare },
+    { name: 'Admin Management', icon: UserCheck },
     { name: 'Biometric Attendance', icon: Contact },
     { 
       name: 'Class Desk', 
@@ -199,6 +200,7 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
       ]
     },
     { name: 'Users Management', icon: Lock },
+    { name: 'Vault', icon: Lock },
     { name: 'Subject Management', icon: BookOpen },
     { name: 'Settings', icon: Settings }
   ];
@@ -258,6 +260,7 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
     { name: 'Meetings', icon: Video },
     { name: 'Notices', icon: Bell },
     { name: 'Profile', icon: User },
+    { name: 'Vault', icon: Lock },
     { name: 'Subject Management', icon: BookOpen },
     { name: 'Settings', icon: Settings },
   ];
@@ -278,6 +281,7 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
     { name: 'Meetings', icon: Video },
     { name: 'Notices', icon: Bell },
     { name: 'Profile', icon: User },
+    { name: 'Vault', icon: Lock },
     { name: 'Settings', icon: Settings },
   ];
 
@@ -304,6 +308,7 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
     { name: 'Meetings', icon: Video },
     { name: 'Notices', icon: Bell },
     { name: 'Profile', icon: User },
+    { name: 'Vault', icon: Lock },
     { name: 'Settings', icon: Settings },
   ];
 

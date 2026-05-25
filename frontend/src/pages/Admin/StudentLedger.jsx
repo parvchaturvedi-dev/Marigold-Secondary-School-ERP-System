@@ -94,16 +94,16 @@ const StudentLedger = () => {
     const message = buildReceiptMessage(receipt);
 
     if (!message.to) {
-      alert('Guardian Gmail is missing for this receipt.');
+      alert('Guardian email is missing for this receipt.');
       return;
     }
 
     setIsSendingMail(true);
     try {
       await sendGmailMessages(message);
-      alert(`Receipt mailed successfully to ${message.to}.`);
+      if (mode === 'manual') alert('Receipt sent via email.');
     } catch (error) {
-      const prefix = mode === 'auto' ? 'Receipt was saved, but Gmail failed' : 'Receipt Gmail failed';
+      const prefix = mode === 'auto' ? 'Receipt was saved, but email failed' : 'Receipt email failed';
       alert(`${prefix}: ${error.message}`);
     } finally {
       setIsSendingMail(false);
@@ -133,16 +133,16 @@ const StudentLedger = () => {
     setFeeAssignmentNote('');
 
     if (!assignment.guardianEmail) {
-      alert('Total fee saved, but guardian Gmail is missing for this student.');
+      alert('Total fee saved, but guardian email is missing for this student.');
       return;
     }
 
     setIsSendingFeeAssignmentMail(true);
     try {
       await sendGmailMessages(buildFeeAssignmentNoticeMessage(assignment));
-      alert(`Total fee saved and Gmail notice sent to ${assignment.guardianEmail}.`);
+      alert(`Total fee saved and email notice sent to ${assignment.guardianEmail}.`);
     } catch (error) {
-      alert(`Total fee saved, but Gmail notice failed: ${error.message}`);
+      alert(`Total fee saved, but email notice failed: ${error.message}`);
     } finally {
       setIsSendingFeeAssignmentMail(false);
     }
@@ -282,7 +282,7 @@ const StudentLedger = () => {
                 </p>
               </div>
               <span className="text-[10px] font-black text-red-600 bg-red-50 border border-red-100 px-2 py-1 rounded-lg">
-                Gmail notice auto-sends
+                Email notice auto-sends
               </span>
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_1fr_1.4fr_auto] gap-3">
@@ -437,7 +437,7 @@ const StudentLedger = () => {
               <MessageSquare className="w-3.5 h-3.5 text-emerald-600" /> WhatsApp
             </button>
             <button type="button" onClick={() => sendReceiptMail(latestReceipt)} disabled={isSendingMail} className="flex items-center justify-center gap-1.5 text-[10px] font-black uppercase tracking-wider bg-neutral-100 hover:bg-neutral-200 text-neutral-800 p-2.5 rounded-xl border border-neutral-300 transition-all shadow-sm disabled:opacity-60">
-              <Mail className="w-3.5 h-3.5 text-red-500" /> {isSendingMail ? 'Sending...' : 'Mail'}
+              <Mail className="w-3.5 h-3.5 text-red-500" /> {isSendingMail ? 'Sending...' : 'Email'}
             </button>
           </div>
 

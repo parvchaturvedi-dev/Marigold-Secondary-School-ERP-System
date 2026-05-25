@@ -16,6 +16,7 @@ import leaveRequestRoutes from './routes/leaveRequests.js';
 import meetingRoutes from './routes/meetings.js';
 import moduleStateRoutes from './routes/moduleState.js';
 import notificationRoutes from './routes/notifications.js';
+import vaultRoutes from './routes/vault.js';
 import { connectMongo, getDbStatus } from './db.js';
 import { requireAuth } from './middleware/auth.js';
 import { setRealtimeServer, trackRealtimeSocket } from './realtime.js';
@@ -83,7 +84,7 @@ app.set('trust proxy', 1);
 app.use(corsMiddleware);
 app.options(/.*/, corsMiddleware);
 app.use(sessionMiddleware);
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '8mb' }));
 
 const io = new Server(server, {
   cors: {
@@ -128,6 +129,7 @@ app.use('/api/leave-requests', leaveRequestRoutes);
 app.use('/api/meetings', meetingRoutes);
 app.use('/api/module-state', moduleStateRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/vault', vaultRoutes);
 
 app.use((error, request, response, next) => {
   if (response.headersSent) {

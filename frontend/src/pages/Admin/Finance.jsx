@@ -238,16 +238,16 @@ const Finance = ({ setActivePage }) => {
     }
 
     if (!recipients.length) {
-      alert('No pending-fee Gmail recipients found.');
+      alert('No pending-fee email recipients found.');
       return;
     }
 
     setIsSendingReminder(true);
     try {
       const result = await sendGmailMessages(recipients.map(buildFeeReminderMessage));
-      alert(`Gmail reminders sent successfully to ${result.sent || recipients.length} guardian account(s).`);
+      alert(`Email reminders sent successfully to ${result.sent || recipients.length} guardian account(s).`);
     } catch (error) {
-      alert(`Gmail reminder failed: ${error.message}`);
+      alert(`Email reminder failed: ${error.message}`);
     } finally {
       setIsSendingReminder(false);
     }
@@ -257,7 +257,7 @@ const Finance = ({ setActivePage }) => {
     const receiptMessage = buildReceiptMessage(receipt);
 
     if (!receiptMessage.to) {
-      alert('Guardian Gmail is missing for this receipt.');
+      alert('Guardian email is missing for this receipt.');
       return;
     }
 
@@ -266,7 +266,7 @@ const Finance = ({ setActivePage }) => {
       await sendGmailMessages(receiptMessage);
       alert(`Receipt mailed successfully to ${receiptMessage.to}.`);
     } catch (error) {
-      alert(`Receipt Gmail failed: ${error.message}`);
+      alert(`Receipt email failed: ${error.message}`);
     } finally {
       setIsSendingReceiptMail(false);
     }
@@ -295,16 +295,16 @@ const Finance = ({ setActivePage }) => {
     setFeeAssignmentNote('');
 
     if (!assignment.guardianEmail) {
-      alert('Total fee saved, but guardian Gmail is missing for this student.');
+      alert('Total fee saved, but guardian email is missing for this student.');
       return;
     }
 
     setIsSendingFeeAssignmentMail(true);
     try {
       await sendGmailMessages(buildFeeAssignmentNoticeMessage(assignment));
-      alert(`Total fee saved and Gmail notice sent to ${assignment.guardianEmail}.`);
+      alert(`Total fee saved and email notice sent to ${assignment.guardianEmail}.`);
     } catch (error) {
-      alert(`Total fee saved, but Gmail notice failed: ${error.message}`);
+      alert(`Total fee saved, but email notice failed: ${error.message}`);
     } finally {
       setIsSendingFeeAssignmentMail(false);
     }
@@ -363,7 +363,7 @@ const Finance = ({ setActivePage }) => {
                 disabled={isSendingReminder}
                 className="flex items-center gap-1 text-[10px] font-black bg-neutral-100 hover:bg-neutral-200 px-3 py-2 rounded-xl transition-all disabled:opacity-60"
               >
-                <Mail className="w-3.5 h-3.5 text-red-500" /> Via Gmail
+                <Mail className="w-3.5 h-3.5 text-red-500" /> Via Email
               </button>
               <button
                 type="button"
@@ -629,7 +629,7 @@ const Finance = ({ setActivePage }) => {
                 </p>
               </div>
               <span className="text-[10px] font-black text-red-600 bg-red-50 border border-red-100 px-2 py-1 rounded-lg">
-                Gmail notice auto-sends
+                Email notice auto-sends
               </span>
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_1fr_1.4fr_auto] gap-3">
@@ -759,7 +759,7 @@ const Finance = ({ setActivePage }) => {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <button type="button" onClick={() => window.print()} className="flex items-center justify-center gap-1.5 text-[10px] font-black bg-neutral-100 border border-neutral-300 p-2.5 rounded-xl"><Printer className="w-3.5 h-3.5" /> Print</button>
             <button type="button" onClick={() => alert(`WhatsApp alert queued for ${latestReceipt.familyDetails?.contact || 'guardian'}.`)} className="flex items-center justify-center gap-1.5 text-[10px] font-black bg-neutral-100 border border-neutral-300 p-2.5 rounded-xl"><MessageSquare className="w-3.5 h-3.5 text-emerald-600" /> WhatsApp</button>
-            <button type="button" onClick={() => sendReceiptMail(latestReceipt)} disabled={isSendingReceiptMail} className="flex items-center justify-center gap-1.5 text-[10px] font-black bg-neutral-100 border border-neutral-300 p-2.5 rounded-xl disabled:opacity-60"><Mail className="w-3.5 h-3.5 text-red-500" /> {isSendingReceiptMail ? 'Sending...' : 'Gmail'}</button>
+            <button type="button" onClick={() => sendReceiptMail(latestReceipt)} disabled={isSendingReceiptMail} className="flex items-center justify-center gap-1.5 text-[10px] font-black bg-neutral-100 border border-neutral-300 p-2.5 rounded-xl disabled:opacity-60"><Mail className="w-3.5 h-3.5 text-red-500" /> {isSendingReceiptMail ? 'Sending...' : 'Email'}</button>
           </div>
           <button
             type="button"

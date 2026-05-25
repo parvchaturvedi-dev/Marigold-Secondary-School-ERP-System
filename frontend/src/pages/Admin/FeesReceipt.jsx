@@ -22,11 +22,11 @@ const FeesReceipt = ({ setActivePage }) => {
     }
   };
 
-  const handleGmailBroadcast = async () => {
+  const handleEmailBroadcast = async () => {
     const guardianEmail = receiptData?.familyDetails?.guardianEmail || receiptData?.familyDetails?.email;
 
     if (!guardianEmail) {
-      alert('Guardian Gmail is missing for this receipt.');
+      alert('Guardian email is missing for this receipt.');
       return;
     }
 
@@ -50,15 +50,13 @@ const FeesReceipt = ({ setActivePage }) => {
           'MGPS ERP Portal',
         ].join('\n'),
       });
-      alert(`Receipt mailed successfully to ${guardianEmail}.`);
+      alert('Receipt sent via email.');
     } catch (error) {
-      alert(`Receipt Gmail failed: ${error.message}`);
+      alert(`Receipt email failed: ${error.message}`);
     } finally {
       setIsSendingMail(false);
     }
   };
-
-  if (!receiptData) {
     return (
       <div className="flex flex-col items-center justify-center p-10 bg-white rounded-2xl border border-neutral-300 shadow-md">
         <p className="text-sm font-bold text-neutral-500 font-mono">No active receipt payload found in stream.</p>
@@ -174,7 +172,7 @@ const FeesReceipt = ({ setActivePage }) => {
           <MessageSquare className="w-4 h-4 text-emerald-600" /> WhatsApp Slip
         </button>
         <button onClick={handleGmailBroadcast} disabled={isSendingMail} className="flex items-center justify-center gap-2 text-xs font-black bg-white hover:bg-neutral-50 border border-neutral-300 p-3 rounded-xl transition-all shadow-sm disabled:opacity-60">
-          <Mail className="w-4 h-4 text-red-500" /> {isSendingMail ? 'Sending...' : 'Gmail Broadcast'}
+          <Mail className="w-4 h-4 text-red-500" /> {isSendingMail ? 'Sending...' : 'Email Broadcast'}
         </button>
         <button onClick={handleBack} className="flex items-center justify-center gap-2 text-xs font-black bg-neutral-900 hover:bg-neutral-800 text-white p-3 rounded-xl transition-all shadow-sm md:col-span-1">
           <ArrowLeft className="w-4 h-4" /> BACK TO LEDGER

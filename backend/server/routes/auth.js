@@ -53,7 +53,7 @@ const validatePasswordAccessOtp = ({ username, otp, requestedBy }) => {
 
 const sendMail = async ({ to, subject, text }) => {
   const mailConfig = getMailConfig();
-  if (!mailConfig.isReady) throw new Error('Email is not configured. Set Gmail credentials in .env.');
+  if (!mailConfig.isReady) throw new Error('Email is not configured. Set email credentials in .env.');
 
   const transporter = await createMailTransporter(mailConfig);
   try {
@@ -402,7 +402,7 @@ router.post('/users/send-credentials-all', ensureMongo, requireAuth, requireRole
   await syncIdentityUsersFromState();
   const mailConfig = getMailConfig();
   if (!mailConfig.isReady) {
-    handleMailError(response, new Error('Email is not configured. Set Gmail credentials in .env.'));
+    handleMailError(response, new Error('Email is not configured. Set email credentials in .env.'));
     return;
   }
 
@@ -424,7 +424,7 @@ router.post('/users/send-credentials-all', ensureMongo, requireAuth, requireRole
       }
 
       if (!email) {
-        skipped.push({ username: user.username, reason: 'Linked Gmail address is missing.' });
+        skipped.push({ username: user.username, reason: 'Linked email address is missing.' });
         continue;
       }
 
@@ -433,7 +433,7 @@ router.post('/users/send-credentials-all', ensureMongo, requireAuth, requireRole
         sent.push({ username: user.username, email, messageId: info.messageId || '' });
       } catch (error) {
         logSmtpError(error, { phase: 'send', username: user.username, to: email });
-        failed.push({ username: user.username, email, error: error?.message || 'Gmail dispatch failed.' });
+        failed.push({ username: user.username, email, error: error?.message || 'Email dispatch failed.' });
       }
     }
   } catch (error) {
@@ -467,7 +467,7 @@ router.post('/users/:username/request-password-otp', ensureMongo, requireAuth, r
   const email = getEmailForUser(user);
 
   if (!user || !email) {
-    response.status(404).json({ message: 'A linked Gmail address was not found for this user.' });
+    response.status(404).json({ message: 'A linked email address was not found for this user.' });
     return;
   }
 
@@ -516,7 +516,7 @@ router.post('/users/:username/send-credentials', ensureMongo, requireAuth, requi
   const email = getEmailForUser(user);
 
   if (!user || !email) {
-    response.status(404).json({ message: 'A linked Gmail address was not found for this user.' });
+    response.status(404).json({ message: 'A linked email address was not found for this user.' });
     return;
   }
 

@@ -1788,18 +1788,18 @@ const MarksManagementSection = ({ state, actor, role, session, onRefresh }) => {
     const messages = buildReportMessages(students);
 
     if (messages.length === 0) {
-      alert('No guardian Gmail addresses found for this class.');
+      alert('No guardian email addresses found for this class.');
       return;
     }
-
+    
     setIsSendingReports(true);
     try {
       const result = await sendGmailMessages(messages);
       const nextState = recordReportDelivery({ examId, className, channel, actor });
       onRefresh(nextState);
-      alert(`Gmail report cards sent successfully to ${result.sent} parent email group(s).`);
+      alert(`Email notices sent successfully to ${result.sent || messages.length} guardian account(s).`);
     } catch (error) {
-      alert(`Report card Gmail failed: ${error.message}`);
+      alert(`Email dispatch failed: ${error.message}`);
     } finally {
       setIsSendingReports(false);
     }

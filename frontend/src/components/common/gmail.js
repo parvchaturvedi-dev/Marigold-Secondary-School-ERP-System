@@ -17,7 +17,7 @@ export const sendGmailMessages = async (messages) => {
 
   if (!response.ok) {
     const detail = responseBody.detail ? ` ${responseBody.detail}` : '';
-    throw new Error(`${responseBody.message || 'Gmail dispatch failed.'}${detail}`);
+    throw new Error(`${responseBody.message || 'Email dispatch failed.'}${detail}`);
   }
 
   return responseBody;

@@ -238,8 +238,8 @@ const ClerkFormModal = ({ title, btnText, formValues, onInputChange, onFileChang
 
         <div className="grid grid-cols-2 gap-3">
           <div className="flex flex-col gap-1.5">
-            <label className="text-[#555555]">Official Gmail Address <span className="text-red-500">*</span></label>
-            <input type="email" name="email" required value={formValues.email} onChange={onInputChange} placeholder="name@gmail.com" className="w-full p-3 bg-[#EAEAEA] border border-[#C8C8C8] rounded-xl outline-none focus:border-black font-medium" />
+            <label className="text-[#555555]">Official Email Address <span className="text-red-500">*</span></label>
+            <input type="email" name="email" required value={formValues.email} onChange={onInputChange} placeholder="name@example.com" className="w-full p-3 bg-[#EAEAEA] border border-[#C8C8C8] rounded-xl outline-none focus:border-black font-medium" />
           </div>
           <div className="flex flex-col gap-1.5">
             <label className="text-[#555555]">Mobile Number <span className="text-red-500">*</span></label>

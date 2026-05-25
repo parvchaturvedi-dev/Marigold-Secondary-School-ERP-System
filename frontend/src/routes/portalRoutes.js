@@ -22,6 +22,7 @@ export const portalRoutes = {
       Application: lazyPage('../pages/Admin/Application'),
       Assignment: lazyPage('../pages/Admin/Assignment'),
       Attendance: lazyPage('../pages/Admin/Attendance'),
+      'Admin Management': lazyPage('../pages/Admin/AdminManagement'),
       'Biometric Attendance': lazyPage('../pages/Admin/BiometricAttendance'),
       'Class Management': lazyPage('../pages/Admin/ClassManagement'),
       'Clerk Management': lazyPage('../pages/Admin/ClerkManagement'),
@@ -57,6 +58,7 @@ export const portalRoutes = {
       'Class Preferences': lazyPage('../pages/Admin/ClassPreferences'),
       'Fees Receipt': lazyPage('../pages/Admin/FeesReceipt'),
       'Users Management': lazyPage('../pages/Admin/UsersManagement'),
+      Vault: lazyPage('../pages/Admin/Vault'),
     },
   },
   clerk: {
@@ -93,6 +95,7 @@ export const portalRoutes = {
       'Teacher Assignment': lazyPage('../pages/Clerk/TeacherAssignment'),
       'Teacher Management': lazyPage('../pages/Clerk/TeacherManagement'),
       'Teacher Profile': lazyPage('../pages/Clerk/TeacherProfile'),
+      Vault: lazyPage('../pages/Clerk/Vault'),
     },
   },
   student: {
@@ -114,6 +117,7 @@ export const portalRoutes = {
       Notices: lazyPage('../pages/Student/Notices'),
       Profile: lazyPage('../pages/Student/Profile'),
       Settings: lazyPage('../pages/Student/Settings'),
+      Vault: lazyPage('../pages/Student/Vault'),
     },
   },
   teacher: {
@@ -136,6 +140,7 @@ export const portalRoutes = {
       Notices: lazyPage('../pages/Teacher/Notices'),
       Profile: lazyPage('../pages/Teacher/Profile'),
       Settings: lazyPage('../pages/Teacher/Settings'),
+      Vault: lazyPage('../pages/Teacher/Vault'),
     },
   },
 };

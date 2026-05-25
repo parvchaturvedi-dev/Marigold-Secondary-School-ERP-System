@@ -434,7 +434,7 @@ const UsersManagement = ({ session }) => {
                           disabled={isSendingCredentials[user.username]}
                           className="mt-2 rounded-lg border border-[#C8C8C8] bg-white px-2 py-1 text-[10px] font-black text-[#1A1A1A] hover:bg-[#EAEAEA] disabled:opacity-60"
                         >
-                          {isSendingCredentials[user.username] ? 'Sending...' : 'Send Credentials via Gmail'}
+                          {isSendingCredentials[user.username] ? 'Sending...' : 'Send Credentials via Email'}
                         </button>
                       </td>
                       <td className="px-4 py-3">
