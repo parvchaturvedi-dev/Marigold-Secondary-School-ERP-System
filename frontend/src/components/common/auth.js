@@ -207,7 +207,8 @@ export const authenticateUser = async ({ username, password }) =>
 
 export const fetchCurrentSession = async () => {
   try {
-    return await apiFetch('/auth/session');
+    const session = await apiFetch('/auth/session');
+    return session?.authenticated === false ? null : session;
   } catch {
     return null;
   }

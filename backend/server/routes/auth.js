@@ -3,7 +3,7 @@ import { randomInt } from 'crypto';
 import multer from 'multer';
 import User from '../models/User.js';
 import { isMongoConnected } from '../db.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
+import { optionalAuth, requireAuth, requireRole } from '../middleware/auth.js';
 import { createAuthToken } from '../utils/authToken.js';
 import {
   buildMailErrorPayload,
@@ -618,8 +618,13 @@ router.patch('/profile-photo', ensureMongo, requireAuth, upload.single('photo'),
   saveSessionAuth(request, payload, response);
 });
 
-router.get('/session', requireAuth, async (request, response) => {
+router.get('/session', optionalAuth, async (request, response) => {
   try {
+    if (!request.auth?.username) {
+      response.json({ authenticated: false });
+      return;
+    }
+
     if (!isMongoConnected()) {
       if (request.session?.auth?.username) {
         response.json(request.session.auth);
