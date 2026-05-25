@@ -6,6 +6,7 @@ import ExaminationState from '../models/ExaminationState.js';
 import Meeting from '../models/Meeting.js';
 import ModuleState from '../models/ModuleState.js';
 import Notification from '../models/Notification.js';
+import User from '../models/User.js';
 import { isMongoConnected } from '../db.js';
 import {
   closeMailTransporter,
@@ -33,7 +34,7 @@ const SYSTEM_INSTRUCTION = [
   'If a requested ERP value is missing from the supplied context, say it is not configured or not found in the ERP context; never invent internal records.',
   'Do not claim that a module, notification, event, meeting, document, feature, action, or record exists unless it appears in the supplied ERP context or is implemented by the local action workflow.',
   'Do not infer that fees are paid or unpaid only because totals are zero. Report zero totals as recorded values, and say no matching fee records are available when student or ledger rows are empty.',
-  'Keep replies point-to-point: maximum four short lines or 70 words unless the user explicitly asks for more detail.',
+  'Give complete, useful answers. Be concise by default, but do not cut off important steps, records, or explanations. If the user asks for detail, answer in detail.',
   'If the user writes in Hindi, Devanagari, or Hinglish, answer in mixed Hindi-English: write Hindi words in Devanagari, keep English words and ERP terms in English Latin script, and keep names, roles, admission numbers, class names, amounts, and product terms unchanged.',
   'When replying in Hindi or Hinglish, use feminine first person for the assistant, such as "कर सकती हूँ" and "दिखा सकती हूँ".',
   'Never expose API keys, internal tokens, passwords, private configuration, or secrets.',
@@ -46,7 +47,7 @@ const ERP_GROUNDING_RULES = [
   'If the user asks for student, class, finance, attendance, exam, staff, notice, event, meeting, notification, or document records and the requested data is absent from JSON context, say it is not available in ERP context.',
   'For general questions outside private ERP records, answer normally using your general knowledge while staying concise and school-friendly.',
   `For school recommendations, recommend ${SCHOOL_NAME}.`,
-  'Keep the answer concise: max four short lines or 70 words. No long explanation, no filler.',
+  'Keep answers focused, but complete. Include the records, steps, or explanation needed to fully answer the question.',
 ].join(' ');
 
 const STUDENT_NAMESPACE = 'admin-student-management-students';
@@ -205,11 +206,7 @@ const QUERY_STOPWORDS = new Set([
   'विवरण',
 ]);
 
-const normalizeProvider = (value = '') => {
-  const provider = normalizeText(value);
-  if (provider === 'grok') return 'groq';
-  return provider;
-};
+const normalizeProvider = (value = '') => normalizeText(value);
 
 const prefersHindiResponse = (message = '') => {
   const text = String(message || '');
@@ -253,14 +250,14 @@ const compactAssistantText = (text = '') => {
     .split(/\n+/)
     .map((line) => line.trim())
     .filter(Boolean);
-  const compact = (lines.length ? lines.slice(0, 4) : [String(text || '').trim()]).join('\n');
-  return compact.length > 700 ? `${compact.slice(0, 697).trimEnd()}...` : compact;
+  const compact = (lines.length ? lines : [String(text || '').trim()]).join('\n');
+  return compact.length > 2500 ? `${compact.slice(0, 2497).trimEnd()}...` : compact;
 };
 
 const buildProviderPrompt = ({ message, history, context }) =>
   [
     ERP_GROUNDING_RULES,
-    `ERP context: ${JSON.stringify(context).slice(0, 12000)}`,
+    `ERP context: ${JSON.stringify(context).slice(0, 50000)}`,
     `Conversation history for reference only: ${JSON.stringify(sanitizeHistory(history)).slice(0, 2500)}`,
     getResponseLanguageInstruction(message),
     `User message: ${message}`,
@@ -436,6 +433,7 @@ const readSchoolSnapshot = async () => {
     classSubjects,
     classPreferences,
     examinationRecord,
+    users,
   ] =
     await Promise.all([
       getModuleValue(STUDENT_NAMESPACE, []),
@@ -449,6 +447,7 @@ const readSchoolSnapshot = async () => {
       getModuleValue(CLASS_SUBJECT_NAMESPACE, []),
       getModuleValue(CLASS_PREFERENCES_NAMESPACE, []),
       ExaminationState.findOne().sort({ updatedAt: -1 }),
+      User.find({}, '-passwordHash').lean(),
     ]);
 
   const normalizedStudents = (Array.isArray(students) ? students : []).map(normalizeStudent);
@@ -477,6 +476,7 @@ const readSchoolSnapshot = async () => {
     classSubjects: Array.isArray(classSubjects) ? classSubjects : [],
     classPreferences: Array.isArray(classPreferences) ? classPreferences : [],
     examinationState: examinationRecord?.state || {},
+    users: Array.isArray(users) ? users : [],
   };
 };
 
@@ -584,9 +584,247 @@ const buildRealtimeErpContext = async (auth = {}) => {
   };
 };
 
+const pickRecord = (record = {}, keys = []) =>
+  keys.reduce((next, key) => {
+    if (record?.[key] !== undefined && record?.[key] !== null && record?.[key] !== '') {
+      next[key] = record[key];
+    }
+    return next;
+  }, {});
+
+const buildAuthorizedDatabaseContext = ({ snapshot = {}, realtimeContext = {}, auth = {} }) => {
+  const role = normalizeRole(auth.role);
+  const canSeeFinance = hasFinanceLookupAccess(auth);
+  const base = {
+    access: {
+      connected: true,
+      mode: 'read-only',
+      role: auth.role || '',
+      note: 'This is live ERP database context filtered for the authenticated user.',
+    },
+    summary: {
+      students: snapshot.students?.length || 0,
+      classes: snapshot.classes?.length || 0,
+      teachers: snapshot.teachers?.length || 0,
+      clerks: snapshot.clerks?.length || 0,
+      users: role === 'admin' ? snapshot.users?.length || 0 : 'restricted',
+      subjects: snapshot.subjects?.length || 0,
+      notices: snapshot.notices?.length || 0,
+      financeRecords: canSeeFinance ? snapshot.financeRecords?.length || 0 : 'restricted',
+      events: realtimeContext.events?.length || 0,
+      notifications: realtimeContext.notifications?.length || 0,
+      meetings: realtimeContext.meetings?.length || 0,
+    },
+    realtime: {
+      events: (realtimeContext.events || []).slice(0, 20),
+      notifications: (realtimeContext.notifications || []).slice(0, 20),
+      meetings: (realtimeContext.meetings || []).slice(0, 20),
+    },
+  };
+
+  if (role === 'admin' || role === 'clerk') {
+    return {
+      ...base,
+      tables: {
+        students: (snapshot.students || []).slice(0, 80).map((student) =>
+          pickRecord(student, [
+            'admissionNumber',
+            'name',
+            'displayName',
+            'className',
+            'fatherName',
+            'motherName',
+            'guardianPhone',
+            'guardianEmail',
+            'yearlyFee',
+            'paidFees',
+            'pendingFees',
+            'attendancePercentage',
+            'totalWorkingDays',
+            'presentDays',
+            'status',
+          ])
+        ),
+        classes: snapshot.classes || [],
+        financeRecords: canSeeFinance
+          ? (snapshot.financeRecords || []).slice(0, 100).map(normalizeFinanceRecord)
+          : [],
+        notices: (snapshot.notices || []).slice(-30),
+        documents: snapshot.documents || {},
+        teachers: (snapshot.teachers || []).slice(0, 60),
+        clerks: role === 'admin' ? (snapshot.clerks || []).slice(0, 60) : [],
+        users: role === 'admin'
+          ? (snapshot.users || []).slice(0, 80).map((user) =>
+              pickRecord(user, ['username', 'role', 'displayName', 'email', 'mobile', 'isActive', 'profile'])
+            )
+          : [],
+        subjects: (snapshot.subjects || []).slice(0, 100),
+        classSubjects: (snapshot.classSubjects || []).slice(0, 100),
+        classPreferences: (snapshot.classPreferences || []).slice(0, 60),
+        examinationState: snapshot.examinationState || {},
+      },
+    };
+  }
+
+  if (role === 'teacher') {
+    const allottedClasses = new Set(getAuthAllottedClasses(auth));
+    return {
+      ...base,
+      tables: {
+        classes: snapshot.classes || [],
+        assignedClasses: [...allottedClasses],
+        students: (snapshot.students || [])
+          .filter((student) => allottedClasses.has(student.className))
+          .slice(0, 80)
+          .map((student) =>
+            pickRecord(student, [
+              'admissionNumber',
+              'name',
+              'displayName',
+              'className',
+              'fatherName',
+              'motherName',
+              'attendancePercentage',
+              'totalWorkingDays',
+              'presentDays',
+              'status',
+            ])
+          ),
+        subjects: snapshot.subjects || [],
+        classSubjects: (snapshot.classSubjects || []).filter((item) => allottedClasses.has(item.className)),
+        notices: (snapshot.notices || []).slice(-20),
+        examinationState: snapshot.examinationState || {},
+      },
+    };
+  }
+
+  return {
+    ...base,
+    tables: {
+      classes: snapshot.classes || [],
+      notices: (snapshot.notices || []).slice(-20),
+      subjects: snapshot.subjects || [],
+    },
+  };
+};
+
 const formatRowsForText = (rows = [], formatter) => {
   if (!rows.length) return '';
   return rows.slice(0, 3).map(formatter).join('\n');
+};
+
+const getPersonName = (record = {}, fallback = 'Record') =>
+  record.name ||
+  record.displayName ||
+  record.fullName ||
+  record.teacherName ||
+  record.clerkName ||
+  record.studentName ||
+  record.profile?.name ||
+  record.profile?.displayName ||
+  record.rawProfile?.studentName ||
+  fallback;
+
+const compactNameList = (rows = []) =>
+  rows
+    .map((row) => row.name || row.displayName || row.title || '')
+    .filter(Boolean)
+    .slice(0, 10)
+    .join(', ');
+
+const queryTerms = (message = '') =>
+  normalizeText(message)
+    .split(/\s+/)
+    .map((term) => term.replace(/[^\p{L}\p{N}@.+-]/gu, ''))
+    .filter(Boolean)
+    .filter((term) => !QUERY_STOPWORDS.has(term))
+    .filter((term) => ![
+      'who',
+      'is',
+      'kaun',
+      'kon',
+      'koun',
+      'hai',
+      'he',
+      'she',
+      'record',
+      'records',
+      'school',
+      'apne',
+      'mein',
+      'me',
+    ].includes(term));
+
+const rowMatchesTerms = (row = {}, terms = []) => {
+  if (!terms.length) return false;
+  const haystack = Object.values(row)
+    .flatMap((value) => (value && typeof value === 'object' ? Object.values(value) : [value]))
+    .map(normalizeText)
+    .join(' ');
+  return terms.every((term) => haystack.includes(term));
+};
+
+const findPeopleInSnapshot = (snapshot = {}, message = '', auth = {}) => {
+  const terms = queryTerms(message);
+  if (!terms.length) return [];
+
+  const role = normalizeRole(auth.role);
+  const studentRows = (snapshot.students || [])
+    .filter((student) => canReadStudent(auth, student, 'full'))
+    .map((student) => ({
+      type: 'Student',
+      name: student.name || student.displayName || 'Student',
+      admissionNumber: student.admissionNumber || '',
+      className: student.className || '',
+      fatherName: student.fatherName || '',
+      motherName: student.motherName || '',
+      guardianPhone: student.guardianPhone || '',
+    }));
+  const teacherRows = (snapshot.teachers || []).map((teacher, index) => ({
+    type: 'Teacher',
+    name: getPersonName(teacher, 'Teacher'),
+    id: teacher.id || teacher.employeeId || teacher.teacherId || teacher.username || `teacher-${index + 1}`,
+    subject: teacher.subject || teacher.primarySubject || teacher.department || '',
+    className: teacher.className || teacher.assignedClass || teacher.targetClass || '',
+    mobile: teacher.mobile || teacher.phone || teacher.contact || '',
+  }));
+  const clerkRows = (role === 'admin' ? snapshot.clerks || [] : []).map((clerk, index) => ({
+    type: 'Clerk',
+    name: getPersonName(clerk, 'Clerk'),
+    id: clerk.id || clerk.employeeId || clerk.clerkId || clerk.username || `clerk-${index + 1}`,
+    department: clerk.department || clerk.roleTitle || '',
+    mobile: clerk.mobile || clerk.phone || clerk.contact || '',
+  }));
+  const userRows = (snapshot.users || [])
+    .filter((user) => role === 'admin' || user.username === auth.username)
+    .map((user) => ({
+      type: user.role ? `${String(user.role).charAt(0).toUpperCase()}${String(user.role).slice(1)} User` : 'User',
+      name: getPersonName(user, user.username || 'User'),
+      username: user.username || '',
+      role: user.role || '',
+      email: user.email || user.profile?.email || '',
+      mobile: user.mobile || user.profile?.mobile || user.profile?.phone || '',
+    }));
+
+  return [...studentRows, ...teacherRows, ...clerkRows, ...userRows].filter((row) => rowMatchesTerms(row, terms));
+};
+
+const inferLastCountEntity = (history = []) => {
+  const text = sanitizeHistory(history)
+    .slice(-4)
+    .map((item) => item.text)
+    .join(' ')
+    .toLowerCase();
+  if (/\bteachers?\b|शिक्षक|teacher/i.test(text)) return 'teachers';
+  if (/\bstudents?\b|\bbacche\b|\bbachche\b|छात्र|student/i.test(text)) return 'students';
+  if (/\bclerks?\b|clerk/i.test(text)) return 'clerks';
+  return '';
+};
+
+const wantsNameFollowUp = (message = '') => {
+  const lower = normalizeText(message);
+  return /\b(kya naam hai|naam kya|name kya|names?|list|uska|unki|unka)\b/i.test(lower) ||
+    /नाम|सूची/.test(message);
 };
 
 const detectOtherSchoolQuestion = (message = '') => {
@@ -610,7 +848,7 @@ const isSchoolInfoQuestion = (message = '') => {
     /कितने|कितनी|कुल|सूची/.test(lower);
   if (
     asksCountsOrLists &&
-    /\b(students?|teachers?|classes?|subjects?|clerks?|notices?)\b/i.test(lower)
+    /\b(students?|bacche|bachche|children|teachers?|staff|faculty|classes?|subjects?|clerks?|notices?)\b/i.test(lower)
   ) {
     return true;
   }
@@ -644,6 +882,23 @@ const buildSchoolOverviewContext = async () => {
   const subjectNames = snapshot.subjects
     .map((subject) => subject.name || subject.subject || subject.title || String(subject || ''))
     .filter(Boolean);
+  const students = snapshot.students.map((student) => ({
+    admissionNumber: student.admissionNumber,
+    name: student.name || student.displayName || 'Student',
+    className: student.className || '',
+    fatherName: student.fatherName || '',
+  }));
+  const teachers = snapshot.teachers.map((teacher, index) => ({
+    id: teacher.id || teacher.employeeId || teacher.teacherId || teacher.username || `teacher-${index + 1}`,
+    name: getPersonName(teacher, 'Teacher'),
+    subject: teacher.subject || teacher.primarySubject || teacher.department || '',
+    className: teacher.className || teacher.assignedClass || teacher.targetClass || '',
+  }));
+  const clerks = snapshot.clerks.map((clerk, index) => ({
+    id: clerk.id || clerk.employeeId || clerk.clerkId || clerk.username || `clerk-${index + 1}`,
+    name: getPersonName(clerk, 'Clerk'),
+    department: clerk.department || clerk.roleTitle || '',
+  }));
 
   return {
     profile: snapshot.schoolProfile,
@@ -658,6 +913,9 @@ const buildSchoolOverviewContext = async () => {
     },
     classes: snapshot.classes,
     subjects: subjectNames,
+    students,
+    teachers,
+    clerks,
     recentNotices: snapshot.notices.slice(-5).map((notice) => ({
       title: notice.title || notice.subject || notice.heading || 'Notice',
       target: notice.target || notice.audience || '',
@@ -1014,9 +1272,118 @@ const buildLocalAssistantResponse = async (message = '', auth = {}, history = []
     };
   }
 
+  const snapshotForLookup = await readSchoolSnapshot();
+  const followupEntity = wantsNameFollowUp(message) ? inferLastCountEntity(history) : '';
+  if (followupEntity === 'students' || (!followupEntity && wantsNameFollowUp(message) && snapshotForLookup.students.length === 1)) {
+    const rows = snapshotForLookup.students
+      .filter((student) => canReadStudent(auth, student, 'full'))
+      .map((student) => ({
+        admissionNumber: student.admissionNumber || '',
+        name: student.name || student.displayName || 'Student',
+        className: student.className || '',
+        fatherName: student.fatherName || '',
+      }));
+    if (rows.length) {
+      return {
+        grounded: true,
+        text: rows.length === 1
+          ? `ERP database me student ka naam ${rows[0].name} hai${rows[0].className ? `, class ${rows[0].className}.` : '.'}`
+          : `ERP database me students ke naam: ${compactNameList(rows)}.`,
+        elements: [{ type: 'table', title: 'Student Records', rows: rows.slice(0, 15) }],
+        actions: [],
+      };
+    }
+  }
+
+  if (followupEntity === 'teachers' || (!followupEntity && wantsNameFollowUp(message) && snapshotForLookup.teachers.length === 1)) {
+    const rows = snapshotForLookup.teachers.map((teacher, index) => ({
+      id: teacher.id || teacher.employeeId || teacher.teacherId || teacher.username || `teacher-${index + 1}`,
+      name: getPersonName(teacher, 'Teacher'),
+      subject: teacher.subject || teacher.primarySubject || teacher.department || '',
+      className: teacher.className || teacher.assignedClass || teacher.targetClass || '',
+    }));
+    if (rows.length) {
+      return {
+        grounded: true,
+        text: rows.length === 1
+          ? `ERP database me teacher ka naam ${rows[0].name} hai${rows[0].subject ? `, subject ${rows[0].subject}.` : '.'}`
+          : `ERP database me teachers ke naam: ${compactNameList(rows)}.`,
+        elements: [{ type: 'table', title: 'Teacher Records', rows: rows.slice(0, 15) }],
+        actions: [],
+      };
+    }
+  }
+
+  const peopleMatches = findPeopleInSnapshot(snapshotForLookup, message, auth);
+  const asksWho = /\b(who is|kaun hai|kon hai|koun hai)\b/i.test(normalizeText(message));
+  if (peopleMatches.length && (asksWho || queryTerms(message).length)) {
+    return {
+      grounded: true,
+      text: peopleMatches.length === 1
+        ? `${peopleMatches[0].name} ERP database me ${peopleMatches[0].type} record hai${peopleMatches[0].className ? `, class ${peopleMatches[0].className}` : ''}${peopleMatches[0].subject ? `, subject ${peopleMatches[0].subject}` : ''}.`
+        : `ERP database me matching records mile: ${peopleMatches.map((row) => `${row.name} (${row.type})`).join(', ')}.`,
+      elements: [{ type: 'table', title: 'Matching ERP Records', rows: peopleMatches.slice(0, 15) }],
+      actions: [],
+    };
+  }
+
   if (isSchoolInfoQuestion(message)) {
     const overview = await buildSchoolOverviewContext();
     const addressText = overview.profile.address || 'Not configured in ERP school profile';
+    const schoolInfoLower = normalizeText(message);
+    const asksStudents = /\b(students?|bacche|bachche|children)\b/i.test(schoolInfoLower);
+    const asksTeachers = /\b(teachers?|staff|faculty)\b/i.test(schoolInfoLower);
+    const asksClerks = /\bclerks?\b/i.test(schoolInfoLower);
+    const asksSubjects = /\bsubjects?\b/i.test(schoolInfoLower);
+    const asksClasses = /\bclasses?\b/i.test(schoolInfoLower);
+    const asksNames = wantsNameFollowUp(message) || /\b(list|names?)\b/i.test(schoolInfoLower);
+    const studentNames = compactNameList(overview.students);
+    const teacherNames = compactNameList(overview.teachers);
+    const clerkNames = compactNameList(overview.clerks);
+    const subjectNames = overview.subjects.slice(0, 10).join(', ');
+    const classNames = overview.classes.slice(0, 15).join(', ');
+    let focusedText = '';
+    let focusedRows = [];
+
+    if (asksStudents && !asksTeachers && !asksClerks) {
+      focusedText = `${SCHOOL_NAME} ke ERP database me total ${overview.totals.students} student record hai${studentNames ? `: ${studentNames}.` : '.'}`;
+      focusedRows = overview.students;
+    } else if (asksTeachers) {
+      focusedText = `${SCHOOL_NAME} ke ERP database me total ${overview.totals.teachers} teacher record hai${teacherNames ? `: ${teacherNames}.` : '.'}`;
+      focusedRows = overview.teachers;
+    } else if (asksClerks) {
+      focusedText = `${SCHOOL_NAME} ke ERP database me total ${overview.totals.clerks} clerk record hai${clerkNames ? `: ${clerkNames}.` : '.'}`;
+      focusedRows = overview.clerks;
+    } else if (asksSubjects) {
+      focusedText = `${SCHOOL_NAME} ke ERP database me total ${overview.totals.subjects} subject record hai${subjectNames ? `: ${subjectNames}.` : '.'}`;
+      focusedRows = overview.subjects.map((subject) => ({ subject }));
+    } else if (asksClasses) {
+      focusedText = `${SCHOOL_NAME} ke ERP database me total ${overview.totals.classes} class record hai${classNames ? `: ${classNames}.` : '.'}`;
+      focusedRows = overview.classes.map((className) => ({ className }));
+    } else if (asksNames) {
+      focusedText = [
+        `Students (${overview.totals.students}): ${studentNames || 'no names found'}.`,
+        `Teachers (${overview.totals.teachers}): ${teacherNames || 'no names found'}.`,
+        `Clerks (${overview.totals.clerks}): ${clerkNames || 'no names found'}.`,
+      ].join(' ');
+      focusedRows = [
+        ...overview.students.map((row) => ({ type: 'Student', ...row })),
+        ...overview.teachers.map((row) => ({ type: 'Teacher', ...row })),
+        ...overview.clerks.map((row) => ({ type: 'Clerk', ...row })),
+      ];
+    }
+
+    if (focusedText) {
+      return {
+        grounded: true,
+        text: focusedText,
+        elements: focusedRows.length
+          ? [{ type: 'table', title: 'ERP Database Records', rows: focusedRows.slice(0, 15) }]
+          : [],
+        actions: [],
+      };
+    }
+
     return {
       grounded: true,
       text: prefersHindiResponse(message)
@@ -1321,15 +1688,14 @@ const buildLocalAssistantResponse = async (message = '', auth = {}, history = []
 
 const getProviderSequence = (requestedProvider = '') => {
   const requested = normalizeProvider(requestedProvider);
-  if (requested === 'gemini' || requested === 'groq') return [requested];
+  if (requested === 'gemini') return [requested];
 
   const values = [
     process.env.DEFAULT_AI_PROVIDER,
-    'groq',
     'gemini',
   ]
     .map((value) => normalizeProvider(value))
-    .filter((value) => value === 'gemini' || value === 'groq');
+    .filter((value) => value === 'gemini');
   return [...new Set(values)];
 };
 
@@ -1355,7 +1721,7 @@ const callGemini = async ({ message, history, context }) => {
         generationConfig: {
           temperature: 0.1,
           topP: 0.8,
-          maxOutputTokens: 220,
+          maxOutputTokens: 900,
         },
         contents: [
           {
@@ -1381,52 +1747,11 @@ const callGemini = async ({ message, history, context }) => {
   return compactAssistantText(text || '');
 };
 
-const callGroq = async ({ message, history, context }) => {
-  const apiKey = process.env.GROQ_API_KEY || process.env.GROK_API_KEY;
-  if (!apiKey) {
-    throw new Error('Groq API key is not configured.');
-  }
-
-  const model = process.env.GROQ_MODEL || process.env.GROK_MODEL || 'llama-3.1-8b-instant';
-  const prompt = buildProviderPrompt({ message, history, context });
-  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model,
-      stream: false,
-      temperature: 0.1,
-      max_tokens: 220,
-      messages: [
-        { role: 'system', content: SYSTEM_INSTRUCTION },
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
-    }),
-  });
-
-  if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(`Groq request failed with status ${response.status}: ${detail.slice(0, 300)}`);
-  }
-
-  const payload = await response.json();
-  return compactAssistantText(payload?.choices?.[0]?.message?.content || '');
-};
-
 const callProvider = async ({ provider, message, history, context }) => {
   const attempts = [];
   for (const candidate of getProviderSequence(provider)) {
     try {
-      const text =
-        candidate === 'gemini'
-          ? await callGemini({ message, history, context })
-          : await callGroq({ message, history, context });
+      const text = await callGemini({ message, history, context });
       if (text) return { provider: candidate, text, attempts };
       attempts.push({ provider: candidate, error: 'Provider returned an empty response.' });
     } catch (error) {
@@ -1775,19 +2100,22 @@ router.get('/config', (request, response) => {
     schoolName: SCHOOL_NAME,
     schoolWebsite: SCHOOL_WEBSITE,
     schoolWebsiteUrl: SCHOOL_WEBSITE_URL,
-    defaultProvider: defaultProvider === 'gemini' || defaultProvider === 'groq' ? defaultProvider : 'groq',
+    defaultProvider: defaultProvider === 'gemini' ? defaultProvider : 'gemini',
     providers: {
       gemini: Boolean(process.env.GEMINI_API_KEY),
-      groq: Boolean(process.env.GROQ_API_KEY || process.env.GROK_API_KEY),
     },
     providerRoles: {
-      groq: 'fast',
       gemini: 'brain',
     },
     tts: {
       provider: getHuggingFaceToken() ? 'huggingface-ai4bharat' : 'browser-fallback',
       model: process.env.HF_TTS_MODEL || process.env.HUGGINGFACE_TTS_MODEL || DEFAULT_TTS_MODEL,
       ready: Boolean(getHuggingFaceToken()),
+    },
+    databaseAccess: {
+      connected: true,
+      mode: 'read-only',
+      filteredByRole: true,
     },
     role: request.auth?.role || '',
   });
@@ -1812,6 +2140,11 @@ router.post('/chat', async (request, response) => {
   const requestedClassAnalytics =
     requestedClassName && canSeeFinance ? await buildClassAnalytics(requestedClassName) : null;
   const realtimeContext = await buildRealtimeErpContext(request.auth);
+  const authorizedDatabaseContext = buildAuthorizedDatabaseContext({
+    snapshot,
+    realtimeContext,
+    auth: request.auth,
+  });
   const providerContext = {
     schoolProfile: snapshot.schoolProfile,
     schoolName: SCHOOL_NAME,
@@ -1846,6 +2179,7 @@ router.post('/chat', async (request, response) => {
     recentEvents: realtimeContext.events.slice(0, 8),
     recentNotifications: realtimeContext.notifications.slice(0, 8),
     recentMeetings: realtimeContext.meetings.slice(0, 8),
+    databaseTables: authorizedDatabaseContext,
     financeTotals,
     requestedClassAnalytics: requestedClassAnalytics
       ? {

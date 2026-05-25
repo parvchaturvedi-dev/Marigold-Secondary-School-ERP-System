@@ -102,17 +102,17 @@ const resolveIPv4Host = async (host, timeoutMs) => {
 };
 
 export const getMailConfig = () => {
-  const user = String(firstEnv('GMAIL_USER', 'EMAIL_USER')).trim();
-  const pass = normalizePassword(firstEnv('GMAIL_APP_PASSWORD', 'EMAIL_PASS'));
+  const user = String(firstEnv('BREVO_SMTP_USER', 'GMAIL_USER', 'EMAIL_USER')).trim();
+  const pass = normalizePassword(firstEnv('BREVO_SMTP_KEY', 'GMAIL_APP_PASSWORD', 'EMAIL_PASS'));
   const fromName = String(firstEnv('EMAIL_FROM_NAME', 'GMAIL_FROM_NAME') || DEFAULT_FROM_NAME).trim();
-  const host = String(firstEnv('GMAIL_SMTP_HOST', 'EMAIL_SMTP_HOST', 'SMTP_HOST') || DEFAULT_SMTP_HOST).trim();
+  const host = String(firstEnv('BREVO_SMTP_HOST', 'GMAIL_SMTP_HOST', 'EMAIL_SMTP_HOST', 'SMTP_HOST') || DEFAULT_SMTP_HOST).trim();
   const configuredPort = parsePositiveInteger(
-    firstEnv('GMAIL_SMTP_PORT', 'EMAIL_SMTP_PORT', 'SMTP_PORT'),
+    firstEnv('BREVO_SMTP_PORT', 'GMAIL_SMTP_PORT', 'EMAIL_SMTP_PORT', 'SMTP_PORT'),
     DEFAULT_SMTP_PORT
   );
   const port = isGmailHost(host) ? 587 : configuredPort;
   const configuredSecure = parseBoolean(
-    firstEnv('GMAIL_SMTP_SECURE', 'EMAIL_SMTP_SECURE', 'SMTP_SECURE'),
+    firstEnv('BREVO_SMTP_SECURE', 'GMAIL_SMTP_SECURE', 'EMAIL_SMTP_SECURE', 'SMTP_SECURE'),
     port === 465
   );
   const secure = isGmailHost(host) ? false : configuredSecure;

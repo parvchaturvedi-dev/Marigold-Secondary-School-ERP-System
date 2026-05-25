@@ -54,6 +54,95 @@ const getSpeechRecognition = () => {
   return window.SpeechRecognition || window.webkitSpeechRecognition || null;
 };
 
+const DEVANAGARI_VOWELS = {
+  '\u0905': 'a',
+  '\u0906': 'aa',
+  '\u0907': 'i',
+  '\u0908': 'ee',
+  '\u0909': 'u',
+  '\u090A': 'oo',
+  '\u090F': 'e',
+  '\u0910': 'ai',
+  '\u0913': 'o',
+  '\u0914': 'au',
+};
+
+const DEVANAGARI_MATRAS = {
+  '\u093E': 'aa',
+  '\u093F': 'i',
+  '\u0940': 'ee',
+  '\u0941': 'u',
+  '\u0942': 'oo',
+  '\u0947': 'e',
+  '\u0948': 'ai',
+  '\u094B': 'o',
+  '\u094C': 'au',
+};
+
+const DEVANAGARI_CONSONANTS = {
+  '\u0915': 'k',
+  '\u0916': 'kh',
+  '\u0917': 'g',
+  '\u0918': 'gh',
+  '\u091A': 'ch',
+  '\u091B': 'chh',
+  '\u091C': 'j',
+  '\u091D': 'jh',
+  '\u091F': 't',
+  '\u0920': 'th',
+  '\u0921': 'd',
+  '\u0922': 'dh',
+  '\u0924': 't',
+  '\u0925': 'th',
+  '\u0926': 'd',
+  '\u0927': 'dh',
+  '\u0928': 'n',
+  '\u092A': 'p',
+  '\u092B': 'f',
+  '\u092C': 'b',
+  '\u092D': 'bh',
+  '\u092E': 'm',
+  '\u092F': 'y',
+  '\u0930': 'r',
+  '\u0932': 'l',
+  '\u0935': 'v',
+  '\u0936': 'sh',
+  '\u0937': 'sh',
+  '\u0938': 's',
+  '\u0939': 'h',
+};
+
+const toLatinTranscript = (text = '') => {
+  const value = String(text || '');
+  if (!/[\u0900-\u097F]/.test(value)) return value;
+
+  let output = '';
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+    const next = value[index + 1];
+    if (DEVANAGARI_VOWELS[char]) {
+      output += DEVANAGARI_VOWELS[char];
+    } else if (DEVANAGARI_CONSONANTS[char]) {
+      output += DEVANAGARI_CONSONANTS[char];
+      if (!DEVANAGARI_MATRAS[next] && next !== '\u094D') output += 'a';
+    } else if (DEVANAGARI_MATRAS[char]) {
+      output += DEVANAGARI_MATRAS[char];
+    } else if (char === '\u0902' || char === '\u0901') {
+      output += 'n';
+    } else if (char === '\u0903') {
+      output += 'h';
+    } else if (char === '\u094D') {
+      output = output.replace(/a$/, '');
+    } else if (char === '\u0964' || char === '\u0965') {
+      output += '. ';
+    } else {
+      output += char;
+    }
+  }
+
+  return output.replace(/\s+/g, ' ').trim();
+};
+
 const getBestSpeechVoice = (text = '') => {
   if (typeof window === 'undefined' || !window.speechSynthesis) return null;
   const voices = window.speechSynthesis.getVoices?.() || [];
@@ -97,7 +186,6 @@ const ProviderBadge = ({ enabled, children }) => (
 );
 
 const providerLabels = {
-  groq: 'Groq Quick',
   gemini: 'Gemini Detailed',
   'erp-grounded': 'ERP Grounded',
   'development-fallback': 'Fallback',
@@ -122,26 +210,6 @@ const buildHistoryPayload = (items = []) =>
 
 const shouldEndCall = (text = '') =>
   /(\bend call\b|\bstop call\b|\bhang up\b|call\s*(band|bund|बंद)|बात\s*बंद|कॉल\s*बंद)/i.test(String(text || ''));
-
-const getPuterSpeechOptions = (text = '') => {
-  const lower = String(text || '').toLowerCase();
-  const language = /[\u0900-\u097F]/.test(text) || /\b(hindi|hinglish|namaste|kaise|kya|hai|school|bachcha|fees?)\b/.test(lower)
-    ? 'hi-IN'
-    : 'en-IN';
-
-  return {
-    provider: 'gemini',
-    model: 'gemini-2.5-flash-preview-tts',
-    voice: language === 'hi-IN' ? 'Puck' : 'Kore',
-    language,
-    instructions: language === 'hi-IN'
-      ? 'Speak naturally in Hindi/Hinglish with a friendly Indian school assistant tone.'
-      : 'Speak naturally in Indian English with a friendly school assistant tone.',
-  };
-};
-
-const normalizeAnswerText = (text = '') =>
-  String(text || '').replace(/\s+/g, ' ').trim().toLowerCase();
 
 const DataTable = ({ element }) => {
   const rows = Array.isArray(element.rows) ? element.rows : [];
@@ -351,7 +419,7 @@ const FeaturePage = () => {
   const callActiveRef = useRef(false);
   const [config, setConfig] = useState({
     defaultProvider: 'development-fallback',
-    providers: { gemini: false, groq: false },
+    providers: { gemini: false },
     role: '',
   });
   const [mode, setMode] = useState('chat');
@@ -410,83 +478,16 @@ const FeaturePage = () => {
 
   const speak = async (text) => {
     if (isMuted || !text || typeof window === 'undefined') return Promise.resolve();
-    const speechText = /[\u0900-\u097F]/.test(text) ? text : text.replace(/\bAI\b/g, 'ए आई');
+    const speechText = String(text || '').replace(/\bAI\b/g, 'AI');
     window.speechSynthesis?.cancel();
     speechAudioRef.current?.pause?.();
     speechAudioRef.current = null;
-    setIsSpeaking(true);
-
-    try {
-      const puterSpeech = window.puter?.ai?.txt2speech;
-      if (puterSpeech) {
-        const audio = await puterSpeech(speechText, getPuterSpeechOptions(speechText));
-        speechAudioRef.current = audio;
-        audio.onplay = () => setIsSpeaking(true);
-        audio.onended = () => {
-          setIsSpeaking(false);
-          speechAudioRef.current = null;
-        };
-        audio.onerror = () => {
-          setIsSpeaking(false);
-          speechAudioRef.current = null;
-        };
-        await audio.play();
-        return new Promise((resolve) => {
-          audio.onended = () => {
-            setIsSpeaking(false);
-            speechAudioRef.current = null;
-            resolve();
-          };
-          audio.onerror = () => {
-            setIsSpeaking(false);
-            speechAudioRef.current = null;
-            resolve();
-          };
-        });
-      }
-    } catch {
-      // Server and browser voices remain available if Puter TTS cannot play.
-    }
-
-    try {
-      const payload = await apiFetch(`${AI_ENDPOINT}/voice/speak`, {
-        method: 'POST',
-        body: { text: speechText },
-      });
-      if (payload.audioBase64 && payload.mimeType) {
-        const audio = new Audio(`data:${payload.mimeType};base64,${payload.audioBase64}`);
-        speechAudioRef.current = audio;
-        audio.onplay = () => setIsSpeaking(true);
-        audio.onended = () => {
-          setIsSpeaking(false);
-          speechAudioRef.current = null;
-        };
-        audio.onerror = () => {
-          setIsSpeaking(false);
-          speechAudioRef.current = null;
-        };
-        await audio.play();
-        return new Promise((resolve) => {
-          audio.onended = () => {
-            setIsSpeaking(false);
-            speechAudioRef.current = null;
-            resolve();
-          };
-          audio.onerror = () => {
-            setIsSpeaking(false);
-            speechAudioRef.current = null;
-            resolve();
-          };
-        });
-      }
-    } catch {
-      // Browser speech still works when the server voice endpoint is unavailable.
-    }
 
     if (!window.speechSynthesis) {
       setIsSpeaking(false);
       return Promise.resolve();
     }
+    setIsSpeaking(true);
     const utterance = new SpeechSynthesisUtterance(speechText);
     utterance.lang = /[\u0900-\u097F]/.test(speechText) ? 'hi-IN' : 'en-IN';
     const voice = getBestSpeechVoice(speechText);
@@ -567,48 +568,10 @@ const FeaturePage = () => {
     };
 
     try {
-      const enabledProviders = ['groq', 'gemini'].filter((name) => config.providers?.[name]);
-      const providersToCall = enabledProviders.length ? enabledProviders : [config.defaultProvider === 'gemini' ? 'gemini' : 'groq'];
-      const responses = {};
-      let hasAppended = false;
-      let quickText = '';
-
-      await Promise.allSettled(
-        providersToCall.map(async (providerName) => {
-          const payload = await requestAiProvider(providerName, trimmed, requestHistory);
-          responses[providerName] = payload;
-
-          if (providerName === 'groq') {
-            quickText = payload.text || '';
-            appendProviderPayload(payload, 'groq', { includeRichPayload: true, speak: mode === 'voice' });
-            hasAppended = true;
-          }
-        })
-      );
-
-      const geminiPayload = responses.gemini;
-      const groqPayload = responses.groq;
-
-      if (geminiPayload) {
-        const sameAsQuick = normalizeAnswerText(geminiPayload.text) === normalizeAnswerText(quickText);
-        const duplicateErp = geminiPayload.provider === 'erp-grounded' && groqPayload?.provider === 'erp-grounded';
-        if (!hasAppended) {
-          appendProviderPayload(geminiPayload, 'gemini', { includeRichPayload: true, speak: mode === 'voice' });
-          hasAppended = true;
-        } else if (!sameAsQuick && !duplicateErp) {
-          appendProviderPayload(geminiPayload, 'gemini', { includeRichPayload: false, speak: false });
-        }
-      }
-
-      if (!hasAppended) {
-        const firstPayload = Object.values(responses)[0];
-        if (firstPayload) {
-          appendProviderPayload(firstPayload, firstPayload.provider || 'ai', { includeRichPayload: true, speak: mode === 'voice' });
-          hasAppended = true;
-        }
-      }
-
-      if (!hasAppended) {
+      const payload = await requestAiProvider('gemini', trimmed, requestHistory);
+      if (payload) {
+        appendProviderPayload(payload, payload.provider || 'gemini', { includeRichPayload: true, speak: mode === 'voice' });
+      } else {
         throw new Error('No AI provider returned a response.');
       }
     } catch (submitError) {
@@ -660,7 +623,7 @@ const FeaturePage = () => {
     if (isSpeaking) stopSpeaking();
 
     const recognition = new Recognition();
-    recognition.lang = 'hi-IN';
+    recognition.lang = 'en-IN';
     recognition.continuous = false;
     recognition.interimResults = false;
     recognition.onstart = () => setIsListening(true);
@@ -670,7 +633,7 @@ const FeaturePage = () => {
       setIsListening(false);
     };
     recognition.onresult = async (event) => {
-      const transcript = event.results?.[0]?.[0]?.transcript || '';
+      const transcript = toLatinTranscript(event.results?.[0]?.[0]?.transcript || '');
       if (shouldEndCall(transcript)) {
         endVoiceCall('Voice call ended by instruction.');
         return;
