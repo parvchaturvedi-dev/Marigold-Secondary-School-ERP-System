@@ -28,6 +28,28 @@ const upload = multer({
   },
 });
 const passwordRevealOtps = new Map();
+const OTP_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const OTP_TTL_MS = 5 * 60 * 1000;
+
+const generatePasswordAccessOtp = () =>
+  Array.from({ length: 8 }, () => OTP_ALPHABET[randomInt(0, OTP_ALPHABET.length)]).join('');
+
+const validatePasswordAccessOtp = ({ username, otp, requestedBy }) => {
+  const otpRecord = passwordRevealOtps.get(username);
+  const normalizedOtp = String(otp || '').trim().toUpperCase();
+
+  if (
+    !otpRecord ||
+    otpRecord.expiresAt < Date.now() ||
+    otpRecord.otp !== normalizedOtp ||
+    otpRecord.requestedBy !== requestedBy
+  ) {
+    return false;
+  }
+
+  passwordRevealOtps.delete(username);
+  return true;
+};
 
 const sendMail = async ({ to, subject, text }) => {
   const mailConfig = getMailConfig();
@@ -102,7 +124,7 @@ const normalizeStudent = (student = {}, index = 0) => ({
 });
 
 const getEmailForUser = (user = {}) =>
-  user.profile?.email || user.profile?.studentProfiles?.[0]?.guardianEmail || '';
+  user?.profile?.email || user?.profile?.studentProfiles?.[0]?.guardianEmail || '';
 
 const normalizeAdminUsername = (value = '') => {
   const raw = String(value || '').trim().toUpperCase().replace(/\s+/g, '-');
@@ -163,6 +185,7 @@ const toSessionPayload = (user) => {
     photoDataUrl: profile.photoDataUrl || '',
     createdAt: new Date().toISOString(),
     token: createAuthToken(user),
+    mustChangePassword: Boolean(user.profile?.forcePasswordChange),
   };
 
   if (user.role === 'student') {
@@ -260,7 +283,9 @@ router.post('/login', ensureMongo, async (request, response) => {
   }
 
   const payload = toSessionPayload(user);
-  payload.mustChangePassword = Boolean(user.profile?.initialPassword && password === user.profile.initialPassword);
+  payload.mustChangePassword =
+    Boolean(user.profile?.forcePasswordChange) ||
+    Boolean(user.profile?.initialPassword && password === user.profile.initialPassword);
   persistSessionAuth(request, payload, response);
 });
 
@@ -326,6 +351,12 @@ router.patch('/users/:username', ensureMongo, requireAuth, requireRole('admin'),
   user.profile = nextProfile;
 
   if (nextPassword) {
+    const otp = String(request.body.passwordOtp || '').trim();
+    if (!validatePasswordAccessOtp({ username, otp, requestedBy: request.auth.username })) {
+      response.status(403).json({ message: 'Password update requires a valid OTP sent to the user.' });
+      return;
+    }
+
     if (nextPassword.length < 6) {
       response.status(400).json({ message: 'Password must contain at least 6 characters.' });
       return;
@@ -334,6 +365,9 @@ router.patch('/users/:username', ensureMongo, requireAuth, requireRole('admin'),
     user.profile = {
       ...user.profile,
       initialPassword: nextPassword,
+      forcePasswordChange: true,
+      passwordResetBy: request.auth.username,
+      passwordResetAt: new Date(),
     };
   }
 
@@ -437,17 +471,18 @@ router.post('/users/:username/request-password-otp', ensureMongo, requireAuth, r
     return;
   }
 
-  const otp = String(randomInt(100000, 999999));
+  const otp = generatePasswordAccessOtp();
   passwordRevealOtps.set(username, {
     otp,
-    expiresAt: Date.now() + 5 * 60 * 1000,
+    requestedBy: request.auth.username,
+    expiresAt: Date.now() + OTP_TTL_MS,
   });
 
   try {
     await sendMail({
       to: email,
-      subject: 'MGPS ERP password reveal OTP',
-      text: `Your OTP to reveal the MGPS ERP password for ${username} is ${otp}. It expires in 5 minutes.`,
+      subject: 'MGPS ERP password access OTP',
+      text: `Your OTP for admin password access on MGPS ERP account ${username} is ${otp}. Share it only if you approve this password view or update request. It expires in 5 minutes.`,
     });
   } catch (error) {
     handleMailError(response, error);
@@ -460,16 +495,17 @@ router.post('/users/:username/request-password-otp', ensureMongo, requireAuth, r
 router.post('/users/:username/reveal-password', ensureMongo, requireAuth, requireRole('admin', 'clerk'), async (request, response) => {
   await syncIdentityUsersFromState();
   const username = String(request.params.username || '').trim().toUpperCase();
-  const otp = String(request.body.otp || '').trim();
-  const otpRecord = passwordRevealOtps.get(username);
 
-  if (!otpRecord || otpRecord.expiresAt < Date.now() || otpRecord.otp !== otp) {
+  if (!validatePasswordAccessOtp({
+    username,
+    otp: request.body.otp,
+    requestedBy: request.auth.username,
+  })) {
     response.status(403).json({ message: 'Invalid or expired OTP.' });
     return;
   }
 
   const user = await User.findOne({ username }).lean();
-  passwordRevealOtps.delete(username);
   response.json({ password: user?.profile?.initialPassword || '' });
 });
 
@@ -501,9 +537,22 @@ router.post('/users/:username/send-credentials', ensureMongo, requireAuth, requi
 });
 
 router.post('/change-password', ensureMongo, requireAuth, async (request, response) => {
+  const currentPassword = String(request.body.currentPassword || '');
   const newPassword = String(request.body.newPassword || '');
+  const confirmPassword = String(request.body.confirmPassword || '');
+
+  if (!currentPassword) {
+    response.status(400).json({ message: 'Current password is required.' });
+    return;
+  }
+
   if (newPassword.length < 6) {
     response.status(400).json({ message: 'New password must contain at least 6 characters.' });
+    return;
+  }
+
+  if (confirmPassword && newPassword !== confirmPassword) {
+    response.status(400).json({ message: 'New password and confirm password do not match.' });
     return;
   }
 
@@ -513,10 +562,16 @@ router.post('/change-password', ensureMongo, requireAuth, async (request, respon
     return;
   }
 
+  if (!verifyPassword(currentPassword, user.passwordHash)) {
+    response.status(403).json({ message: 'Current password is incorrect.' });
+    return;
+  }
+
   user.passwordHash = createPasswordHash(newPassword);
   user.profile = {
     ...(user.profile || {}),
     initialPassword: '',
+    forcePasswordChange: false,
   };
   await user.save();
 
@@ -581,6 +636,9 @@ router.get('/session', requireAuth, async (request, response) => {
     }
 
     const payload = toSessionPayload(user);
+    payload.mustChangePassword =
+      Boolean(user.profile?.forcePasswordChange) ||
+      Boolean(user.profile?.initialPassword);
     saveSessionAuth(request, payload, response);
   } catch (error) {
     console.error('[auth:session]', {

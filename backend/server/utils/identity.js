@@ -283,11 +283,10 @@ export const listIdentityUsers = async () => {
     delete safeProfile.initialPassword;
 
     return {
-    username: user.username,
-    role: user.role,
-    displayName: user.displayName,
-    isActive: user.isActive,
-    initialPassword: user.profile?.initialPassword || '',
+      username: user.username,
+      role: user.role,
+      displayName: user.displayName,
+      isActive: user.isActive,
       email: user.profile?.email || user.profile?.studentProfiles?.[0]?.guardianEmail || '',
       linkedStudents: user.profile?.studentProfiles || [],
       isSiblingAccount: (user.profile?.studentProfiles || []).length > 1,

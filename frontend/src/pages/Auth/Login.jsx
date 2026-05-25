@@ -13,6 +13,7 @@ const Login = ({ onLoginSuccess }) => {
 
   // FORCED RESET POPUP STATES
   const [forcedResetModal, setForcedResetModal] = useState({ isOpen: false, username: '', role: '' });
+  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
@@ -72,11 +73,12 @@ const Login = ({ onLoginSuccess }) => {
       await apiFetch('/auth/change-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ newPassword }),
+        body: JSON.stringify({ currentPassword, newPassword, confirmPassword }),
       });
 
       const nextSession = { ...(forcedResetModal.session || {}), mustChangePassword: false };
       setForcedResetModal({ isOpen: false, username: '', role: '', session: null });
+      setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
       if (typeof onLoginSuccess === 'function') {
@@ -199,11 +201,23 @@ const Login = ({ onLoginSuccess }) => {
               </div>
               <div>
                 <h3 className="text-sm font-black uppercase tracking-wider font-mono text-neutral-900">Change Password</h3>
-                <p className="text-[11px] text-neutral-500 font-medium mt-0.5">This login is using the shared password sent by the office. Please set a private password now.</p>
+                <p className="text-[11px] text-neutral-500 font-medium mt-0.5">Change your password now for security purpose. Enter current password, then set a private password.</p>
               </div>
             </div>
 
             <form onSubmit={handleForcedPasswordReset} className="space-y-3 pt-2">
+              <div className="space-y-1">
+                <label className="text-[9px] font-mono font-black text-neutral-400 uppercase tracking-wider block">Current Password</label>
+                <input
+                  type="password"
+                  required
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="Current password"
+                  className="w-full text-xs font-mono font-bold p-3 bg-neutral-50 border border-neutral-300 rounded-xl outline-none focus:border-neutral-950"
+                />
+              </div>
+
               {/* NEW CREDENTIAL */}
               <div className="space-y-1">
                 <label className="text-[9px] font-mono font-black text-neutral-400 uppercase tracking-wider block">New Password</label>

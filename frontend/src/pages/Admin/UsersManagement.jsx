@@ -7,7 +7,6 @@ import {
   Edit2,
   KeyRound,
   Lock,
-  Plus,
   RefreshCw,
   Save,
   Search,
@@ -44,16 +43,6 @@ const getEmailForUser = (user = {}) =>
 const getInitialPassword = (user = {}) =>
   user.initialPassword || 'Password not available';
 
-const emptyAdminForm = {
-  username: '',
-  displayName: '',
-  email: '',
-  mobile: '',
-  designation: 'Administrator',
-  password: '',
-  isActive: true,
-};
-
 const UsersManagement = ({ session }) => {
   const [users, setUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -66,8 +55,6 @@ const UsersManagement = ({ session }) => {
   const [isSendingCredentials, setIsSendingCredentials] = useState({});
   const [isSendingAllCredentials, setIsSendingAllCredentials] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
-  const [showAdminForm, setShowAdminForm] = useState(false);
-  const [adminForm, setAdminForm] = useState(emptyAdminForm);
   const [editingUser, setEditingUser] = useState(null);
 
   const loadUsers = async () => {
@@ -105,6 +92,12 @@ const UsersManagement = ({ session }) => {
   }, []);
 
   const requestPasswordOtp = async (user) => {
+    const email = getEmailForUser(user);
+    const confirmed = window.confirm(
+      `This password access process will send an 8-character OTP to ${email || 'the linked user email'}. Continue?`
+    );
+    if (!confirmed) return null;
+
     setError('');
     setSuccessMessage('');
     try {
@@ -113,8 +106,10 @@ const UsersManagement = ({ session }) => {
       });
       setOtpPrompts((current) => ({ ...current, [user.username]: true }));
       setSuccessMessage(payload.message || 'OTP sent.');
+      return payload;
     } catch (otpError) {
       setError(otpError.message);
+      return null;
     }
   };
 
@@ -168,31 +163,6 @@ const UsersManagement = ({ session }) => {
     }
   };
 
-  const handleAdminFormChange = (event) => {
-    const { name, value, type, checked } = event.target;
-    setAdminForm((current) => ({ ...current, [name]: type === 'checkbox' ? checked : value }));
-  };
-
-  const createAdminUser = async (event) => {
-    event.preventDefault();
-    setError('');
-    setSuccessMessage('');
-
-    try {
-      const payload = await apiFetch('/auth/users/admins', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(adminForm),
-      });
-      setUsers(payload.users || []);
-      setSuccessMessage(payload.message || 'Admin user created.');
-      setShowAdminForm(false);
-      setAdminForm(emptyAdminForm);
-    } catch (saveError) {
-      setError(saveError.message);
-    }
-  };
-
   const startEditUser = (user) => {
     setEditingUser({
       username: user.username,
@@ -201,6 +171,7 @@ const UsersManagement = ({ session }) => {
       mobile: user.profile?.mobile || '',
       designation: user.profile?.designation || roleLabels[user.role] || user.role,
       password: '',
+      passwordOtp: '',
       isActive: user.isActive,
       managedByIdentitySync: user.profile?.managedByIdentitySync,
       role: user.role,
@@ -211,6 +182,11 @@ const UsersManagement = ({ session }) => {
     event.preventDefault();
     setError('');
     setSuccessMessage('');
+
+    if (editingUser.password && !editingUser.passwordOtp.trim()) {
+      setError('Send OTP to the user and enter the 8-character code before updating password.');
+      return;
+    }
 
     try {
       const payload = await apiFetch(`/auth/users/${encodeURIComponent(editingUser.username)}`, {
@@ -306,14 +282,6 @@ const UsersManagement = ({ session }) => {
         </div>
 
         <div className="flex flex-col sm:flex-row gap-2">
-          <button
-            type="button"
-            onClick={() => setShowAdminForm(true)}
-            className="inline-flex items-center justify-center gap-2 bg-[#E1FA6C] border border-[#1A1A1A]/10 px-4 py-2 rounded-lg text-xs font-black text-[#1A1A1A] hover:bg-[#d4ee59]"
-          >
-            <Plus className="w-4 h-4" />
-            Add Admin
-          </button>
           <button
             type="button"
             onClick={sendCredentialsToAll}
@@ -517,17 +485,6 @@ const UsersManagement = ({ session }) => {
         </div>
       </div>
 
-      {showAdminForm && (
-        <UserFormModal
-          title="Add Admin User"
-          values={adminForm}
-          onChange={handleAdminFormChange}
-          onClose={() => setShowAdminForm(false)}
-          onSubmit={createAdminUser}
-          submitLabel="Create Admin"
-        />
-      )}
-
       {editingUser && (
         <UserFormModal
           title={`Edit ${editingUser.username}`}
@@ -541,6 +498,12 @@ const UsersManagement = ({ session }) => {
           submitLabel="Save Changes"
           isEdit
           lockProfileFields={editingUser.managedByIdentitySync && editingUser.role !== 'admin'}
+          onRequestPasswordOtp={async () => {
+            const payload = await requestPasswordOtp(editingUser);
+            if (payload) {
+              setEditingUser((current) => ({ ...current, passwordOtp: '' }));
+            }
+          }}
         />
       )}
     </div>
@@ -556,6 +519,7 @@ const UserFormModal = ({
   submitLabel,
   isEdit = false,
   lockProfileFields = false,
+  onRequestPasswordOtp,
 }) => (
   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
     <form onSubmit={onSubmit} className="w-full max-w-xl rounded-2xl border border-[#C8C8C8] bg-white p-5 text-xs font-bold text-[#1A1A1A] shadow-xl">
@@ -640,6 +604,31 @@ const UserFormModal = ({
             required={!isEdit}
           />
         </label>
+        {isEdit && values.password && (
+          <div className="space-y-1">
+            <span>Password OTP</span>
+            <div className="flex gap-2">
+              <input
+                name="passwordOtp"
+                value={values.passwordOtp || ''}
+                onChange={onChange}
+                placeholder="E6HJK82D"
+                maxLength={8}
+                className="min-w-0 flex-1 rounded-xl border border-[#C8C8C8] bg-[#F8F8F8] px-3 py-2 font-mono uppercase outline-none"
+              />
+              <button
+                type="button"
+                onClick={onRequestPasswordOtp}
+                className="shrink-0 rounded-xl border border-[#1A1A1A] bg-white px-3 py-2 text-[10px] font-black text-[#1A1A1A] hover:bg-[#EAEAEA]"
+              >
+                Send OTP
+              </button>
+            </div>
+            <p className="text-[10px] font-semibold text-[#555555]">
+              Password updates send OTP to the user and force password change at next login.
+            </p>
+          </div>
+        )}
       </div>
 
       <label className="mt-4 flex items-center gap-2 rounded-xl border border-[#EAEAEA] bg-[#F8F8F8] px-3 py-2">
