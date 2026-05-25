@@ -542,12 +542,11 @@ router.patch('/profile-photo', ensureMongo, requireAuth, upload.single('photo'),
 });
 
 router.get('/session', requireAuth, async (request, response) => {
-  if (request.session?.auth?.username) {
-    response.json(request.session.auth);
-    return;
-  }
-
   if (!isMongoConnected()) {
+    if (request.session?.auth?.username) {
+      response.json(request.session.auth);
+      return;
+    }
     response.status(503).json({ message: 'Data service is not connected. Please restart the API server or contact support.' });
     return;
   }

@@ -66,6 +66,23 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+api.interceptors.response.use(
+  (response) => {
+    if (response && response.status === 401) {
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+      window.dispatchEvent(new CustomEvent('mgps-erp-session-updated', { detail: null }));
+    }
+    return response;
+  },
+  (error) => {
+    if (error.response && error.response.status === 401) {
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+      window.dispatchEvent(new CustomEvent('mgps-erp-session-updated', { detail: null }));
+    }
+    return Promise.reject(error);
+  }
+);
+
 const toResponseLike = (response) => ({
   ok: response.status >= 200 && response.status < 300,
   status: response.status,

@@ -116,7 +116,12 @@ function AppRoutes() {
     let isActive = true;
 
     fetchCurrentSession().then((serverSession) => {
-      if (!isActive || !serverSession) return;
+      if (!isActive) return;
+      if (!serverSession) {
+        clearSession();
+        setSession(null);
+        return;
+      }
       const nextSession = saveSession(serverSession);
       if (nextSession) setSession(nextSession);
     });
@@ -128,7 +133,11 @@ function AppRoutes() {
 
   useEffect(() => {
     const handleSessionUpdate = (event) => {
-      if (event.detail?.username) setSession(event.detail);
+      if (event.detail && event.detail.username) {
+        setSession(event.detail);
+      } else {
+        setSession(null);
+      }
     };
 
     window.addEventListener(SESSION_UPDATED_EVENT, handleSessionUpdate);
