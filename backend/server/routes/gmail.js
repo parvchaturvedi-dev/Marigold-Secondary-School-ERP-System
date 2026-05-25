@@ -52,18 +52,14 @@ const validateMessage = (message) => {
 router.get('/status', (_request, response) => {
   const mailConfig = getMailConfig();
   response.json({
-    service: 'brevo',
+    service: 'brevo-api',
     configured: mailConfig.isReady,
-    hasUser: Boolean(mailConfig.user),
-    hasPassword: Boolean(mailConfig.pass),
-    fromName: mailConfig.fromName,
-    host: mailConfig.host,
-    port: mailConfig.port,
-    secure: mailConfig.secure,
-    forceIPv4: mailConfig.forceIPv4,
+    hasApiKey: Boolean(mailConfig.apiKey),
+    hasSenderEmail: Boolean(mailConfig.senderEmail),
+    senderName: mailConfig.senderName,
+    senderEmail: mailConfig.senderEmail,
     maxConnections: mailConfig.maxConnections,
-    requiredEnv: ['BREVO_SMTP_USER', 'BREVO_SMTP_KEY'],
-    smtpEnvAliases: ['GMAIL_SMTP_HOST/GMAIL_SMTP_PORT', 'EMAIL_SMTP_HOST/EMAIL_SMTP_PORT', 'SMTP_HOST/SMTP_PORT'],
+    requiredEnv: ['BREVO_API_KEY', 'BREVO_SENDER_EMAIL'],
   });
 });
 
@@ -72,7 +68,7 @@ router.post('/send', async (request, response) => {
 
   if (!mailConfig.isReady) {
     response.status(503).json({
-      message: 'Email is not configured. Set BREVO_SMTP_USER and BREVO_SMTP_KEY in backend/.env.',
+      message: 'Email is not configured. Set BREVO_API_KEY and BREVO_SENDER_EMAIL in backend/.env.',
     });
     return;
   }

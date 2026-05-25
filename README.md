@@ -16,7 +16,7 @@ MGPS ERP features high-end aesthetics, a custom HSL-tailored responsive layout, 
 - **Consolidated Sibling Family Accounts:** Groups students belonging to the same family under a unified Sibling Family login (`FAM-...`), allowing parents to toggle profiles seamlessly in a single desk without multiple sign-ins.
 - **Mongoose-Buffered File Streaming:** Dynamic PDF Academic Calendars, assignment attachments, and event banners are stored directly in MongoDB as binary buffers (`Buffer`), offering a self-contained infrastructure without external storage dependencies.
 - **Classroom Collaborative Consensus Pipeline:** Actionable student requests of class-level scope undergo collaborative voting inside target classrooms, transitioning to the Administrator's desk automatically once an 80% consensus threshold is reached.
-- **Nodemailer SMTP dispatch:** Dispatches bulk communication logs via Google App Passwords through a secure SMTP integration.
+- **Brevo API dispatch:** Sends transactional email through Brevo's REST API instead of SMTP relay configuration.
 
 ---
 
@@ -26,7 +26,7 @@ MGPS ERP features high-end aesthetics, a custom HSL-tailored responsive layout, 
 - **Runtime:** Node.js (ECMAScript Modules)
 - **Framework:** Express (with CORS security, JSON limit controls, and JWT auth router)
 - **Database Persistence:** MongoDB via Mongoose ODM
-- **File Parsing & Mail:** Multer (memory buffering) & Nodemailer
+- **File Parsing & Mail:** Multer (memory buffering) & Brevo API
 - **Authentication:** Custom scrypt password hashing & JSON Web Token (JWT) bearer credentials
 
 ### Frontend
@@ -91,7 +91,7 @@ cp backend/.env.example backend/.env
 
 Fill in the values in each file:
 - `frontend/.env`: `VITE_API_BASE_URL`
-- `backend/.env`: `MONGODB_URI`, `JWT_SECRET`, `FRONTEND_URL`, `EMAIL_USER`, `EMAIL_PASS`, `PORT`
+- `backend/.env`: `MONGODB_URI`, `JWT_SECRET`, `FRONTEND_URL`, `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME`, `PORT`
 
 ### 4. Create Initial Administrator Account
 Run the automated bootstrapper to seed the `ADM-001` account in MongoDB:
@@ -128,12 +128,10 @@ Open your browser and navigate to `http://127.0.0.1:5173/` or `http://localhost:
 | `MONGODB_DB_NAME` | Targeted Database namespace | `mgps_erp` | Optional |
 | `JWT_SECRET` | Secret key for signing authorization JWTs | *None* | Yes |
 | `AUTH_AUTO_PROVISION` | Automatically creates ADM-001 admin | `false` | No |
-| `EMAIL_USER` | NodeMailer school sender Gmail address | *None* | No |
-| `EMAIL_PASS` | Google App Password credentials | *None* | No |
-| `GMAIL_SMTP_PORT` | Gmail SMTP port for live mail dispatch | `587` | No |
-| `GMAIL_FORCE_IPV4` | Force IPv4 SMTP DNS resolution to avoid IPv6 `ENETUNREACH` | `true` | No |
-| `GMAIL_CONNECTION_TIMEOUT_MS` | SMTP connection timeout | `10000` | No |
-| `GMAIL_MAX_CONNECTIONS` | Parallel SMTP connections for Gmail batches | `3` | No |
+| `BREVO_API_KEY` | Brevo REST API key for transactional emails | *None* | Yes |
+| `BREVO_SENDER_EMAIL` | Verified sender email used by the Brevo API | *None* | Yes |
+| `BREVO_SENDER_NAME` | Sender display name for email dispatch | `MGPS ERP Portal` | No |
+| `BREVO_MAX_CONNECTIONS` | Parallel email dispatch workers for `/api/gmail/send` | `3` | No |
 | `GEMINI_API_KEY` | Server-side Gemini key for the Admin Feature Page AI assistant | *None* | No |
 | `GROQ_API_KEY` | Server-side Groq key for the Admin Feature Page AI assistant | *None* | No |
 | `DEFAULT_AI_PROVIDER` | Default AI provider used by `/api/ai/chat` (`gemini` or `groq`) | `groq` | No |

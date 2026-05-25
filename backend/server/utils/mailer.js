@@ -1,23 +1,7 @@
-import dns from 'node:dns/promises';
-import net from 'node:net';
-import nodemailer from 'nodemailer';
-
-const DEFAULT_SMTP_HOST = 'smtp.gmail.com';
-const DEFAULT_SMTP_PORT = 587;
 const DEFAULT_FROM_NAME = 'MGPS ERP Portal';
-const DEFAULT_TIMEOUT_MS = {
-  dns: 5000,
-  connection: 20000,
-  greeting: 10000,
-  socket: 30000,
-};
 const DEFAULT_MAX_CONNECTIONS = 3;
-const DEFAULT_MAX_MESSAGES = 100;
-const IPV4_CACHE_TTL_MS = 5 * 60 * 1000;
-const GMAIL_HOSTS = new Set(['smtp.gmail.com', 'gmail-smtp-msa.l.google.com']);
-const BREVO_HOSTS = new Set(['smtp-relay.brevo.com', 'smtp-relay.sendinblue.com']);
-
-const ipv4Cache = new Map();
+const BREVO_API_BASE_URL = 'https://api.brevo.com/v3';
+const BREVO_API_TIMEOUT_MS = 20_000;
 
 const firstEnv = (...keys) => {
   for (const key of keys) {
@@ -32,267 +16,185 @@ const parsePositiveInteger = (value, fallback) => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 };
 
-const parseBoolean = (value, fallback) => {
-  if (value === undefined || value === '') return fallback;
-  if (/^(1|true|yes|on)$/i.test(String(value))) return true;
-  if (/^(0|false|no|off)$/i.test(String(value))) return false;
-  return fallback;
-};
-
-const normalizePassword = (value = '') => String(value).replace(/\s+/g, '');
-
-const isGmailHost = (host = '') => GMAIL_HOSTS.has(String(host).trim().toLowerCase());
-const isBrevoHost = (host = '') => BREVO_HOSTS.has(String(host).trim().toLowerCase());
-
 const isEmailAddress = (value = '') => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value).trim());
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const normalizeRecipients = (recipients) => {
+  if (Array.isArray(recipients)) {
+    return recipients
+      .map((recipient) => String(recipient || '').trim())
+      .filter(Boolean)
+      .map((recipient) => recipient.replace(/\s+/g, ''));
+  }
+
+  if (typeof recipients === 'string') {
+    return recipients
+      .split(',')
+      .map((recipient) => String(recipient || '').trim())
+      .filter(Boolean)
+      .map((recipient) => recipient.replace(/\s+/g, ''));
+  }
+
+  return [];
+};
 
 export const logSmtpError = (error, context = {}) => {
   const details = {
     ...context,
     name: error?.name,
     code: error?.code,
-    command: error?.command,
-    responseCode: error?.responseCode,
-    response: error?.response,
-    message: error?.message || 'Unknown SMTP error.',
+    status: error?.status,
+    statusText: error?.statusText,
+    message: error?.message || 'Unknown Brevo API error.',
   };
 
-  console.error('[smtp] Mail error', details);
+  console.error('[brevo-api] Mail error', details);
 };
 
 const isAuthError = (error) =>
-  /invalid login|username and password not accepted|application-specific password|app password|eauth|535/i.test(
-    error?.message || ''
-  );
+  /unauthorized|invalid api key|api key|forbidden|authorization/i.test(error?.message || '') ||
+  [401, 403].includes(error?.status);
 
 const isNetworkError = (error) =>
-  /enetunreach|econnrefused|econnreset|etimedout|edns|enotfound|eai_again|connection timeout|greeting never received|socket timeout/i.test(
+  /failed to fetch|network|timeout|etimedout|econnrefused|econnreset|enotfound|eai_again/i.test(
     error?.message || ''
-  );
+  ) ||
+  [408, 429, 500, 502, 503, 504].includes(error?.status);
 
-const resolveIPv4Host = async (host, timeoutMs) => {
-  if (net.isIP(host)) return host;
+const parseResponseError = async (response) => {
+  const rawBody = await response.text().catch(() => '');
 
-  const cached = ipv4Cache.get(host);
-  if (cached?.expiresAt > Date.now()) return cached.address;
+  if (!rawBody) {
+    return response.statusText || `Brevo API request failed with status ${response.status}.`;
+  }
 
-  let timeoutId;
   try {
-    const addresses = await Promise.race([
-      dns.resolve4(host),
-      new Promise((_, reject) => {
-        timeoutId = setTimeout(() => {
-          const error = new Error(`DNS timeout resolving IPv4 address for ${host}.`);
-          error.code = 'EDNS';
-          reject(error);
-        }, timeoutMs);
-      }),
-    ]);
+    const parsed = JSON.parse(rawBody);
+    return parsed?.message || parsed?.error?.message || parsed?.detail || rawBody;
+  } catch {
+    return rawBody;
+  }
+};
 
-    const address = addresses.find(Boolean);
-    if (!address) throw new Error(`No IPv4 SMTP address was found for ${host}.`);
+const sendBrevoRequest = async (mailConfig, payload) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), BREVO_API_TIMEOUT_MS);
 
-    ipv4Cache.set(host, {
-      address,
-      expiresAt: Date.now() + IPV4_CACHE_TTL_MS,
+  try {
+    const response = await fetch(`${BREVO_API_BASE_URL}/smtp/email`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'api-key': mailConfig.apiKey,
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
     });
 
-    return address;
+    if (!response.ok) {
+      const message = await parseResponseError(response);
+      const error = new Error(message);
+      error.status = response.status;
+      error.statusText = response.statusText;
+      throw error;
+    }
+
+    const data = await response.json().catch(() => ({}));
+    return {
+      messageId: data.messageId || data.id || data.messageIds?.[0] || '',
+    };
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      const timeoutError = new Error('Brevo API request timed out.');
+      timeoutError.status = 504;
+      throw timeoutError;
+    }
+
+    throw error;
   } finally {
     clearTimeout(timeoutId);
   }
 };
 
-export const getMailConfig = () => {
-  const user = String(firstEnv('BREVO_SMTP_USER', 'GMAIL_USER', 'EMAIL_USER')).trim();
-  const pass = normalizePassword(firstEnv('BREVO_SMTP_KEY', 'GMAIL_APP_PASSWORD', 'EMAIL_PASS'));
-  const fromName = String(firstEnv('EMAIL_FROM_NAME', 'GMAIL_FROM_NAME') || DEFAULT_FROM_NAME).trim();
-  const host = String(firstEnv('BREVO_SMTP_HOST', 'GMAIL_SMTP_HOST', 'EMAIL_SMTP_HOST', 'SMTP_HOST') || DEFAULT_SMTP_HOST).trim();
-  const configuredPort = parsePositiveInteger(
-    firstEnv('BREVO_SMTP_PORT', 'GMAIL_SMTP_PORT', 'EMAIL_SMTP_PORT', 'SMTP_PORT'),
-    DEFAULT_SMTP_PORT
-  );
-  const port = isGmailHost(host) ? 587 : configuredPort;
-  const configuredSecure = parseBoolean(
-    firstEnv('BREVO_SMTP_SECURE', 'GMAIL_SMTP_SECURE', 'EMAIL_SMTP_SECURE', 'SMTP_SECURE'),
-    port === 465
-  );
-  const secure = isGmailHost(host) ? false : configuredSecure;
+const createBrevoPayload = ({ senderEmail, senderName, to, subject, text, html }) => {
+  const recipients = normalizeRecipients(to);
+
+  if (recipients.length === 0) {
+    throw new Error('At least one recipient is required.');
+  }
 
   return {
-    user,
-    pass,
-    fromName,
-    host,
-    port,
-    secure,
-    forceIPv4: parseBoolean(firstEnv('BREVO_FORCE_IPV4', 'GMAIL_FORCE_IPV4', 'EMAIL_FORCE_IPV4'), true),
-    connectionTimeoutMs: parsePositiveInteger(
-      firstEnv('BREVO_CONNECTION_TIMEOUT_MS', 'GMAIL_CONNECTION_TIMEOUT_MS', 'EMAIL_CONNECTION_TIMEOUT_MS'),
-      DEFAULT_TIMEOUT_MS.connection
-    ),
-    greetingTimeoutMs: parsePositiveInteger(
-      firstEnv('BREVO_GREETING_TIMEOUT_MS', 'GMAIL_GREETING_TIMEOUT_MS', 'EMAIL_GREETING_TIMEOUT_MS'),
-      DEFAULT_TIMEOUT_MS.greeting
-    ),
-    socketTimeoutMs: parsePositiveInteger(
-      firstEnv('BREVO_SOCKET_TIMEOUT_MS', 'GMAIL_SOCKET_TIMEOUT_MS', 'EMAIL_SOCKET_TIMEOUT_MS'),
-      DEFAULT_TIMEOUT_MS.socket
-    ),
-    dnsTimeoutMs: parsePositiveInteger(
-      firstEnv('BREVO_DNS_TIMEOUT_MS', 'GMAIL_DNS_TIMEOUT_MS', 'EMAIL_DNS_TIMEOUT_MS'),
-      DEFAULT_TIMEOUT_MS.dns
-    ),
-    maxConnections: parsePositiveInteger(
-      firstEnv('BREVO_MAX_CONNECTIONS', 'GMAIL_MAX_CONNECTIONS', 'EMAIL_MAX_CONNECTIONS'),
-      DEFAULT_MAX_CONNECTIONS
-    ),
-    maxMessages: parsePositiveInteger(
-      firstEnv('BREVO_MAX_MESSAGES', 'GMAIL_MAX_MESSAGES', 'EMAIL_MAX_MESSAGES'),
-      DEFAULT_MAX_MESSAGES
-    ),
-    isReady: Boolean(user && pass),
+    sender: {
+      email: senderEmail,
+      name: senderName,
+    },
+    to: recipients.map((email) => ({ email })),
+    subject,
+    ...(text ? { textContent: text } : {}),
+    ...(html ? { htmlContent: html } : {}),
+  };
+};
+
+export const getMailConfig = () => {
+  const apiKey = String(firstEnv('BREVO_API_KEY')).trim();
+  const senderEmail = String(firstEnv('BREVO_SENDER_EMAIL', 'BREVO_FROM_EMAIL')).trim();
+  const senderName = String(firstEnv('BREVO_SENDER_NAME', 'BREVO_FROM_NAME', 'EMAIL_FROM_NAME') || DEFAULT_FROM_NAME).trim();
+
+  return {
+    apiKey,
+    senderEmail,
+    senderName,
+    maxConnections: parsePositiveInteger(firstEnv('BREVO_MAX_CONNECTIONS'), DEFAULT_MAX_CONNECTIONS),
+    isReady: Boolean(apiKey && senderEmail),
   };
 };
 
 export const getSenderAddress = (mailConfig = getMailConfig()) =>
-  `"${mailConfig.fromName.replace(/"/g, '\\"')}" <${mailConfig.user}>`;
-
-const uniqueAttempts = (attempts) => {
-  const seen = new Set();
-  return attempts.filter((attempt) => {
-    const key = `${attempt.host}:${attempt.port}:${attempt.secure}:${attempt.forceIPv4}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-};
-
-const getMailConnectionAttempts = (mailConfig) => {
-  const attempts = [
-    {
-      ...mailConfig,
-      secure: mailConfig.port === 465 ? true : mailConfig.secure,
-    },
-  ];
-
-  if (isBrevoHost(mailConfig.host)) {
-    attempts.push(
-      {
-        ...mailConfig,
-        port: 2525,
-        secure: false,
-      },
-      {
-        ...mailConfig,
-        port: 465,
-        secure: true,
-      }
-    );
-  }
-
-  if (mailConfig.forceIPv4) {
-    attempts.push(
-      ...attempts.map((attempt) => ({
-        ...attempt,
-        forceIPv4: false,
-      }))
-    );
-  }
-
-  return uniqueAttempts(attempts);
-};
-
-const createTransportForAttempt = async (attempt) => {
-  const host = attempt.forceIPv4 ? await resolveIPv4Host(attempt.host, attempt.dnsTimeoutMs) : attempt.host;
-
-  const transporter = nodemailer.createTransport({
-    host,
-    port: attempt.port,
-    secure: attempt.secure,
-    requireTLS: attempt.port === 587 || !attempt.secure,
-    auth: {
-      user: attempt.user,
-      pass: attempt.pass,
-    },
-    pool: true,
-    maxConnections: attempt.maxConnections,
-    maxMessages: attempt.maxMessages,
-    connectionTimeout: attempt.connectionTimeoutMs,
-    greetingTimeout: attempt.greetingTimeoutMs,
-    socketTimeout: attempt.socketTimeoutMs,
-    dnsTimeout: attempt.dnsTimeoutMs,
-    tls: {
-      servername: attempt.host,
-      minVersion: 'TLSv1.2',
-    },
-  });
-
-  await transporter.verify();
-  return transporter;
-};
+  `"${mailConfig.senderName.replace(/"/g, '\\"')}" <${mailConfig.senderEmail}>`;
 
 export const createMailTransporter = async (mailConfig = getMailConfig()) => {
   if (!mailConfig.isReady) {
-    throw new Error('Email is not configured. Set Brevo SMTP credentials in .env.');
+    throw new Error('Email is not configured. Set BREVO_API_KEY and BREVO_SENDER_EMAIL in backend/.env.');
   }
 
-  if (!isEmailAddress(mailConfig.user)) {
-    throw new Error('SMTP username must be the full email address.');
+  if (!isEmailAddress(mailConfig.senderEmail)) {
+    throw new Error('Sender email must be a valid email address.');
   }
 
-  const failures = [];
-  for (const attempt of getMailConnectionAttempts(mailConfig)) {
-    try {
-      return await createTransportForAttempt(attempt);
-    } catch (error) {
-      logSmtpError(error, {
-        phase: 'verify',
-        host: attempt.host,
-        port: attempt.port,
-        secure: attempt.secure,
-        starttls: attempt.port === 587 && !attempt.secure,
-        forceIPv4: attempt.forceIPv4,
+  return {
+    sendMail: async (message) => {
+      const payload = createBrevoPayload({
+        senderEmail: mailConfig.senderEmail,
+        senderName: mailConfig.senderName,
+        to: message.to,
+        subject: String(message.subject || '').trim(),
+        text: message.text ? String(message.text) : undefined,
+        html: message.html ? String(message.html) : undefined,
       });
 
-      failures.push({
-        host: attempt.host,
-        port: attempt.port,
-        secure: attempt.secure,
-        forceIPv4: attempt.forceIPv4,
-        message: error?.message || 'Unknown SMTP connection error.',
-      });
-
-      if (isAuthError(error)) break;
-      if (!isNetworkError(error)) break;
-    }
-  }
-
-  const details = failures
-    .map(
-      (failure) =>
-        `${failure.host}:${failure.port} secure=${failure.secure} ipv4=${failure.forceIPv4} - ${failure.message}`
-    )
-    .join(' | ');
-  throw new Error(`Email SMTP connection failed after ${failures.length} attempt(s). ${details}`);
+      const response = await sendBrevoRequest(mailConfig, payload);
+      return {
+        messageId: response.messageId,
+      };
+    },
+    close: () => {},
+  };
 };
 
-export const closeMailTransporter = (transporter) => {
-  if (typeof transporter?.close === 'function') {
-    transporter.close();
-  }
-};
+export const closeMailTransporter = (_transporter) => {};
 
 export const buildMailErrorPayload = (error) => {
   logSmtpError(error, { phase: 'dispatch' });
 
-  const detail = error?.message || 'Unknown Gmail error.';
+  const detail = error?.message || 'Unknown Brevo API error.';
 
   if (/not configured/i.test(detail)) {
     return {
       status: 503,
       body: {
-        message: 'Email is not configured. Set BREVO_SMTP_USER and BREVO_SMTP_KEY in backend/.env.',
+        message: 'Email is not configured. Set BREVO_API_KEY and BREVO_SENDER_EMAIL in backend/.env.',
         detail,
       },
     };
@@ -305,9 +207,9 @@ export const buildMailErrorPayload = (error) => {
     status: 502,
     body: {
       message: isAuthFailure
-        ? 'Email authentication failed. Please check your Brevo SMTP User and Key.'
+        ? 'Email authentication failed. Please check your Brevo API key.'
         : isNetworkFailure
-          ? 'Email SMTP connection failed. Check the server internet/firewall and SMTP port setting.'
+          ? 'Email API request failed. Check your Brevo API key, network connectivity, and API usage limits.'
           : 'Email dispatch failed.',
       detail,
     },

@@ -53,7 +53,9 @@ const validatePasswordAccessOtp = ({ username, otp, requestedBy }) => {
 
 const sendMail = async ({ to, subject, text }) => {
   const mailConfig = getMailConfig();
-  if (!mailConfig.isReady) throw new Error('Email is not configured. Set email credentials in .env.');
+  if (!mailConfig.isReady) {
+    throw new Error('Email is not configured. Set BREVO_API_KEY and BREVO_SENDER_EMAIL in backend/.env.');
+  }
 
   const transporter = await createMailTransporter(mailConfig);
   try {
@@ -402,7 +404,7 @@ router.post('/users/send-credentials-all', ensureMongo, requireAuth, requireRole
   await syncIdentityUsersFromState();
   const mailConfig = getMailConfig();
   if (!mailConfig.isReady) {
-    handleMailError(response, new Error('Email is not configured. Set email credentials in .env.'));
+    handleMailError(response, new Error('Email is not configured. Set BREVO_API_KEY and BREVO_SENDER_EMAIL in backend/.env.'));
     return;
   }
 

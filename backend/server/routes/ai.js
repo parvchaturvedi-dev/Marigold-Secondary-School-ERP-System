@@ -2040,7 +2040,7 @@ const sendReceipt = async ({ receiptNo, channels = ['gmail', 'whatsapp'] }, auth
     if (!guardianEmail) {
       result.gmail = { status: 'skipped', message: 'Guardian email is missing.' };
     } else if (!mailConfig.isReady) {
-      result.gmail = { status: 'mock', message: 'Gmail is not configured; receipt send was simulated.' };
+      result.gmail = { status: 'mock', message: 'Email is not configured; receipt send was simulated.' };
     } else {
       const transporter = await createMailTransporter(mailConfig);
       let info;
