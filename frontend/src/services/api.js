@@ -1,5 +1,7 @@
 import axios from 'axios';
 
+const PRODUCTION_API_BASE_URL = 'https://marigold-secondary-school-erp-system.onrender.com/api';
+
 const normalizeApiBaseUrl = (value) => {
   const rawValue = String(value || '/api').trim().replace(/\/+$/, '');
   if (!rawValue) return '/api';
@@ -21,7 +23,10 @@ const normalizeApiBaseUrl = (value) => {
   return rawValue.endsWith('/api') ? rawValue : `${rawValue}/api`;
 };
 
-export const API_BASE_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL);
+export const API_BASE_URL = normalizeApiBaseUrl(
+  import.meta.env.VITE_API_BASE_URL ||
+    (import.meta.env.PROD ? PRODUCTION_API_BASE_URL : '/api')
+);
 
 export const API_ORIGIN = (() => {
   if (typeof window === 'undefined') return '';

@@ -181,22 +181,34 @@ const toSessionPayload = (user) => {
   return session;
 };
 
+const saveSessionAuth = (request, payload, response) => {
+  request.session.auth = payload;
+  request.session.save((saveError) => {
+    if (saveError) {
+      console.error('[auth:session-save]', {
+        username: payload?.username,
+        message: saveError.message,
+      });
+      response.status(500).json({ message: 'Could not persist authenticated session.' });
+      return;
+    }
+
+    response.json(payload);
+  });
+};
+
 const persistSessionAuth = (request, payload, response) => {
   request.session.regenerate((regenerateError) => {
     if (regenerateError) {
+      console.error('[auth:session-regenerate]', {
+        username: payload?.username,
+        message: regenerateError.message,
+      });
       response.status(500).json({ message: 'Could not create authenticated session.' });
       return;
     }
 
-    request.session.auth = payload;
-    request.session.save((saveError) => {
-      if (saveError) {
-        response.status(500).json({ message: 'Could not persist authenticated session.' });
-        return;
-      }
-
-      response.json(payload);
-    });
+    saveSessionAuth(request, payload, response);
   });
 };
 
@@ -510,7 +522,18 @@ router.post('/change-password', ensureMongo, requireAuth, async (request, respon
 
   if (request.session?.auth) {
     request.session.auth.mustChangePassword = false;
-    request.session.save(() => response.json({ message: 'Password changed successfully.' }));
+    request.session.save((saveError) => {
+      if (saveError) {
+        console.error('[auth:change-password-session-save]', {
+          username: request.auth?.username,
+          message: saveError.message,
+        });
+        response.status(500).json({ message: 'Password changed, but the session could not be refreshed.' });
+        return;
+      }
+
+      response.json({ message: 'Password changed successfully.' });
+    });
     return;
   }
 
@@ -537,29 +560,36 @@ router.patch('/profile-photo', ensureMongo, requireAuth, upload.single('photo'),
   await user.save();
 
   const payload = toSessionPayload(user);
-  request.session.auth = payload;
-  request.session.save(() => response.json(payload));
+  saveSessionAuth(request, payload, response);
 });
 
 router.get('/session', requireAuth, async (request, response) => {
-  if (!isMongoConnected()) {
-    if (request.session?.auth?.username) {
-      response.json(request.session.auth);
+  try {
+    if (!isMongoConnected()) {
+      if (request.session?.auth?.username) {
+        response.json(request.session.auth);
+        return;
+      }
+      response.status(503).json({ message: 'Data service is not connected. Please restart the API server or contact support.' });
       return;
     }
-    response.status(503).json({ message: 'Data service is not connected. Please restart the API server or contact support.' });
-    return;
-  }
 
-  const user = await User.findOne({ username: request.auth.username });
-  if (!user) {
-    response.status(404).json({ message: 'Session user not found.' });
-    return;
-  }
+    const user = await User.findOne({ username: request.auth.username });
+    if (!user) {
+      response.status(404).json({ message: 'Session user not found.' });
+      return;
+    }
 
-  const payload = toSessionPayload(user);
-  request.session.auth = payload;
-  request.session.save(() => response.json(payload));
+    const payload = toSessionPayload(user);
+    saveSessionAuth(request, payload, response);
+  } catch (error) {
+    console.error('[auth:session]', {
+      username: request.auth?.username,
+      message: error.message,
+      stack: process.env.NODE_ENV === 'production' ? undefined : error.stack,
+    });
+    response.status(500).json({ message: 'Could not load authenticated session.' });
+  }
 });
 
 router.post('/logout', async (request, response) => {

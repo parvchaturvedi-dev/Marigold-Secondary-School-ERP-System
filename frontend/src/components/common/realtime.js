@@ -12,6 +12,8 @@ export const getRealtimeSocket = () => {
     path: '/socket.io',
     transports: ['websocket', 'polling'],
     withCredentials: true,
+    timeout: 20000,
+    reconnectionAttempts: 5,
   });
 
   return realtimeSocket;
@@ -34,4 +36,3 @@ export const useRealtimeBridge = () => {
     };
   }, []);
 };
-

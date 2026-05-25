@@ -35,6 +35,9 @@ const localDevOriginPattern = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
 const vercelOrigin = process.env.VERCEL_URL ? `https://${normalizeOrigin(process.env.VERCEL_URL)}` : '';
 const frontendUrl = process.env.FRONTEND_URL || process.env.FRONTEND_ORIGIN || '';
 const defaultAllowedOrigins = [
+  'https://www.mghub.marigoldschoolbehror.com',
+  'https://mghub.marigoldschoolbehror.com',
+  'http://localhost:5173',
   'https://marigold-secondary-school-erp-system-frontend-dhuizf172.vercel.app',
 ];
 const schoolVercelPreviewPattern =
@@ -61,18 +64,23 @@ const corsOrigin = (origin, callback) => {
     return;
   }
 
-  callback(new Error(`CORS blocked for origin: ${origin}`));
+  const error = new Error(`CORS blocked for origin: ${origin}`);
+  error.statusCode = 403;
+  callback(error);
 };
 
 const sessionMiddleware = createSessionMiddleware();
-
-app.set('trust proxy', 1);
-app.use(cors({
+const corsMiddleware = cors({
   origin: corsOrigin,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-}));
+  optionsSuccessStatus: 204,
+});
+
+app.set('trust proxy', 1);
+app.use(corsMiddleware);
+app.options(/.*/, corsMiddleware);
 app.use(sessionMiddleware);
 app.use(express.json({ limit: '1mb' }));
 
@@ -118,6 +126,29 @@ app.use('/api/leave-requests', leaveRequestRoutes);
 app.use('/api/meetings', meetingRoutes);
 app.use('/api/module-state', moduleStateRoutes);
 app.use('/api/notifications', notificationRoutes);
+
+app.use((error, request, response, next) => {
+  if (response.headersSent) {
+    next(error);
+    return;
+  }
+
+  const statusCode = error.statusCode || error.status || 500;
+  const isCorsError = /^CORS blocked/.test(error.message || '');
+
+  console.error('[api:error]', {
+    method: request.method,
+    path: request.originalUrl,
+    origin: request.get('origin') || '',
+    statusCode,
+    message: error.message,
+    stack: process.env.NODE_ENV === 'production' ? undefined : error.stack,
+  });
+
+  response.status(statusCode).json({
+    message: isCorsError ? 'Origin is not allowed by CORS policy.' : 'Internal server error.',
+  });
+});
 
 await connectMongo();
 
