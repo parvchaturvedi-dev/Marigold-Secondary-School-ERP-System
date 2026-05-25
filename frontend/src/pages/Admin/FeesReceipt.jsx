@@ -57,6 +57,8 @@ const FeesReceipt = ({ setActivePage }) => {
       setIsSendingMail(false);
     }
   };
+
+  if (!receiptData) {
     return (
       <div className="flex flex-col items-center justify-center p-10 bg-white rounded-2xl border border-neutral-300 shadow-md">
         <p className="text-sm font-bold text-neutral-500 font-mono">No active receipt payload found in stream.</p>
@@ -125,7 +127,7 @@ const FeesReceipt = ({ setActivePage }) => {
                   <tr key={index} className="hover:bg-neutral-50/40">
                     <td className="py-3.5 px-4 text-neutral-800 font-bold">{item.name} <span className="text-[10px] text-neutral-400 font-mono font-medium ml-1">(Tuition & Term Pooling Split)</span></td>
                     {/* CRITICAL FIX: .toFixed(2) implemented to eliminate trailing float decimals */}
-                    <td className="py-3.5 px-4 text-right font-mono text-neutral-900 font-bold">₹{Number(item.allocated).toFixed(2)}</td>
+                    <td className="py-3.5 px-4 text-right font-mono text-neutral-900 font-bold">Γé╣{Number(item.allocated).toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -142,7 +144,7 @@ const FeesReceipt = ({ setActivePage }) => {
             </div>
             <div className="bg-white/10 px-6 py-2.5 rounded-lg border border-white/20 text-right min-w-[160px]">
               <span className="text-[9px] font-black uppercase tracking-widest text-blue-200 font-mono block">Amount Paid</span>
-              <span className="text-xl font-black font-mono tracking-tight">₹{Number(receiptData.amountPaid).toFixed(2)}</span>
+              <span className="text-xl font-black font-mono tracking-tight">Γé╣{Number(receiptData.amountPaid).toFixed(2)}</span>
             </div>
           </div>
 
@@ -168,10 +170,10 @@ const FeesReceipt = ({ setActivePage }) => {
         <button onClick={() => window.print()} className="flex items-center justify-center gap-2 text-xs font-black bg-white hover:bg-neutral-50 border border-neutral-300 p-3 rounded-xl transition-all shadow-sm">
           <Printer className="w-4 h-4 text-neutral-700" /> Local Print
         </button>
-        <button onClick={() => alert(`⚡ WhatsApp Dispatched to ${receiptData.familyDetails?.contact}`)} className="flex items-center justify-center gap-2 text-xs font-black bg-white hover:bg-neutral-50 border border-neutral-300 p-3 rounded-xl transition-all shadow-sm">
+        <button onClick={() => alert(`ΓÜí WhatsApp Dispatched to ${receiptData.familyDetails?.contact}`)} className="flex items-center justify-center gap-2 text-xs font-black bg-white hover:bg-neutral-50 border border-neutral-300 p-3 rounded-xl transition-all shadow-sm">
           <MessageSquare className="w-4 h-4 text-emerald-600" /> WhatsApp Slip
         </button>
-        <button onClick={handleGmailBroadcast} disabled={isSendingMail} className="flex items-center justify-center gap-2 text-xs font-black bg-white hover:bg-neutral-50 border border-neutral-300 p-3 rounded-xl transition-all shadow-sm disabled:opacity-60">
+        <button onClick={handleEmailBroadcast} disabled={isSendingMail} className="flex items-center justify-center gap-2 text-xs font-black bg-white hover:bg-neutral-50 border border-neutral-300 p-3 rounded-xl transition-all shadow-sm disabled:opacity-60">
           <Mail className="w-4 h-4 text-red-500" /> {isSendingMail ? 'Sending...' : 'Email Broadcast'}
         </button>
         <button onClick={handleBack} className="flex items-center justify-center gap-2 text-xs font-black bg-neutral-900 hover:bg-neutral-800 text-white p-3 rounded-xl transition-all shadow-sm md:col-span-1">
