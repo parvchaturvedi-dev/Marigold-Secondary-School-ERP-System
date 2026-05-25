@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, CalendarCheck, CheckCircle2, Clock } from 'lucide-react';
+import { fetchAttendanceLogs } from '../../components/common/attendanceStore';
 import {
   getAttendanceRows,
   getClassLabel,
@@ -9,8 +10,45 @@ import {
 
 const Attendance = ({ session }) => {
   const student = getPortalStudent(session);
-  const rows = getAttendanceRows(student);
-  const metrics = getStudentMetrics(student);
+  const fallbackRows = getAttendanceRows(student);
+  const fallbackMetrics = getStudentMetrics(student);
+  const [liveLogs, setLiveLogs] = useState([]);
+
+  useEffect(() => {
+    fetchAttendanceLogs({ entityType: 'student', entityId: student.admissionNumber || student.id, period: 'yearly' })
+      .then((payload) => setLiveLogs(payload.logs || []))
+      .catch(() => setLiveLogs([]));
+  }, [student.admissionNumber, student.id]);
+
+  const liveRows = useMemo(() => {
+    if (!liveLogs.length) return [];
+    const byMonth = liveLogs.reduce((acc, log) => {
+      const month = new Date(`${log.attendanceDate}T00:00:00`).toLocaleString('en-IN', {
+        month: 'short',
+        year: 'numeric',
+      });
+      acc[month] = acc[month] || { month, workingDays: 0, present: 0, absent: 0, late: 0 };
+      acc[month].workingDays += 1;
+      if (log.status === 'present' || log.status === 'manual') acc[month].present += 1;
+      else if (log.status === 'half-day') acc[month].late += 1;
+      else acc[month].absent += 1;
+      return acc;
+    }, {});
+    return Object.values(byMonth);
+  }, [liveLogs]);
+
+  const rows = liveRows.length ? liveRows : fallbackRows;
+  const metrics = liveRows.length
+    ? {
+        workingDays: liveRows.reduce((sum, row) => sum + row.workingDays, 0),
+        presentDays: liveRows.reduce((sum, row) => sum + row.present + row.late, 0),
+        attendance: Math.round(
+          (liveRows.reduce((sum, row) => sum + row.present + row.late, 0) /
+            Math.max(1, liveRows.reduce((sum, row) => sum + row.workingDays, 0))) *
+            100
+        ),
+      }
+    : fallbackMetrics;
 
   return (
     <div className="space-y-6 pb-8 select-none font-sans text-[#1A1A1A]">
@@ -61,7 +99,9 @@ const Attendance = ({ session }) => {
         <div className="xl:col-span-8 bg-white border border-[#C8C8C8] rounded-3xl p-5">
           <div className="flex items-center justify-between border-b border-[#EAEAEA] pb-3 mb-4">
             <h3 className="text-sm font-black">Monthly Attendance Sheet</h3>
-            <span className="text-[10px] font-black text-[#555555]">Scoped to active student</span>
+            <span className="text-[10px] font-black text-[#555555]">
+              {liveRows.length ? 'Live biometric / QR logs' : 'Scoped to active student'}
+            </span>
           </div>
 
           <div className="overflow-x-auto rounded-2xl border border-[#EAEAEA]">

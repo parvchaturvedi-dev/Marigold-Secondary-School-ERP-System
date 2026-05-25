@@ -4,6 +4,7 @@ import {
   FileText, BarChart3, GraduationCap, Download, Eye, PlusCircle, Save, UploadCloud, Camera, CreditCard, Users
 } from 'lucide-react';
 import { useMongoState } from '../../components/common/mongoState';
+import { fetchAttendanceLogs } from '../../components/common/attendanceStore';
 import { DEFAULT_CLASS_NAMES, sortClassNames } from '../../components/common/masterData';
 import {
   EXAMINATION_UPDATED_EVENT,
@@ -75,6 +76,7 @@ const StudentProfile = ({ studentContext, onBack }) => {
   const [documentDraftState, setDocumentDraftState] = useState({ key: '', documents: [] });
   const [documentMessage, setDocumentMessage] = useState('');
   const [customDocumentName, setCustomDocumentName] = useState('');
+  const [liveAttendanceLogs, setLiveAttendanceLogs] = useState([]);
   const studentAdmissionId =
     studentContext?.admissionNumber ||
     studentContext?.id ||
@@ -123,11 +125,27 @@ const StudentProfile = ({ studentContext, onBack }) => {
     photoDataUrl: matchedStudent.photoDataUrl || matchedStudent.rawProfile?.photoDataUrl || '',
   };
   const classSnapshot = getClassSnapshot(matchedStudent, selectedClassName);
-  const classAttendance = {
-    totalWorkingDays: Number(classSnapshot.totalWorkingDays || matchedStudent.totalWorkingDays || 0),
-    presentDays: Number(classSnapshot.presentDays || matchedStudent.presentDays || 0),
-    attendancePercentage: Number(classSnapshot.attendancePercentage || matchedStudent.attendancePercentage || 0),
-  };
+  const liveAttendance = liveAttendanceLogs.reduce(
+    (acc, log) => {
+      acc.totalWorkingDays += 1;
+      if (log.status === 'present' || log.status === 'half-day' || log.status === 'manual') {
+        acc.presentDays += 1;
+      }
+      return acc;
+    },
+    { totalWorkingDays: 0, presentDays: 0 }
+  );
+  const classAttendance = liveAttendance.totalWorkingDays
+    ? {
+        totalWorkingDays: liveAttendance.totalWorkingDays,
+        presentDays: liveAttendance.presentDays,
+        attendancePercentage: Math.round((liveAttendance.presentDays / liveAttendance.totalWorkingDays) * 100),
+      }
+    : {
+        totalWorkingDays: Number(classSnapshot.totalWorkingDays || matchedStudent.totalWorkingDays || 0),
+        presentDays: Number(classSnapshot.presentDays || matchedStudent.presentDays || 0),
+        attendancePercentage: Number(classSnapshot.attendancePercentage || matchedStudent.attendancePercentage || 0),
+      };
   const profileExamStudent = {
     id: profileData.admissionNumber,
     admissionNumber: profileData.admissionNumber,
@@ -173,6 +191,18 @@ const StudentProfile = ({ studentContext, onBack }) => {
       setSelectedClassName(classHistory[classHistory.length - 1]);
     }
   }, [classHistory, selectedClassName]);
+
+  useEffect(() => {
+    if (!profileData.admissionNumber) return;
+    fetchAttendanceLogs({
+      entityType: 'student',
+      entityId: profileData.admissionNumber,
+      className: selectedClassName,
+      period: 'yearly',
+    })
+      .then((payload) => setLiveAttendanceLogs(payload.logs || []))
+      .catch(() => setLiveAttendanceLogs([]));
+  }, [profileData.admissionNumber, selectedClassName]);
 
   useEffect(() => {
     let isActive = true;
@@ -509,6 +539,9 @@ const StudentProfile = ({ studentContext, onBack }) => {
               <div className="space-y-6 animate-fadeIn text-xs font-bold">
                 <div className="border-b border-[#EAEAEA] pb-2">
                   <h4 className="text-sm font-black text-[#1A1A1A]">Live Attendance Metric Trackers</h4>
+                  <p className="text-[10px] font-bold text-[#555555] mt-1">
+                    {liveAttendanceLogs.length ? 'Connected to QR / biometric attendance logs.' : 'Using saved profile attendance until live logs are marked.'}
+                  </p>
                 </div>
 
                 {/* Simulated Attendance Visual Graph Node Component */}

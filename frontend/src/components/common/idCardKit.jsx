@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import html2canvas from 'html2canvas';
@@ -23,6 +24,8 @@ const fieldValue = (fields = [], label = '') =>
 export const buildQrPayload = (record = {}) => {
   if (record.type === 'student') {
     return [
+      'ENTITY TYPE: student',
+      `ENTITY ID: ${record.id}`,
       `NAME: ${fieldValue(record.frontFields, 'NAME')}`,
       `ADM NO.: ${fieldValue(record.frontFields, 'ADM NO.')}`,
       `FATHER NAME: ${fieldValue(record.frontFields, 'FATHER NAME')}`,
@@ -32,6 +35,8 @@ export const buildQrPayload = (record = {}) => {
   }
 
   return [
+    `ENTITY TYPE: ${record.type || 'staff'}`,
+    `ENTITY ID: ${record.id}`,
     `NAME: ${fieldValue(record.frontFields, 'NAME')}`,
     `EMP ID: ${fieldValue(record.frontFields, 'EMP ID')}`,
     `ROLE: ${fieldValue(record.frontFields, 'ROLE')}`,
