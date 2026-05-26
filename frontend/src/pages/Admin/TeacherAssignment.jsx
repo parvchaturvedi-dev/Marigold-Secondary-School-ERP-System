@@ -15,7 +15,7 @@ const TeacherAssignment = () => {
     maritalStatus: '',
     category: '',
     address: '',
-    aadharNumber: '', // Handled safely as per professional mock layout placeholders
+    aadharNumber: '',
     fatherName: '',
     husbandName: '',
     dateOfJoining: '',

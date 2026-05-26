@@ -119,9 +119,17 @@ const normalizeStudent = (student = {}, index = 0) => ({
   dob: student.dob || '',
   gender: student.gender || '',
   bloodGroup: student.bloodGroup || '',
+  category: student.category || '',
+  religion: student.religion || '',
   house: student.house || '',
   busRoute: student.busRoute || '',
   address: student.address || '',
+  tempAddress: student.tempAddress || '',
+  permAddress: student.permAddress || student.address || '',
+  studentAadhar: student.studentAadhar || '',
+  penNumber: student.penNumber || '',
+  dateOfAdmission: student.dateOfAdmission || '',
+  lastSchoolName: student.lastSchoolName || '',
   photoDataUrl: student.photoDataUrl || '',
 });
 
@@ -184,6 +192,10 @@ const toSessionPayload = (user) => {
     displayName,
     accountDisplayName: profile.accountDisplayName || displayName,
     allottedClasses: Array.isArray(profile.allottedClasses) ? profile.allottedClasses : [],
+    teacherProfile: profile.teacherProfile || null,
+    clerkProfile: profile.clerkProfile || null,
+    adminProfile: profile.adminProfile || null,
+    assignedClassTeacherFor: profile.teacherProfile?.assignedClassTeacherFor || profile.assignedClassTeacherFor || '',
     photoDataUrl: profile.photoDataUrl || '',
     createdAt: new Date().toISOString(),
     token: createAuthToken(user),
@@ -240,6 +252,7 @@ const persistSessionAuth = (request, payload, response) => {
 router.post('/login', ensureMongo, async (request, response) => {
   const username = String(request.body.username || '').trim().toUpperCase();
   const password = String(request.body.password || '');
+  const deviceId = String(request.body.deviceId || request.get('x-device-id') || '').trim();
   const requestedRole = detectRoleFromUsername(username);
 
   if (!username || !password) {
@@ -282,6 +295,35 @@ router.post('/login', ensureMongo, async (request, response) => {
   if (!user || !user.isActive || user.role !== requestedRole || !verifyPassword(password, user.passwordHash)) {
     response.status(401).json({ message: 'Invalid username or password.' });
     return;
+  }
+
+  const assignedHardwareId = String(
+    user.profile?.assignedHardwareId || user.profile?.hardwareDeviceId || user.profile?.deviceId || ''
+  ).trim();
+  if (deviceId && assignedHardwareId && assignedHardwareId !== deviceId) {
+    user.profile = {
+      ...(user.profile || {}),
+      pendingDeviceApproval: {
+        deviceId,
+        requestedAt: new Date(),
+        previousDeviceId: assignedHardwareId,
+      },
+    };
+    await user.save();
+    response.status(403).json({
+      message: 'New device detected. Admin approval is required before login.',
+      requiresAdminDeviceApproval: true,
+    });
+    return;
+  }
+
+  if (deviceId && !assignedHardwareId) {
+    user.profile = {
+      ...(user.profile || {}),
+      assignedHardwareId: deviceId,
+      assignedHardwareIdAt: new Date(),
+    };
+    await user.save();
   }
 
   const payload = toSessionPayload(user);

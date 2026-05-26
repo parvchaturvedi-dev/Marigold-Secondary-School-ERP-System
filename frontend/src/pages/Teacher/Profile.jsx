@@ -21,7 +21,7 @@ const Profile = ({ session }) => {
   const metrics = getTeacherMetrics(session);
   const sections = getTeacherClassSections(session);
   const subjects = getTeacherSubjectLoad(session);
-  const documents = getTeacherDocuments();
+  const documents = getTeacherDocuments(session);
   const [activeTab, setActiveTab] = useState('personal');
 
   const tabs = [

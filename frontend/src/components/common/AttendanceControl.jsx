@@ -1,130 +1,103 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  BarChart3,
-  CalendarCheck2,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
-  Fingerprint,
-  IdCard,
+  LocateFixed,
+  MapPin,
   RefreshCcw,
+  RotateCcw,
   Save,
   Search,
   ShieldCheck,
-  Users,
+  Wifi,
+  X,
 } from 'lucide-react';
-import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
 import { useMasterData } from './masterData';
 import {
-  fetchAttendanceDirectory,
-  fetchAttendanceLogs,
-  registerBiometric,
+  clockAttendance,
   saveAttendanceSettings,
-  scanAttendance,
+  saveStudentAttendanceBatch,
   useAttendanceOverview,
 } from './attendanceStore';
 
 const todayKey = () => new Date().toISOString().slice(0, 10);
-const normalize = (value = '') => String(value || '').trim().toLowerCase();
-
-const statusTone = {
-  present: 'bg-emerald-50 text-emerald-700 border-emerald-100',
-  'half-day': 'bg-amber-50 text-amber-700 border-amber-100',
-  absent: 'bg-rose-50 text-rose-700 border-rose-100',
-  manual: 'bg-blue-50 text-blue-700 border-blue-100',
-  unmarked: 'bg-neutral-100 text-neutral-500 border-neutral-200',
+const addDays = (date, days) => {
+  const next = new Date(`${date}T00:00:00`);
+  next.setDate(next.getDate() + days);
+  return next.toISOString().slice(0, 10);
 };
-
-const sourceLabel = {
-  qr: 'QR Scan',
-  biometric: 'Biometric',
-  manual: 'Manual',
-};
+const statusFromLog = (log) => (log?.status === 'absent' ? 'absent' : log ? 'present' : 'present');
+const bssidPlaceholder = 'AA:BB:CC:DD:EE:FF';
 
 const AttendanceControl = ({ role = 'admin' }) => {
+  const isAdmin = role === 'admin';
   const masterData = useMasterData();
-  const [selectedClass, setSelectedClass] = useState(masterData.classNames[0] || '');
+  const [selectedClass, setSelectedClass] = useState('');
   const [attendanceDate, setAttendanceDate] = useState(todayKey());
-  const [period, setPeriod] = useState('monthly');
   const [searchTerm, setSearchTerm] = useState('');
-  const [scanInput, setScanInput] = useState('');
-  const [biometricToken, setBiometricToken] = useState('');
-  const [selectedEntityType, setSelectedEntityType] = useState('student');
-  const [selectedEntityId, setSelectedEntityId] = useState('');
-  const [directory, setDirectory] = useState([]);
-  const [logs, setLogs] = useState([]);
+  const [draftStatus, setDraftStatus] = useState({});
   const [message, setMessage] = useState('');
-  const { overview, isLoading, error, reload } = useAttendanceOverview({
-    date: attendanceDate,
-    className: selectedClass,
-    period,
-  });
+  const [gpsState, setGpsState] = useState({ checking: false, allowed: false, text: 'GPS not checked', coords: null });
   const [settingsDraft, setSettingsDraft] = useState({
     presentUntil: '08:30',
     halfDayUntil: '10:30',
     closeAfter: '11:00',
     timezone: 'Asia/Kolkata',
     allowTeacherQrScan: true,
+    schoolAddress: '',
+    geofenceLatitude: '',
+    geofenceLongitude: '',
+    geofenceRadiusMeters: 100,
+    authorizedWifiBssid: '',
+    enforceReceptionQr: false,
   });
 
-  const canManageBiometric = ['admin', 'clerk'].includes(role);
+  const { overview, isLoading, error, reload } = useAttendanceOverview({
+    date: attendanceDate,
+    className: selectedClass,
+    period: 'monthly',
+  });
+
+  const classNames = useMemo(
+    () =>
+      masterData.classNames.length
+        ? masterData.classNames
+        : [...new Set((overview?.roster || []).map((student) => student.className).filter(Boolean))],
+    [masterData.classNames, overview?.roster]
+  );
 
   useEffect(() => {
-    if (!selectedClass && masterData.classNames[0]) setSelectedClass(masterData.classNames[0]);
-  }, [masterData.classNames, selectedClass]);
+    if (!selectedClass && classNames[0]) setSelectedClass(classNames[0]);
+  }, [classNames, selectedClass]);
 
   useEffect(() => {
-    if (overview?.settings) {
-      setSettingsDraft({
-        presentUntil: overview.settings.presentUntil || '08:30',
-        halfDayUntil: overview.settings.halfDayUntil || '10:30',
-        closeAfter: overview.settings.closeAfter || '11:00',
-        timezone: overview.settings.timezone || 'Asia/Kolkata',
-        allowTeacherQrScan: overview.settings.allowTeacherQrScan !== false,
-      });
-    }
+    if (!overview?.settings) return;
+    setSettingsDraft((draft) => ({
+      ...draft,
+      ...overview.settings,
+      geofenceLatitude: overview.settings.geofenceLatitude ?? '',
+      geofenceLongitude: overview.settings.geofenceLongitude ?? '',
+      geofenceRadiusMeters: overview.settings.geofenceRadiusMeters || 100,
+      authorizedWifiBssid: overview.settings.authorizedWifiBssid || '',
+      enforceReceptionQr: overview.settings.enforceReceptionQr === true,
+    }));
   }, [overview?.settings]);
 
   useEffect(() => {
-    let mounted = true;
-    fetchAttendanceDirectory({ type: selectedEntityType, className: selectedEntityType === 'student' ? selectedClass : '' })
-      .then((payload) => {
-        if (mounted) setDirectory(payload.rows || []);
-      })
-      .catch((loadError) => setMessage(loadError.message));
-    return () => {
-      mounted = false;
-    };
-  }, [selectedClass, selectedEntityType]);
+    const next = {};
+    (overview?.roster || []).forEach((student) => {
+      next[student.entityId] = statusFromLog(student.todayLog);
+    });
+    setDraftStatus(next);
+  }, [overview?.roster]);
 
-  useEffect(() => {
-    fetchAttendanceLogs({ period, className: selectedClass })
-      .then((payload) => setLogs(payload.logs || []))
-      .catch((loadError) => setMessage(loadError.message));
-  }, [period, selectedClass, overview]);
-
-  const classNames = masterData.classNames.length
-    ? masterData.classNames
-    : [...new Set((overview?.roster || []).map((student) => student.className).filter(Boolean))];
-
-  const visibleRoster = useMemo(() => {
-    const needle = normalize(searchTerm);
+  const roster = useMemo(() => {
+    const needle = searchTerm.trim().toLowerCase();
     return (overview?.roster || [])
       .filter((student) => {
-        const blob = [
-          student.displayName,
-          student.admissionNumber,
-          student.entityId,
-          student.fatherName,
-          student.motherName,
-          student.mobileNumber,
-        ]
+        const blob = [student.rollNo, student.displayName, student.admissionNumber, student.fatherName, student.mobileNumber]
           .join(' ')
           .toLowerCase();
         return !needle || blob.includes(needle);
@@ -132,448 +105,389 @@ const AttendanceControl = ({ role = 'admin' }) => {
       .sort((a, b) => Number(a.rollNo || 0) - Number(b.rollNo || 0) || a.displayName.localeCompare(b.displayName));
   }, [overview?.roster, searchTerm]);
 
-  const filteredDirectory = useMemo(() => {
-    const needle = normalize(searchTerm);
-    return directory.filter((item) => {
-      const blob = [item.displayName, item.entityId, item.admissionNumber, item.className, item.mobileNumber]
-        .join(' ')
-        .toLowerCase();
-      return !needle || blob.includes(needle);
+  const localCounts = useMemo(
+    () =>
+      roster.reduce(
+        (acc, student) => {
+          acc[draftStatus[student.entityId] === 'absent' ? 'absent' : 'present'] += 1;
+          return acc;
+        },
+        { present: 0, absent: 0 }
+      ),
+    [draftStatus, roster]
+  );
+
+  const roleSummary = overview?.roleSummary || {};
+  const mapSrc =
+    settingsDraft.geofenceLatitude && settingsDraft.geofenceLongitude
+      ? `https://maps.google.com/maps?q=${settingsDraft.geofenceLatitude},${settingsDraft.geofenceLongitude}&z=16&output=embed`
+      : `https://maps.google.com/maps?q=${encodeURIComponent(settingsDraft.schoolAddress || 'school')}&z=15&output=embed`;
+
+  const setStudentStatus = (student, status) => {
+    setDraftStatus((current) => ({ ...current, [student.entityId]: status }));
+  };
+
+  const resetDraft = () => {
+    const next = {};
+    (overview?.roster || []).forEach((student) => {
+      next[student.entityId] = statusFromLog(student.todayLog);
     });
-  }, [directory, searchTerm]);
+    setDraftStatus(next);
+  };
 
-  const selectedPerson = filteredDirectory.find((item) => item.entityId === selectedEntityId) || filteredDirectory[0] || null;
+  const saveRegister = async () => {
+    try {
+      const payload = await saveStudentAttendanceBatch({
+        className: selectedClass,
+        attendanceDate,
+        records: roster.map((student) => ({
+          entityId: student.entityId,
+          admissionNumber: student.admissionNumber,
+          status: draftStatus[student.entityId] === 'absent' ? 'absent' : 'present',
+        })),
+      });
+      setMessage(payload.message || 'Attendance saved.');
+      reload();
+    } catch (saveError) {
+      setMessage(saveError.message);
+    }
+  };
 
-  const handleSaveSettings = async () => {
+  const saveSettings = async () => {
     try {
       await saveAttendanceSettings(settingsDraft);
-      setMessage('Attendance time rules saved.');
+      setMessage('Geofence and security configuration saved.');
       reload();
     } catch (saveError) {
       setMessage(saveError.message);
     }
   };
 
-  const handleQrScan = async () => {
-    if (!scanInput.trim()) {
-      setMessage('QR payload, admission number, or employee ID required.');
+  const searchAddress = async () => {
+    if (!settingsDraft.schoolAddress.trim()) {
+      setMessage('Enter a school address first.');
       return;
     }
 
     try {
-      const payload = await scanAttendance({
-        source: 'qr',
-        qrPayload: scanInput,
-        admissionNumber: scanInput,
-        entityId: scanInput,
-        attendanceDate,
-        deviceId: 'erp-qr-console',
-      });
-      setMessage(payload.message || 'Attendance marked.');
-      setScanInput('');
-      reload();
-    } catch (scanError) {
-      setMessage(scanError.message);
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(settingsDraft.schoolAddress)}`
+      );
+      const [result] = await response.json();
+      if (!result) {
+        setMessage('No map result found for this address.');
+        return;
+      }
+      setSettingsDraft((draft) => ({
+        ...draft,
+        geofenceLatitude: Number(result.lat).toFixed(6),
+        geofenceLongitude: Number(result.lon).toFixed(6),
+      }));
+      setMessage('Map location resolved. Review the pin and save.');
+    } catch {
+      setMessage('Address search could not complete. You can enter latitude and longitude manually.');
     }
   };
 
-  const handleBiometricAttendance = async () => {
-    if (!biometricToken.trim()) {
-      setMessage('Biometric device token required.');
+  const checkGps = () => {
+    if (!navigator.geolocation) {
+      setGpsState({ checking: false, allowed: false, text: 'GPS unavailable on this device', coords: null });
       return;
     }
-
-    try {
-      const payload = await scanAttendance({
-        source: 'biometric',
-        biometricToken,
-        attendanceDate,
-        deviceId: 'erp-biometric-console',
-      });
-      setMessage(payload.message || 'Biometric attendance marked.');
-      setBiometricToken('');
-      reload();
-    } catch (scanError) {
-      setMessage(scanError.message);
-    }
+    setGpsState((current) => ({ ...current, checking: true, text: 'Checking GPS...' }));
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const coords = {
+          gpsLatitude: position.coords.latitude,
+          gpsLongitude: position.coords.longitude,
+        };
+        setGpsState({ checking: false, allowed: true, text: 'GPS captured for secure clock action', coords });
+      },
+      () => setGpsState({ checking: false, allowed: false, text: 'GPS permission denied or unavailable', coords: null }),
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
   };
 
-  const handleRegisterBiometric = async () => {
-    if (!selectedPerson || !biometricToken.trim()) {
-      setMessage('Select a profile and enter the biometric token.');
-      return;
-    }
-
+  const clock = async (action) => {
     try {
-      await registerBiometric({
-        entityType: selectedPerson.entityType,
-        entityId: selectedPerson.entityId,
-        admissionNumber: selectedPerson.admissionNumber,
-        biometricToken,
+      const payload = await clockAttendance({
+        action,
+        source: 'clerk-self',
+        requiresGeofence: true,
+        deviceId: localStorage.getItem('mgps_device_id') || navigator.userAgent,
+        deviceType: navigator.userAgent,
+        ...(gpsState.coords || {}),
       });
-      setMessage(`${selectedPerson.displayName} biometric saved and linked with profile.`);
-      setBiometricToken('');
-      const payload = await fetchAttendanceDirectory({
-        type: selectedEntityType,
-        className: selectedEntityType === 'student' ? selectedClass : '',
-      });
-      setDirectory(payload.rows || []);
-    } catch (saveError) {
-      setMessage(saveError.message);
-    }
-  };
-
-  const markManual = async (student, status = 'manual') => {
-    try {
-      await scanAttendance({
-        source: 'qr',
-        entityType: student.entityType,
-        entityId: student.entityId,
-        admissionNumber: student.admissionNumber,
-        attendanceDate,
-        status,
-        force: true,
-        note: 'Manual correction from attendance desk',
-      });
-      setMessage(`${student.displayName} attendance updated.`);
-      reload();
-    } catch (saveError) {
-      setMessage(saveError.message);
+      setMessage(payload.message || 'Clock action recorded.');
+    } catch (clockError) {
+      setMessage(clockError.message);
     }
   };
 
   return (
-    <div className="space-y-6 pb-8 select-none font-sans text-[#1A1A1A]">
-      <section className="bg-white border border-[#C8C8C8] rounded-3xl p-6 flex flex-col xl:flex-row xl:items-center justify-between gap-5">
-        <div>
-          <h2 className="text-xl font-black flex items-center gap-2">
-            <CalendarCheck2 className="w-5 h-5 text-emerald-700" /> Smart Attendance Control
-          </h2>
-          <p className="text-xs font-bold text-[#555555] mt-1">
-            QR ID card scan, biometric fallback, live logs, timing rules, and profile-linked audit.
-          </p>
+    <div className="space-y-6 pb-28 select-none font-sans text-[#1A1A1A]">
+      <section className="bg-white border border-[#C8C8C8] rounded-3xl p-6 space-y-5">
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-black flex items-center gap-2">
+              <CalendarDays className="w-5 h-5 text-emerald-700" />
+              {isAdmin ? 'Admin Attendance Control Center' : 'Clerk Attendance Management'}
+            </h2>
+            <p className="text-xs font-bold text-[#555555] mt-1">
+              {isAdmin
+                ? 'Global monitoring, geofence rules, reception QR policy, and historical overrides.'
+                : 'Self-service staff attendance and full student register CRUD.'}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={reload}
+            className="h-10 px-4 rounded-2xl bg-[#E1FA6C] border border-[#1A1A1A]/10 text-xs font-black inline-flex items-center justify-center gap-2"
+          >
+            <RefreshCcw className="w-4 h-4" /> Refresh
+          </button>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 min-w-full xl:min-w-[520px]">
-          <Metric label="Roster" value={overview?.counts?.total || 0} />
-          <Metric label="Present" value={overview?.counts?.present || 0} tone="text-emerald-700" />
-          <Metric label="Half Day" value={overview?.counts?.['half-day'] || 0} tone="text-amber-700" />
-          <Metric label="Unmarked" value={overview?.counts?.unmarked || 0} tone="text-neutral-500" />
-        </div>
+
+        {isAdmin ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <MetricCard title="Clerk Attendance Summary" counts={roleSummary.clerk} />
+            <MetricCard title="Teacher Attendance Summary" counts={roleSummary.teacher} />
+            <MetricCard title="Student Attendance Summary" counts={roleSummary.student} />
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+            <div className="lg:col-span-2 rounded-2xl border border-[#EAEAEA] bg-[#F8F8F8] p-4">
+              <p className="text-[10px] font-black uppercase text-[#555555]">My Attendance</p>
+              <p className="mt-1 text-sm font-black">{gpsState.text}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button type="button" onClick={checkGps} className="h-10 px-4 rounded-2xl bg-white border border-[#C8C8C8] text-xs font-black inline-flex items-center gap-2">
+                  <LocateFixed className="w-4 h-4" /> Check GPS
+                </button>
+                <button type="button" onClick={() => clock('clock-in')} disabled={!gpsState.allowed} className="h-10 px-4 rounded-2xl bg-emerald-600 text-white text-xs font-black disabled:opacity-40">
+                  Clock-In
+                </button>
+                <button type="button" onClick={() => clock('clock-out')} disabled={!gpsState.allowed} className="h-10 px-4 rounded-2xl bg-[#1A1A1A] text-white text-xs font-black disabled:opacity-40">
+                  Clock-Out
+                </button>
+              </div>
+            </div>
+            <MetricCard title="Student Attendance Summary" counts={{ ...localCounts, late: overview?.counts?.['half-day'] || 0, total: roster.length }} />
+          </div>
+        )}
       </section>
 
       {(message || error) && (
-        <div className="bg-[#1A1A1A] text-white border border-black rounded-2xl px-4 py-3 text-xs font-bold">
+        <div className="rounded-2xl border border-black bg-[#1A1A1A] px-4 py-3 text-xs font-bold text-white">
           {message || error}
         </div>
       )}
 
-      <section className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-        <div className="xl:col-span-8 space-y-6">
-          <div className="bg-white border border-[#C8C8C8] rounded-3xl p-5 space-y-4">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-              <div>
-                <h3 className="text-sm font-black flex items-center gap-2">
-                  <Users className="w-4 h-4" /> Classwise Live Register
-                </h3>
-                <p className="text-[10px] font-bold text-[#555555] mt-1">
-                  {selectedClass || 'All Classes'} | {attendanceDate}
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <select
-                  value={selectedClass}
-                  onChange={(event) => setSelectedClass(event.target.value)}
-                  className="bg-[#F8F8F8] border border-[#EAEAEA] rounded-2xl px-3 py-2 text-xs font-bold outline-none"
-                >
-                  <option value="">All Classes</option>
-                  {classNames.map((className) => (
-                    <option key={className} value={className}>
-                      {className}
-                    </option>
-                  ))}
-                </select>
+      {isAdmin && (
+        <section className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+          <div className="xl:col-span-7 bg-white border border-[#C8C8C8] rounded-3xl p-5 space-y-4">
+            <h3 className="text-sm font-black flex items-center gap-2">
+              <MapPin className="w-4 h-4" /> Geofencing & Security Configurator
+            </h3>
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-2">
+              <input
+                value={settingsDraft.schoolAddress}
+                onChange={(event) => setSettingsDraft((draft) => ({ ...draft, schoolAddress: event.target.value }))}
+                placeholder="Search school address"
+                className="lg:col-span-3 h-11 rounded-2xl border border-[#EAEAEA] bg-[#F8F8F8] px-3 text-xs font-bold outline-none"
+              />
+              <button type="button" onClick={searchAddress} className="h-11 rounded-2xl bg-[#1A1A1A] text-white text-xs font-black inline-flex items-center justify-center gap-2">
+                <Search className="w-4 h-4" /> Search
+              </button>
+            </div>
+            <iframe title="School geofence map" src={mapSrc} className="h-72 w-full rounded-2xl border border-[#EAEAEA] bg-[#F8F8F8]" loading="lazy" />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+              <Field label="Latitude" value={settingsDraft.geofenceLatitude} onChange={(value) => setSettingsDraft((draft) => ({ ...draft, geofenceLatitude: value }))} />
+              <Field label="Longitude" value={settingsDraft.geofenceLongitude} onChange={(value) => setSettingsDraft((draft) => ({ ...draft, geofenceLongitude: value }))} />
+              <label className="rounded-2xl border border-[#EAEAEA] bg-[#F8F8F8] p-3 text-xs font-black">
+                Radius: {settingsDraft.geofenceRadiusMeters}m
                 <input
-                  type="date"
-                  value={attendanceDate}
-                  onChange={(event) => setAttendanceDate(event.target.value)}
-                  className="bg-[#F8F8F8] border border-[#EAEAEA] rounded-2xl px-3 py-2 text-xs font-bold outline-none"
+                  type="range"
+                  min="50"
+                  max="200"
+                  step="50"
+                  value={settingsDraft.geofenceRadiusMeters}
+                  onChange={(event) => setSettingsDraft((draft) => ({ ...draft, geofenceRadiusMeters: Number(event.target.value) }))}
+                  className="mt-3 w-full"
                 />
-                <div className="bg-[#F8F8F8] border border-[#EAEAEA] rounded-2xl px-3 py-2 flex items-center gap-2">
-                  <Search className="w-4 h-4 text-[#555555]" />
-                  <input
-                    value={searchTerm}
-                    onChange={(event) => setSearchTerm(event.target.value)}
-                    placeholder="Search"
-                    className="bg-transparent outline-none text-xs font-bold w-40"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={reload}
-                  className="w-10 h-10 grid place-items-center bg-[#E1FA6C] border border-[#1A1A1A]/10 rounded-2xl"
-                  title="Refresh attendance"
-                >
-                  <RefreshCcw className="w-4 h-4" />
-                </button>
-              </div>
+              </label>
             </div>
-
-            <div className="overflow-x-auto rounded-2xl border border-[#EAEAEA]">
-              <table className="w-full min-w-[900px] text-left text-xs font-bold">
-                <thead className="bg-[#EAEAEA] text-[#555555] uppercase text-[10px]">
-                  <tr>
-                    <th className="px-3 py-3">Roll</th>
-                    <th className="px-3 py-3">Student</th>
-                    <th className="px-3 py-3">Admission</th>
-                    <th className="px-3 py-3">Parents / Mobile</th>
-                    <th className="px-3 py-3">Today</th>
-                    <th className="px-3 py-3">Source</th>
-                    <th className="px-3 py-3 text-right">Manual</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#EAEAEA]">
-                  {visibleRoster.map((student) => {
-                    const status = student.todayLog?.status || 'unmarked';
-                    return (
-                      <tr key={`${student.entityType}-${student.entityId}`} className="hover:bg-[#F8F8F8]">
-                        <td className="px-3 py-3 font-mono">{student.rollNo || '-'}</td>
-                        <td className="px-3 py-3">
-                          <p className="font-black">{student.displayName}</p>
-                          <p className="text-[10px] text-[#555555]">{student.className}-{student.section || '-'}</p>
-                        </td>
-                        <td className="px-3 py-3 font-mono text-[#555555]">{student.admissionNumber}</td>
-                        <td className="px-3 py-3 text-[#555555]">
-                          <p>{student.fatherName || student.motherName || '-'}</p>
-                          <p className="font-mono text-[10px]">{student.mobileNumber || '-'}</p>
-                        </td>
-                        <td className="px-3 py-3">
-                          <span className={`inline-flex px-2 py-1 rounded-lg border text-[10px] font-black uppercase ${statusTone[status] || statusTone.unmarked}`}>
-                            {status}
-                          </span>
-                        </td>
-                        <td className="px-3 py-3 text-[#555555]">
-                          {student.todayLog ? sourceLabel[student.todayLog.source] || student.todayLog.source : '-'}
-                        </td>
-                        <td className="px-3 py-3">
-                          <div className="flex justify-end gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => markManual(student, 'manual')}
-                              className="px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 border border-blue-100 text-[10px] font-black"
-                            >
-                              Mark
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => markManual(student, 'absent')}
-                              className="px-3 py-1.5 rounded-xl bg-rose-50 text-rose-700 border border-rose-100 text-[10px] font-black"
-                            >
-                              Absent
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {!visibleRoster.length && (
-                    <tr>
-                      <td colSpan="7" className="py-10 text-center text-[10px] font-black uppercase tracking-widest text-neutral-400">
-                        {isLoading ? 'Loading attendance...' : 'No students found.'}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <label className="rounded-2xl border border-[#EAEAEA] bg-[#F8F8F8] p-3 text-xs font-black">
+                <span className="flex items-center gap-2 text-[#555555]"><Wifi className="w-4 h-4" /> Authorized WiFi BSSID</span>
+                <input
+                  value={settingsDraft.authorizedWifiBssid}
+                  onChange={(event) => setSettingsDraft((draft) => ({ ...draft, authorizedWifiBssid: event.target.value }))}
+                  placeholder={bssidPlaceholder}
+                  className="mt-2 w-full bg-transparent font-mono outline-none"
+                />
+              </label>
+              <label className="rounded-2xl border border-[#EAEAEA] bg-[#F8F8F8] p-3 text-xs font-black flex items-center justify-between gap-3">
+                <span className="flex items-center gap-2 text-[#555555]"><ShieldCheck className="w-4 h-4" /> Enforce Reception QR</span>
+                <input
+                  type="checkbox"
+                  checked={settingsDraft.enforceReceptionQr}
+                  onChange={(event) => setSettingsDraft((draft) => ({ ...draft, enforceReceptionQr: event.target.checked }))}
+                  className="h-5 w-5"
+                />
+              </label>
             </div>
+            <button type="button" onClick={saveSettings} className="h-11 px-5 rounded-2xl bg-[#E1FA6C] border border-[#1A1A1A]/10 text-xs font-black inline-flex items-center gap-2">
+              <Save className="w-4 h-4" /> Save Global Configuration
+            </button>
           </div>
 
-          <div className="bg-white border border-[#C8C8C8] rounded-3xl p-5">
-            <div className="flex items-center justify-between border-b border-[#EAEAEA] pb-3 mb-4">
-              <h3 className="text-sm font-black flex items-center gap-2">
-                <BarChart3 className="w-4 h-4" /> Attendance Graph
-              </h3>
-              <select
-                value={period}
-                onChange={(event) => setPeriod(event.target.value)}
-                className="bg-[#F8F8F8] border border-[#EAEAEA] rounded-xl px-3 py-2 text-[10px] font-black outline-none"
-              >
-                <option value="weekly">Weekly</option>
-                <option value="monthly">Monthly</option>
-                <option value="yearly">Yearly</option>
-              </select>
-            </div>
-            <div className="h-72">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={overview?.trend || []}>
-                  <defs>
-                    <linearGradient id="presentGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#059669" stopOpacity={0.35} />
-                      <stop offset="95%" stopColor="#059669" stopOpacity={0.02} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#EAEAEA" />
-                  <XAxis dataKey="date" tick={{ fontSize: 10 }} />
-                  <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
-                  <Tooltip />
-                  <Area type="monotone" dataKey="present" stroke="#059669" fill="url(#presentGradient)" />
-                  <Area type="monotone" dataKey="halfDay" stroke="#d97706" fill="#fef3c7" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
+          <div className="xl:col-span-5 bg-white border border-[#C8C8C8] rounded-3xl p-5 space-y-4">
+            <h3 className="text-sm font-black flex items-center gap-2">
+              <Clock3 className="w-4 h-4" /> Time Rules
+            </h3>
+            {[
+              ['presentUntil', 'Present until'],
+              ['halfDayUntil', 'Late/Half-day until'],
+              ['closeAfter', 'Close after'],
+            ].map(([key, label]) => (
+              <label key={key} className="flex items-center justify-between gap-3 rounded-2xl border border-[#EAEAEA] bg-[#F8F8F8] p-3 text-xs font-black">
+                {label}
+                <input type="time" value={settingsDraft[key]} onChange={(event) => setSettingsDraft((draft) => ({ ...draft, [key]: event.target.value }))} className="bg-white rounded-xl px-3 py-2 font-mono outline-none" />
+              </label>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section className="bg-white border border-[#C8C8C8] rounded-3xl p-5">
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 border-b border-[#EAEAEA] pb-4">
+          <div>
+            <h3 className="text-sm font-black">{isAdmin ? 'Global Override Action' : 'Student Attendance CRUD'}</h3>
+            <p className="text-[10px] font-bold text-[#555555] mt-1">
+              {selectedClass || 'Select class'} | {attendanceDate} | Present {localCounts.present} / Absent {localCounts.absent}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <select value={selectedClass} onChange={(event) => setSelectedClass(event.target.value)} className="h-10 rounded-2xl border border-[#EAEAEA] bg-[#F8F8F8] px-3 text-xs font-bold outline-none">
+              {classNames.map((className) => <option key={className} value={className}>{className}</option>)}
+            </select>
+            <DateShifter date={attendanceDate} setDate={setAttendanceDate} />
+            <label className="h-10 rounded-2xl border border-[#EAEAEA] bg-[#F8F8F8] px-3 text-xs font-bold inline-flex items-center gap-2">
+              <Search className="w-4 h-4 text-[#555555]" />
+              <input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search roster" className="w-40 bg-transparent outline-none" />
+            </label>
           </div>
         </div>
 
-        <aside className="xl:col-span-4 space-y-6">
-          <Panel title="QR Machine Scan" icon={IdCard}>
-            <textarea
-              value={scanInput}
-              onChange={(event) => setScanInput(event.target.value)}
-              placeholder="Scan QR payload or type admission / employee ID"
-              className="w-full h-24 bg-[#F8F8F8] border border-[#EAEAEA] rounded-2xl p-3 text-xs font-semibold outline-none focus:border-black resize-none"
-            />
-            <button
-              type="button"
-              onClick={handleQrScan}
-              className="w-full px-4 py-3 bg-[#E1FA6C] border border-[#1A1A1A]/10 rounded-2xl text-xs font-black flex items-center justify-center gap-2"
-            >
-              <CalendarCheck2 className="w-4 h-4" /> Mark QR Attendance
-            </button>
-          </Panel>
-
-          <Panel title="Biometric Register" icon={Fingerprint}>
-            <div className="grid grid-cols-2 gap-2">
-              <select
-                value={selectedEntityType}
-                onChange={(event) => {
-                  setSelectedEntityType(event.target.value);
-                  setSelectedEntityId('');
-                }}
-                disabled={!canManageBiometric}
-                className="bg-[#F8F8F8] border border-[#EAEAEA] rounded-2xl px-3 py-2 text-xs font-bold outline-none disabled:opacity-60"
-              >
-                <option value="student">Students</option>
-                <option value="teacher">Teachers</option>
-                <option value="clerk">Clerks</option>
-                <option value="admin">Admins</option>
-              </select>
-              <select
-                value={selectedEntityId || selectedPerson?.entityId || ''}
-                onChange={(event) => setSelectedEntityId(event.target.value)}
-                disabled={!canManageBiometric}
-                className="bg-[#F8F8F8] border border-[#EAEAEA] rounded-2xl px-3 py-2 text-xs font-bold outline-none disabled:opacity-60"
-              >
-                {filteredDirectory.map((item) => (
-                  <option key={`${item.entityType}-${item.entityId}`} value={item.entityId}>
-                    {item.displayName}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <input
-              value={biometricToken}
-              onChange={(event) => setBiometricToken(event.target.value)}
-              placeholder="Thumb device template/token"
-              className="w-full bg-[#F8F8F8] border border-[#EAEAEA] rounded-2xl p-3 text-xs font-semibold outline-none focus:border-black"
-            />
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={handleRegisterBiometric}
-                disabled={!canManageBiometric}
-                className="px-4 py-3 bg-[#1A1A1A] text-white rounded-2xl text-xs font-black flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                <Save className="w-4 h-4" /> Save Thumb
-              </button>
-              <button
-                type="button"
-                onClick={handleBiometricAttendance}
-                disabled={!canManageBiometric}
-                className="px-4 py-3 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-2xl text-xs font-black flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                <Fingerprint className="w-4 h-4" /> Mark
-              </button>
-            </div>
-          </Panel>
-
-          <Panel title="Timing Rules" icon={Clock3}>
-            {[
-              ['presentUntil', 'On-time until'],
-              ['halfDayUntil', 'Half-day until'],
-              ['closeAfter', 'Close after'],
-            ].map(([key, label]) => (
-              <label key={key} className="flex items-center justify-between gap-3 text-xs font-black">
-                <span className="text-[#555555]">{label}</span>
-                <input
-                  type="time"
-                  value={settingsDraft[key]}
-                  onChange={(event) => setSettingsDraft((draft) => ({ ...draft, [key]: event.target.value }))}
-                  disabled={!canManageBiometric}
-                  className="bg-[#F8F8F8] border border-[#EAEAEA] rounded-xl px-3 py-2 font-mono outline-none disabled:opacity-60"
-                />
-              </label>
-            ))}
-            <label className="flex items-center justify-between gap-3 text-xs font-black">
-              <span className="text-[#555555]">Teacher QR scan</span>
-              <input
-                type="checkbox"
-                checked={settingsDraft.allowTeacherQrScan}
-                onChange={(event) => setSettingsDraft((draft) => ({ ...draft, allowTeacherQrScan: event.target.checked }))}
-                disabled={!canManageBiometric}
-                className="w-4 h-4"
-              />
-            </label>
-            <button
-              type="button"
-              onClick={handleSaveSettings}
-              disabled={!canManageBiometric}
-              className="w-full px-4 py-3 bg-[#E1FA6C] border border-[#1A1A1A]/10 rounded-2xl text-xs font-black flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              <ShieldCheck className="w-4 h-4" /> Save Rules
-            </button>
-          </Panel>
-
-          <Panel title="Audit Logs" icon={ShieldCheck}>
-            <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
-              {logs.slice(0, 18).map((log) => (
-                <div key={log._id} className="bg-[#F8F8F8] border border-[#EAEAEA] rounded-2xl p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs font-black truncate">{log.displayName}</p>
-                    <span className={`px-2 py-0.5 rounded-lg border text-[9px] font-black uppercase ${statusTone[log.status] || statusTone.unmarked}`}>
-                      {log.status}
-                    </span>
-                  </div>
-                  <p className="text-[10px] text-[#555555] font-mono mt-1">
-                    {log.attendanceDate} | {sourceLabel[log.source] || log.source} | {log.recordedBy || '-'}
-                  </p>
-                </div>
-              ))}
-              {!logs.length && (
-                <p className="text-center py-8 text-[10px] font-black uppercase text-neutral-400">
-                  No audit logs in this period.
-                </p>
+        <div className="mt-4 overflow-x-auto rounded-2xl border border-[#EAEAEA]">
+          <table className="w-full min-w-[720px] text-left text-xs font-bold">
+            <thead className="bg-[#EAEAEA] text-[#555555] uppercase text-[10px]">
+              <tr>
+                <th className="px-3 py-3">Roll No</th>
+                <th className="px-3 py-3">Name</th>
+                <th className="px-3 py-3">Admission</th>
+                <th className="px-3 py-3">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#EAEAEA]">
+              {roster.map((student) => {
+                const status = draftStatus[student.entityId] || 'present';
+                return (
+                  <tr key={student.entityId} className="hover:bg-[#F8F8F8]">
+                    <td className="px-3 py-3 font-mono">{student.rollNo || '-'}</td>
+                    <td className="px-3 py-3">
+                      <p className="font-black">{student.displayName}</p>
+                      <p className="text-[10px] text-[#555555]">{student.className}-{student.section || '-'}</p>
+                    </td>
+                    <td className="px-3 py-3 font-mono text-[#555555]">{student.admissionNumber}</td>
+                    <td className="px-3 py-3">
+                      <div className="flex gap-2">
+                        <StatusButton label="A" active={status === 'absent'} tone="absent" onClick={() => setStudentStatus(student, 'absent')} />
+                        <StatusButton label="P" active={status === 'present'} tone="present" onClick={() => setStudentStatus(student, 'present')} />
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              {!roster.length && (
+                <tr>
+                  <td colSpan="4" className="py-10 text-center text-[10px] font-black uppercase tracking-widest text-neutral-400">
+                    {isLoading ? 'Loading roster...' : 'No students found for this class.'}
+                  </td>
+                </tr>
               )}
-            </div>
-          </Panel>
-        </aside>
+            </tbody>
+          </table>
+        </div>
       </section>
+
+      <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-[#C8C8C8] bg-white/95 px-6 py-3 backdrop-blur">
+        <div className="mx-auto flex max-w-5xl justify-end gap-2">
+          <button type="button" onClick={resetDraft} className="h-11 px-4 rounded-2xl border border-[#C8C8C8] bg-white text-xs font-black inline-flex items-center gap-2">
+            <X className="w-4 h-4" /> Cancel
+          </button>
+          <button type="button" onClick={resetDraft} className="h-11 px-4 rounded-2xl border border-[#C8C8C8] bg-[#F8F8F8] text-xs font-black inline-flex items-center gap-2">
+            <RotateCcw className="w-4 h-4" /> Reset
+          </button>
+          <button type="button" onClick={saveRegister} className="h-11 px-5 rounded-2xl bg-[#E1FA6C] border border-[#1A1A1A]/10 text-xs font-black inline-flex items-center gap-2">
+            <Save className="w-4 h-4" /> {isAdmin ? 'Save' : 'Save Attendance'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
 
-const Metric = ({ label, value, tone = 'text-[#1A1A1A]' }) => (
-  <div className="bg-[#F8F8F8] border border-[#EAEAEA] rounded-2xl p-3">
-    <p className="text-[10px] font-black uppercase text-[#555555]">{label}</p>
-    <p className={`text-2xl font-black mt-1 ${tone}`}>{value}</p>
+const MetricCard = ({ title, counts = {} }) => (
+  <article className="rounded-2xl border border-[#EAEAEA] bg-[#F8F8F8] p-4">
+    <p className="text-[10px] font-black uppercase text-[#555555]">{title}</p>
+    <div className="mt-3 grid grid-cols-3 gap-2">
+      <MiniMetric label="Present" value={counts?.present || 0} tone="text-emerald-700" />
+      <MiniMetric label="Absent" value={counts?.absent || 0} tone="text-rose-700" />
+      <MiniMetric label="Late" value={counts?.late || 0} tone="text-amber-700" />
+    </div>
+  </article>
+);
+
+const MiniMetric = ({ label, value, tone }) => (
+  <div className="rounded-xl bg-white p-2">
+    <p className="text-[9px] font-black uppercase text-[#555555]">{label}</p>
+    <p className={`text-xl font-black ${tone}`}>{value}</p>
   </div>
 );
 
-const Panel = ({ title, icon, children }) => (
-  <div className="bg-white border border-[#C8C8C8] rounded-3xl p-5 space-y-3">
-    <h3 className="text-sm font-black flex items-center gap-2 border-b border-[#EAEAEA] pb-3">
-      {React.createElement(icon, { className: 'w-4 h-4 text-[#555555]' })} {title}
-    </h3>
-    {children}
+const Field = ({ label, value, onChange }) => (
+  <label className="rounded-2xl border border-[#EAEAEA] bg-[#F8F8F8] p-3 text-xs font-black">
+    <span className="text-[#555555]">{label}</span>
+    <input value={value} onChange={(event) => onChange(event.target.value)} className="mt-2 w-full bg-transparent font-mono outline-none" />
+  </label>
+);
+
+const DateShifter = ({ date, setDate }) => (
+  <div className="h-10 rounded-2xl border border-[#EAEAEA] bg-[#F8F8F8] px-2 inline-flex items-center gap-1">
+    <button type="button" onClick={() => setDate(addDays(date, -1))} className="h-8 w-8 grid place-items-center rounded-xl bg-white" title="Previous date">
+      <ChevronLeft className="w-4 h-4" />
+    </button>
+    <input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="h-8 bg-transparent px-1 text-xs font-black outline-none" />
+    <button type="button" onClick={() => setDate(addDays(date, 1))} className="h-8 w-8 grid place-items-center rounded-xl bg-white" title="Next date">
+      <ChevronRight className="w-4 h-4" />
+    </button>
   </div>
 );
+
+const StatusButton = ({ label, active, tone, onClick }) => {
+  const activeClass = tone === 'absent' ? 'bg-rose-600 text-white border-rose-700' : 'bg-emerald-600 text-white border-emerald-700';
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`h-10 w-10 rounded-full border text-sm font-black transition-colors ${
+        active ? activeClass : 'bg-white text-[#555555] border-[#C8C8C8]'
+      }`}
+    >
+      {label}
+    </button>
+  );
+};
 
 export default AttendanceControl;

@@ -65,13 +65,37 @@ const attendanceLogSchema = new mongoose.Schema(
     },
     source: {
       type: String,
-      enum: ['qr', 'biometric', 'manual'],
+      enum: ['qr', 'biometric', 'manual', 'self-service', 'teacher-mobile', 'clerk-self'],
       required: true,
     },
     deviceId: {
       type: String,
       trim: true,
       default: '',
+    },
+    deviceType: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    gpsLatitude: {
+      type: Number,
+      default: null,
+    },
+    gpsLongitude: {
+      type: Number,
+      default: null,
+    },
+    wifiBssid: {
+      type: String,
+      uppercase: true,
+      trim: true,
+      default: '',
+    },
+    action: {
+      type: String,
+      enum: ['clock-in', 'clock-out', 'student-register', 'scan', 'override'],
+      default: 'scan',
     },
     note: {
       type: String,

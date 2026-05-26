@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { BookOpen, Clock, GraduationCap, Layers, Users } from 'lucide-react';
+import { fetchEffectiveTimetable, getClassDayRows, todayIsoDate } from '../../components/common/timetableStore';
 import {
   getClassLabel,
   getClassRoster,
@@ -12,7 +13,26 @@ const MyClass = ({ session }) => {
   const student = getPortalStudent(session);
   const roster = getClassRoster(student);
   const subjects = getSubjectPlan(student);
-  const timetable = getTimetable(student);
+  const [liveTimetable, setLiveTimetable] = useState([]);
+  const [timetableSource, setTimetableSource] = useState('default');
+  const timetable = liveTimetable.length ? liveTimetable : getTimetable(student);
+
+  useEffect(() => {
+    let active = true;
+    fetchEffectiveTimetable({ date: todayIsoDate(), className: student.className })
+      .then((payload) => {
+        if (!active) return;
+        const rows = getClassDayRows(payload.timetable, student.className).filter((period) => period.subject);
+        setLiveTimetable(rows);
+        setTimetableSource(payload.source || 'default');
+      })
+      .catch(() => {
+        if (active) setLiveTimetable([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [student.className]);
 
   return (
     <div className="space-y-6 pb-8 select-none font-sans text-[#1A1A1A]">
@@ -39,7 +59,7 @@ const MyClass = ({ session }) => {
             <h3 className="text-sm font-black flex items-center gap-2">
               <Clock className="w-4 h-4" /> Today Timetable
             </h3>
-            <span className="text-[10px] font-black text-[#555555]">Room 201</span>
+            <span className="text-[10px] font-black text-[#555555] uppercase">{timetableSource}</span>
           </div>
 
           <div className="space-y-3">
@@ -50,7 +70,9 @@ const MyClass = ({ session }) => {
                 </span>
                 <div className="min-w-0">
                   <p className="text-xs font-black truncate">{period.subject}</p>
-                  <p className="text-[10px] font-bold text-[#555555]">{period.time} | {period.room}</p>
+                  <p className="text-[10px] font-bold text-[#555555]">
+                    {[period.time, period.teacher, period.room].filter(Boolean).join(' | ') || 'Timing not set'}
+                  </p>
                 </div>
               </div>
             ))}

@@ -1,225 +1,322 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   CalendarCheck,
   CheckCircle2,
-  Clock,
+  ChevronLeft,
+  ChevronRight,
+  LocateFixed,
+  Lock,
+  RotateCcw,
   Save,
-  Users,
-  XCircle,
+  ShieldCheck,
+  X,
 } from 'lucide-react';
+import { useMasterData } from '../../components/common/masterData';
 import {
-  getTeacherAttendanceRows,
-  getTeacherClassSections,
-  getTeacherProfile,
-  getTeacherRoster,
-} from './teacherPortalData';
+  clockAttendance,
+  saveStudentAttendanceBatch,
+  useAttendanceOverview,
+} from '../../components/common/attendanceStore';
 
-const attendanceOptions = [
-  { id: 'Present', label: 'P', tone: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
-  { id: 'Absent', label: 'A', tone: 'bg-rose-50 text-rose-700 border-rose-100' },
-  { id: 'Late', label: 'L', tone: 'bg-amber-50 text-amber-700 border-amber-100' },
-  { id: 'Leave', label: 'Lv', tone: 'bg-blue-50 text-blue-700 border-blue-100' },
-];
+const todayKey = () => new Date().toISOString().slice(0, 10);
+const addDays = (date, days) => {
+  const next = new Date(`${date}T00:00:00`);
+  next.setDate(next.getDate() + days);
+  return next.toISOString().slice(0, 10);
+};
+const toRad = (degree) => (degree * Math.PI) / 180;
+const distanceMeters = (a, b) => {
+  if (!a || !b || a.latitude === null || b.latitude === null) return Number.POSITIVE_INFINITY;
+  const earth = 6371000;
+  const dLat = toRad(b.latitude - a.latitude);
+  const dLon = toRad(b.longitude - a.longitude);
+  const x =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(a.latitude)) * Math.cos(toRad(b.latitude)) * Math.sin(dLon / 2) ** 2;
+  return 2 * earth * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+};
 
 const Attendance = ({ session }) => {
-  const profile = getTeacherProfile(session);
-  const sections = getTeacherClassSections(session);
-  const classRows = getTeacherAttendanceRows(session);
-  const [selectedClass, setSelectedClass] = useState(sections[0]?.className || 'Class 9');
-  const [statusByStudent, setStatusByStudent] = useState({});
-  const roster = getTeacherRoster(session, selectedClass);
-
-  const summary = useMemo(() => {
-    const counts = roster.reduce(
-      (total, student) => {
-        const status = statusByStudent[student.id] || student.attendanceStatus || 'Present';
-        total[status] = (total[status] || 0) + 1;
-        return total;
-      },
-      { Present: 0, Absent: 0, Late: 0, Leave: 0 }
+  const masterData = useMasterData();
+  const teacher = useMemo(() => {
+    const username = String(session?.username || '').toUpperCase();
+    return masterData.teachers.find((item) =>
+      [item.id, item.empId, item.username, item.name].some((value) => String(value || '').toUpperCase() === username)
     );
+  }, [masterData.teachers, session?.username]);
 
-    const effectivePresent = counts.Present + counts.Late;
-    const percentage = roster.length ? Math.round((effectivePresent / roster.length) * 100) : 0;
+  const assignedClass = teacher?.isClassTeacher === 'Yes' ? teacher.assignedClassTeacherFor || '' : '';
+  const [attendanceDate, setAttendanceDate] = useState(todayKey());
+  const [overrideToken, setOverrideToken] = useState('');
+  const [draftStatus, setDraftStatus] = useState({});
+  const [message, setMessage] = useState('');
+  const [device, setDevice] = useState({
+    checking: false,
+    mock: null,
+    coords: null,
+    allowed: false,
+    text: 'Run validation before marking attendance.',
+  });
 
-    return { ...counts, percentage, total: roster.length };
-  }, [roster, statusByStudent]);
+  const { overview, isLoading, error, reload } = useAttendanceOverview({
+    date: attendanceDate,
+    className: assignedClass,
+    period: 'monthly',
+  });
 
-  const setStudentStatus = (studentId, status) => {
-    setStatusByStudent((prev) => ({ ...prev, [studentId]: status }));
+  useEffect(() => {
+    const next = {};
+    (overview?.roster || []).forEach((student) => {
+      next[student.entityId] = student.todayLog?.status === 'absent' ? 'absent' : 'present';
+    });
+    setDraftStatus(next);
+  }, [overview?.roster]);
+
+  const roster = useMemo(
+    () => [...(overview?.roster || [])].sort((a, b) => Number(a.rollNo || 0) - Number(b.rollNo || 0)),
+    [overview?.roster]
+  );
+
+  const summary = useMemo(
+    () =>
+      roster.reduce(
+        (acc, student) => {
+          acc[draftStatus[student.entityId] === 'absent' ? 'absent' : 'present'] += 1;
+          return acc;
+        },
+        { present: 0, absent: 0 }
+      ),
+    [draftStatus, roster]
+  );
+
+  const isHistorical = attendanceDate !== todayKey();
+  const canSave = assignedClass && (!isHistorical || overrideToken.trim());
+
+  const validateDevice = async () => {
+    const nativeApi = window.MGPSNativeDevice || window.NativeDevice || {};
+    const mock = typeof nativeApi.isMockLocation === 'function' ? await nativeApi.isMockLocation() : false;
+    if (mock) {
+      setDevice({ checking: false, mock: true, coords: null, allowed: false, text: 'Mock location detected. Attendance is locked.' });
+      return;
+    }
+    if (!navigator.geolocation) {
+      setDevice({ checking: false, mock: false, coords: null, allowed: false, text: 'GPS unavailable on this device.' });
+      return;
+    }
+    setDevice((current) => ({ ...current, checking: true, text: 'Checking GPS boundary...' }));
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const coords = { latitude: position.coords.latitude, longitude: position.coords.longitude };
+        const settings = overview?.settings || {};
+        const school = {
+          latitude: Number(settings.geofenceLatitude),
+          longitude: Number(settings.geofenceLongitude),
+        };
+        const distance = distanceMeters(coords, school);
+        const allowed = Number.isFinite(distance) && distance <= Number(settings.geofenceRadiusMeters || 100);
+        setDevice({
+          checking: false,
+          mock: false,
+          coords,
+          allowed,
+          text: allowed ? `Validated inside school boundary (${Math.round(distance)}m).` : 'Out of school boundary.',
+        });
+      },
+      () => setDevice({ checking: false, mock: false, coords: null, allowed: false, text: 'GPS permission denied.' }),
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
   };
 
-  const markAllPresent = () => {
-    setStatusByStudent((prev) => ({
-      ...prev,
-      ...Object.fromEntries(roster.map((student) => [student.id, 'Present'])),
-    }));
+  const markMyAttendance = async () => {
+    try {
+      const payload = await clockAttendance({
+        action: 'clock-in',
+        source: 'teacher-mobile',
+        requiresGeofence: true,
+        isMockLocation: device.mock === true,
+        gpsLatitude: device.coords?.latitude,
+        gpsLongitude: device.coords?.longitude,
+        deviceId: localStorage.getItem('mgps_device_id') || navigator.userAgent,
+        deviceType: navigator.userAgent,
+        receptionQrVerified: true,
+      });
+      setMessage(payload.message || 'Teacher attendance marked.');
+    } catch (clockError) {
+      setMessage(clockError.message);
+    }
   };
 
-  const handleSave = () => {
-    alert(`${selectedClass} attendance saved for ${profile.displayName}.`);
+  const saveRegister = async () => {
+    try {
+      const payload = await saveStudentAttendanceBatch({
+        className: assignedClass,
+        attendanceDate,
+        adminOverrideToken: overrideToken,
+        records: roster.map((student) => ({
+          entityId: student.entityId,
+          admissionNumber: student.admissionNumber,
+          status: draftStatus[student.entityId] === 'absent' ? 'absent' : 'present',
+        })),
+      });
+      setMessage(payload.message || 'Class attendance saved.');
+      reload();
+    } catch (saveError) {
+      setMessage(saveError.message);
+    }
   };
 
-  return (
-    <div className="space-y-6 pb-8 select-none font-sans text-[#1A1A1A]">
-      <section className="bg-white border border-[#C8C8C8] rounded-3xl p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-black flex items-center gap-2">
-            <CalendarCheck className="w-5 h-5" /> Attendance Register
-          </h2>
-          <p className="text-xs font-bold text-[#555555] mt-1">
-            Mark daily attendance for allotted classes | {profile.employeeId}
+  const resetDraft = () => {
+    const next = {};
+    roster.forEach((student) => {
+      next[student.entityId] = student.todayLog?.status === 'absent' ? 'absent' : 'present';
+    });
+    setDraftStatus(next);
+  };
+
+  if (!assignedClass) {
+    return (
+      <div className="min-h-[70vh] grid place-items-center font-sans text-[#1A1A1A]">
+        <div className="max-w-md rounded-3xl border border-rose-100 bg-rose-50 p-6 text-center">
+          <Lock className="mx-auto h-8 w-8 text-rose-700" />
+          <h2 className="mt-3 text-lg font-black">Access denied</h2>
+          <p className="mt-2 text-xs font-bold text-rose-700">
+            Student attendance is restricted to designated class teachers.
           </p>
         </div>
+      </div>
+    );
+  }
 
-        <div className="grid grid-cols-3 gap-2 min-w-full lg:min-w-[420px]">
-          <Summary label="Present" value={summary.Present} icon={CheckCircle2} tone="text-emerald-700 bg-emerald-50 border-emerald-100" />
-          <Summary label="Absent" value={summary.Absent} icon={XCircle} tone="text-rose-700 bg-rose-50 border-rose-100" />
-          <Summary label="Ratio" value={`${summary.percentage}%`} icon={Clock} tone="text-blue-700 bg-blue-50 border-blue-100" />
+  return (
+    <div className="space-y-5 pb-28 select-none font-sans text-[#1A1A1A]">
+      <section className="rounded-3xl border border-[#C8C8C8] bg-white p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 className="flex items-center gap-2 text-lg font-black">
+              <CalendarCheck className="h-5 w-5 text-emerald-700" /> Attendance
+            </h2>
+            <p className="mt-1 text-xs font-bold text-[#555555]">
+              {session?.displayName || session?.username} | Class Teacher: {assignedClass}
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:min-w-72">
+            <Metric label="Present" value={summary.present} tone="text-emerald-700 bg-emerald-50 border-emerald-100" />
+            <Metric label="Absent" value={summary.absent} tone="text-rose-700 bg-rose-50 border-rose-100" />
+          </div>
         </div>
       </section>
 
-      <section className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-        <div className="xl:col-span-4 space-y-6">
-          <div className="bg-white border border-[#C8C8C8] rounded-3xl p-5">
-            <div className="flex items-center justify-between border-b border-[#EAEAEA] pb-3 mb-4">
-              <h3 className="text-sm font-black">Class Summary</h3>
-              <span className="text-[10px] font-black text-[#555555]">Today</span>
-            </div>
+      {(message || error) && <div className="rounded-2xl bg-[#1A1A1A] px-4 py-3 text-xs font-bold text-white">{message || error}</div>}
 
-            <div className="space-y-3">
-              {classRows.map((row) => (
-                <button
-                  key={row.id}
-                  type="button"
-                  onClick={() => setSelectedClass(row.className)}
-                  className={`w-full text-left rounded-2xl border p-3 transition-colors ${
-                    selectedClass === row.className
-                      ? 'bg-[#E1FA6C] border-[#1A1A1A]/10'
-                      : 'bg-[#F8F8F8] border-[#EAEAEA] hover:border-[#C8C8C8]'
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-black">{row.label}</p>
-                      <p className="text-[10px] font-bold text-[#555555] mt-1">
-                        {row.present}/{row.total} present | {row.late} late
-                      </p>
-                    </div>
-                    <span className="text-sm font-black">{row.percentage}%</span>
-                  </div>
-                </button>
-              ))}
-            </div>
+      <section className="rounded-3xl border border-[#C8C8C8] bg-white p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-[10px] font-black uppercase text-[#555555]">Mark My Attendance</p>
+            <p className="mt-1 text-sm font-black">{device.text}</p>
           </div>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={validateDevice} className="h-11 rounded-2xl border border-[#C8C8C8] bg-[#F8F8F8] px-4 text-xs font-black inline-flex items-center gap-2">
+              <LocateFixed className="h-4 w-4" /> Validate
+            </button>
+            <button type="button" disabled={!device.allowed} onClick={markMyAttendance} className="h-11 rounded-2xl bg-[#E1FA6C] px-4 text-xs font-black disabled:opacity-40 inline-flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4" /> Mark My Attendance
+            </button>
+          </div>
+        </div>
+      </section>
 
-          <div className="bg-white border border-[#C8C8C8] rounded-3xl p-5 space-y-4">
-            <h3 className="text-sm font-black">Selected Class Health</h3>
-            <div className="w-full aspect-square max-w-60 mx-auto rounded-full border-[16px] border-[#EAEAEA] flex items-center justify-center">
-              <div className="text-center">
-                <p className="text-4xl font-black">{summary.percentage}%</p>
-                <p className="text-[10px] font-black uppercase text-[#555555]">Attendance</p>
-              </div>
-            </div>
-            {summary.percentage < 75 ? (
-              <div className="bg-rose-50 border border-rose-100 rounded-2xl p-3 text-xs font-bold text-rose-700 flex gap-2">
-                <AlertTriangle className="w-4 h-4 shrink-0" /> Attendance is below the minimum threshold.
-              </div>
-            ) : (
-              <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-3 text-xs font-bold text-emerald-700 flex gap-2">
-                <CheckCircle2 className="w-4 h-4 shrink-0" /> Attendance is healthy for this class.
-              </div>
+      <section className="rounded-3xl border border-[#C8C8C8] bg-white p-5">
+        <div className="flex flex-col gap-3 border-b border-[#EAEAEA] pb-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="text-sm font-black">{assignedClass} Class Roster</h3>
+            {isHistorical && (
+              <p className="mt-1 flex items-center gap-1 text-[10px] font-bold text-amber-700">
+                <AlertTriangle className="h-3 w-3" /> Historical editing needs Admin override token.
+              </p>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <DateShifter date={attendanceDate} setDate={setAttendanceDate} />
+            {isHistorical && (
+              <input
+                value={overrideToken}
+                onChange={(event) => setOverrideToken(event.target.value)}
+                placeholder="Admin override token"
+                className="h-10 rounded-2xl border border-[#EAEAEA] bg-[#F8F8F8] px-3 text-xs font-bold outline-none"
+              />
             )}
           </div>
         </div>
 
-        <div className="xl:col-span-8 bg-white border border-[#C8C8C8] rounded-3xl p-5">
-          <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-[#EAEAEA] pb-3 mb-4 gap-3">
-            <div>
-              <h3 className="text-sm font-black flex items-center gap-2">
-                <Users className="w-4 h-4" /> {selectedClass} Daily Sheet
-              </h3>
-              <p className="text-[10px] font-bold text-[#555555] mt-1">
-                Present includes on-time and late arrivals in ratio.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={markAllPresent}
-                className="px-4 py-2 rounded-full bg-[#F8F8F8] border border-[#EAEAEA] text-xs font-black"
-              >
-                Mark All Present
-              </button>
-              <button
-                type="button"
-                onClick={handleSave}
-                className="px-4 py-2 rounded-full bg-[#E1FA6C] border border-[#1A1A1A]/10 text-xs font-black flex items-center gap-2"
-              >
-                <Save className="w-4 h-4" /> Save Register
-              </button>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto rounded-2xl border border-[#EAEAEA]">
-            <table className="w-full min-w-[760px] text-left text-xs font-bold">
-              <thead className="bg-[#EAEAEA] text-[#555555] uppercase text-[10px]">
-                <tr>
-                  <th className="px-3 py-2">Roll</th>
-                  <th className="px-3 py-2">Student</th>
-                  <th className="px-3 py-2">Admission No.</th>
-                  <th className="px-3 py-2">Status</th>
-                  <th className="px-3 py-2">Guardian</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#EAEAEA]">
-                {roster.map((student) => {
-                  const status = statusByStudent[student.id] || student.attendanceStatus || 'Present';
-
-                  return (
-                    <tr key={student.id} className="hover:bg-[#F8F8F8]">
-                      <td className="px-3 py-3 font-mono">{student.rollNo}</td>
-                      <td className="px-3 py-3 font-black">{student.displayName}</td>
-                      <td className="px-3 py-3 font-mono text-[#555555]">{student.admissionNumber}</td>
-                      <td className="px-3 py-3">
-                        <div className="flex flex-wrap gap-1.5">
-                          {attendanceOptions.map((option) => (
-                            <button
-                              key={option.id}
-                              type="button"
-                              onClick={() => setStudentStatus(student.id, option.id)}
-                              className={`w-9 h-8 rounded-xl border text-[10px] font-black transition-colors ${
-                                status === option.id
-                                  ? option.tone
-                                  : 'bg-white text-[#555555] border-[#EAEAEA] hover:border-[#C8C8C8]'
-                              }`}
-                              title={option.id}
-                            >
-                              {option.label}
-                            </button>
-                          ))}
-                        </div>
-                      </td>
-                      <td className="px-3 py-3 text-[#555555]">{student.guardianPhone}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+        <div className="mt-4 divide-y divide-[#EAEAEA] overflow-hidden rounded-2xl border border-[#EAEAEA]">
+          {roster.map((student) => {
+            const status = draftStatus[student.entityId] || 'present';
+            return (
+              <div key={student.entityId} className="grid grid-cols-[56px_1fr_96px] items-center gap-2 bg-white p-3 text-xs font-bold">
+                <span className="font-mono text-[#555555]">{student.rollNo || '-'}</span>
+                <div className="min-w-0">
+                  <p className="truncate font-black">{student.displayName}</p>
+                  <p className="truncate text-[10px] text-[#555555]">{student.admissionNumber}</p>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <StatusButton label="A" active={status === 'absent'} tone="absent" onClick={() => setDraftStatus((draft) => ({ ...draft, [student.entityId]: 'absent' }))} />
+                  <StatusButton label="P" active={status === 'present'} tone="present" onClick={() => setDraftStatus((draft) => ({ ...draft, [student.entityId]: 'present' }))} />
+                </div>
+              </div>
+            );
+          })}
+          {!roster.length && (
+            <p className="py-10 text-center text-[10px] font-black uppercase tracking-widest text-neutral-400">
+              {isLoading ? 'Loading roster...' : 'No students found.'}
+            </p>
+          )}
         </div>
       </section>
+
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[#C8C8C8] bg-white/95 px-4 py-3 backdrop-blur">
+        <div className="mx-auto flex max-w-3xl justify-end gap-2">
+          <button type="button" onClick={resetDraft} className="h-11 rounded-2xl border border-[#C8C8C8] bg-white px-4 text-xs font-black inline-flex items-center gap-2">
+            <X className="h-4 w-4" /> Cancel
+          </button>
+          <button type="button" onClick={resetDraft} className="h-11 rounded-2xl border border-[#C8C8C8] bg-[#F8F8F8] px-4 text-xs font-black inline-flex items-center gap-2">
+            <RotateCcw className="h-4 w-4" /> Reset
+          </button>
+          <button type="button" disabled={!canSave} onClick={saveRegister} className="h-11 rounded-2xl bg-[#E1FA6C] px-4 text-xs font-black disabled:opacity-40 inline-flex items-center gap-2">
+            <Save className="h-4 w-4" /> Save Attendance
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
 
-const Summary = ({ label, value, icon, tone }) => (
-  <div className={`border rounded-2xl p-3 ${tone}`}>
-    {React.createElement(icon, { className: 'w-4 h-4 mb-2' })}
-    <p className="text-[10px] font-black uppercase">{label}</p>
-    <p className="text-lg font-black mt-0.5">{value}</p>
+const DateShifter = ({ date, setDate }) => (
+  <div className="h-10 rounded-2xl border border-[#EAEAEA] bg-[#F8F8F8] px-2 inline-flex items-center gap-1">
+    <button type="button" onClick={() => setDate(addDays(date, -1))} className="grid h-8 w-8 place-items-center rounded-xl bg-white">
+      <ChevronLeft className="h-4 w-4" />
+    </button>
+    <input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="h-8 bg-transparent text-xs font-black outline-none" />
+    <button type="button" onClick={() => setDate(addDays(date, 1))} className="grid h-8 w-8 place-items-center rounded-xl bg-white">
+      <ChevronRight className="h-4 w-4" />
+    </button>
   </div>
 );
+
+const Metric = ({ label, value, tone }) => (
+  <div className={`rounded-2xl border p-3 ${tone}`}>
+    <p className="text-[10px] font-black uppercase">{label}</p>
+    <p className="mt-1 text-xl font-black">{value}</p>
+  </div>
+);
+
+const StatusButton = ({ label, active, tone, onClick }) => {
+  const activeClass = tone === 'absent' ? 'bg-rose-600 text-white border-rose-700' : 'bg-emerald-600 text-white border-emerald-700';
+  return (
+    <button type="button" onClick={onClick} className={`h-10 w-10 rounded-full border text-sm font-black ${active ? activeClass : 'border-[#C8C8C8] bg-white text-[#555555]'}`}>
+      {label}
+    </button>
+  );
+};
 
 export default Attendance;

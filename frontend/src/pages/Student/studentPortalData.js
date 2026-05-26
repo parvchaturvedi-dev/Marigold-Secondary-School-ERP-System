@@ -1,20 +1,5 @@
-const DEFAULT_STUDENT = {
-  id: 'student',
-  displayName: 'Student',
-  className: 'Class 9',
-  section: 'A',
-  rollNo: 1,
-  admissionNumber: 'MGPS-2026-301',
-  fatherName: 'Registered Guardian',
-  motherName: 'Registered Parent',
-  guardianPhone: 'Not updated',
-  dob: '2012-01-01',
-  gender: 'Not updated',
-  bloodGroup: 'Not updated',
-  house: 'School House',
-  busRoute: 'Self',
-  address: 'Registered residential address',
-};
+import { getActiveStudentProfile, normalizeStudentProfile } from '../../components/common/portalProfiles';
+import { getStudentsForClass, getSubjectsForClass } from '../../components/common/examinationStore';
 
 const hasValue = (value) => value !== undefined && value !== null && value !== '';
 
@@ -27,15 +12,15 @@ const hashText = (value = '') =>
 const getClassNumber = (student) =>
   Number(String(student?.className || '').replace(/\D/g, '')) || 9;
 
-export const getPortalStudent = (session) => ({
-  ...DEFAULT_STUDENT,
-  displayName: session?.displayName || DEFAULT_STUDENT.displayName,
-  ...(session?.studentProfiles?.[0] || {}),
-  ...(session?.activeStudent || {}),
-});
+export const getPortalStudent = (session) =>
+  getActiveStudentProfile(session) ||
+  normalizeStudentProfile({
+    id: session?.username || 'student',
+    displayName: session?.displayName || session?.username || 'Student',
+  });
 
 export const getClassLabel = (student) =>
-  [student.className || 'Class', student.section || 'A'].filter(Boolean).join('-');
+  [student.className, student.section].filter(Boolean).join('-') || 'Class not assigned';
 
 export const getStudentMetrics = (student) => {
   const seed = hashText(student.admissionNumber || student.id);
@@ -60,23 +45,12 @@ export const getStudentMetrics = (student) => {
 export const getSubjectPlan = (student) => {
   if (student.subjectPlan?.length) return student.subjectPlan;
 
-  const juniorSubjects = [
-    { subject: 'English', teacher: 'Mrs. Kavita Rao', progress: 68 },
-    { subject: 'Mathematics', teacher: 'Mr. Nitin Bansal', progress: 72 },
-    { subject: 'Science', teacher: 'Mrs. Sunita Sharma', progress: 64 },
-    { subject: 'Social Studies', teacher: 'Mr. Harish Meena', progress: 70 },
-    { subject: 'Hindi', teacher: 'Mrs. Pooja Saini', progress: 76 },
-  ];
-
-  const seniorSubjects = [
-    { subject: 'English', teacher: 'Mrs. Kavita Rao', progress: 74 },
-    { subject: 'Mathematics', teacher: 'Dr. Ramesh Verma', progress: 69 },
-    { subject: 'Physics', teacher: 'Dr. Ramesh Verma', progress: 71 },
-    { subject: 'Chemistry', teacher: 'Mrs. Meena Kapoor', progress: 66 },
-    { subject: 'Computer Science', teacher: 'Mr. Arpit Jain', progress: 81 },
-  ];
-
-  return getClassNumber(student) >= 9 ? seniorSubjects : juniorSubjects;
+  return getSubjectsForClass(student.className).map((item, index) => ({
+    subject: item.subject,
+    teacher: item.teacherName || 'Not assigned',
+    progress: pickNumber(item.progress, 0),
+    order: index + 1,
+  }));
 };
 
 export const getAttendanceRows = (student) => {
@@ -102,33 +76,10 @@ export const getAttendanceRows = (student) => {
 export const getClassRoster = (student) => {
   if (student.classRoster?.length) return student.classRoster;
 
-  return [
-    student,
-    {
-      id: 'classmate-1',
-      displayName: 'Isha Patel',
-      admissionNumber: 'MGPS-2026-228',
-      rollNo: 2,
-      className: student.className,
-      section: student.section,
-    },
-    {
-      id: 'classmate-2',
-      displayName: 'Rohan Verma',
-      admissionNumber: 'MGPS-2026-239',
-      rollNo: 3,
-      className: student.className,
-      section: student.section,
-    },
-    {
-      id: 'classmate-3',
-      displayName: 'Priya Singh',
-      admissionNumber: 'MGPS-2026-245',
-      rollNo: 4,
-      className: student.className,
-      section: student.section,
-    },
-  ].sort((a, b) => Number(a.rollNo || 99) - Number(b.rollNo || 99));
+  const roster = getStudentsForClass(student.className);
+  return (roster.length ? roster : [student]).sort(
+    (a, b) => Number(a.rollNo || 99) - Number(b.rollNo || 99)
+  );
 };
 
 export const getTimetable = (student) => {
@@ -137,12 +88,12 @@ export const getTimetable = (student) => {
   const subjects = getSubjectPlan(student);
 
   return [
-    { period: '1', time: '08:30 - 09:10', subject: subjects[0]?.subject, room: 'Room 201' },
-    { period: '2', time: '09:10 - 09:50', subject: subjects[1]?.subject, room: 'Room 201' },
-    { period: '3', time: '09:50 - 10:30', subject: subjects[2]?.subject, room: 'Lab 2' },
-    { period: '4', time: '10:45 - 11:25', subject: subjects[3]?.subject, room: 'Room 201' },
-    { period: '5', time: '11:25 - 12:05', subject: subjects[4]?.subject, room: 'Room 201' },
-  ];
+    { period: '1', time: '08:30 - 09:10', subject: subjects[0]?.subject || 'Not assigned', room: 'Not assigned' },
+    { period: '2', time: '09:10 - 09:50', subject: subjects[1]?.subject || 'Not assigned', room: 'Not assigned' },
+    { period: '3', time: '09:50 - 10:30', subject: subjects[2]?.subject || 'Not assigned', room: 'Not assigned' },
+    { period: '4', time: '10:45 - 11:25', subject: subjects[3]?.subject || 'Not assigned', room: 'Not assigned' },
+    { period: '5', time: '11:25 - 12:05', subject: subjects[4]?.subject || 'Not assigned', room: 'Not assigned' },
+  ].filter((row) => row.subject !== 'Not assigned' || subjects.length === 0);
 };
 
 export const getExamRecords = (student) => {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   BookOpen,
   CheckCircle2,
@@ -9,6 +9,7 @@ import {
   UserRound,
   Users,
 } from 'lucide-react';
+import { fetchEffectiveTimetable, getClassDayRows, todayIsoDate } from '../../components/common/timetableStore';
 import {
   getTeacherClassSections,
   getTeacherProfile,
@@ -26,10 +27,33 @@ const MyClass = ({ session }) => {
   const subjectLoad = getTeacherSubjectLoad(session).filter(
     (item) => item.className === selectedClass
   );
-  const timetable = getTeacherTimetable(session).filter(
+  const staticTimetable = getTeacherTimetable(session).filter(
     (item) => item.className === selectedClass
   );
-  const visibleTimetable = timetable.length ? timetable : getTeacherTimetable(session).slice(0, 3);
+  const [liveTimetable, setLiveTimetable] = useState([]);
+  const [timetableSource, setTimetableSource] = useState('default');
+  const visibleTimetable = liveTimetable.length
+    ? liveTimetable
+    : staticTimetable.length
+      ? staticTimetable
+      : getTeacherTimetable(session).slice(0, 3);
+
+  useEffect(() => {
+    let active = true;
+    fetchEffectiveTimetable({ date: todayIsoDate(), className: selectedClass })
+      .then((payload) => {
+        if (!active) return;
+        const rows = getClassDayRows(payload.timetable, selectedClass).filter((period) => period.subject);
+        setLiveTimetable(rows);
+        setTimetableSource(payload.source || 'default');
+      })
+      .catch(() => {
+        if (active) setLiveTimetable([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [selectedClass]);
 
   return (
     <div className="space-y-6 pb-8 select-none font-sans text-[#1A1A1A]">
@@ -73,7 +97,7 @@ const MyClass = ({ session }) => {
             <h3 className="text-sm font-black flex items-center gap-2">
               <Clock className="w-4 h-4" /> Today Periods
             </h3>
-            <span className="text-[10px] font-black text-[#555555]">{selectedSection?.room || 'Room 201'}</span>
+            <span className="text-[10px] font-black text-[#555555] uppercase">{timetableSource}</span>
           </div>
 
           <div className="space-y-3">
@@ -84,7 +108,9 @@ const MyClass = ({ session }) => {
                 </span>
                 <div className="min-w-0">
                   <p className="text-xs font-black truncate">{period.subject}</p>
-                  <p className="text-[10px] font-bold text-[#555555]">{period.time} | {period.room}</p>
+                  <p className="text-[10px] font-bold text-[#555555]">
+                    {[period.time, period.teacher, period.room].filter(Boolean).join(' | ') || 'Timing not set'}
+                  </p>
                 </div>
               </div>
             ))}

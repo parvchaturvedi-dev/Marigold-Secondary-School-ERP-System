@@ -1,4 +1,5 @@
 import { apiFetch } from './api';
+import { getActiveStudentProfile, getSessionStudentProfiles, normalizeStudentProfile } from './portalProfiles';
 
 export const AUTH_STORAGE_KEY = 'mgps_erp_auth_session';
 
@@ -18,28 +19,8 @@ const fallbackNameFromUsername = (username = '') =>
     .trim()
     .toUpperCase();
 
-const normalizeStudent = (student = {}, index = 0) => ({
-  id: student.id || student.admissionNumber || `student-${index + 1}`,
-  displayName: student.displayName || student.name || `Student ${index + 1}`,
-  className: student.className || '',
-  section: student.section || '',
-  rollNo: student.rollNo || index + 1,
-  admissionNumber: student.admissionNumber || '',
-  fatherName: student.fatherName || '',
-  motherName: student.motherName || '',
-  guardianPhone: student.guardianPhone || '',
-  guardianEmail: student.guardianEmail || '',
-  dob: student.dob || '',
-  gender: student.gender || '',
-  bloodGroup: student.bloodGroup || '',
-  house: student.house || '',
-  busRoute: student.busRoute || '',
-  address: student.address || '',
-  photoDataUrl: student.photoDataUrl || '',
-});
-
 const buildFallbackStudent = (username = '') => {
-  return normalizeStudent({
+  return normalizeStudentProfile({
     id: username || 'student',
     displayName: fallbackNameFromUsername(username) || 'Student',
   });
@@ -51,24 +32,13 @@ export const getStudentProfiles = (username = '', role = '') => {
 };
 
 export const getActiveStudent = (session = {}) => {
-  const studentProfiles = session.studentProfiles?.length
-    ? session.studentProfiles.map(normalizeStudent)
-    : [];
-
-  if (!studentProfiles.length) return null;
-
-  return (
-    studentProfiles.find((student) => student.id === session.selectedStudentId) ||
-    studentProfiles[0]
-  );
+  return getActiveStudentProfile(session);
 };
 
 export const hydrateStudentSession = (session = {}, selectedStudentId = '') => {
   if (session.role !== 'student') return session;
 
-  const studentProfiles = session.studentProfiles?.length
-    ? session.studentProfiles.map(normalizeStudent)
-    : [];
+  const studentProfiles = getSessionStudentProfiles(session);
   const activeStudent =
     studentProfiles.find((student) => student.id === (selectedStudentId || session.selectedStudentId)) ||
     studentProfiles[0] ||
@@ -169,6 +139,19 @@ export const isValidRole = (role) => VALID_ROLES.includes(role);
 
 export const getDashboardPath = (role) => ROLE_DASHBOARD_PATHS[role] || '/login';
 
+export const getOrCreateDeviceId = () => {
+  const key = 'mgps_device_id';
+  const existing = localStorage.getItem(key);
+  if (existing) return existing;
+
+  const generated =
+    typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `web-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  localStorage.setItem(key, generated);
+  return generated;
+};
+
 export const getStoredSession = () => {
   try {
     const cachedSession = localStorage.getItem(AUTH_STORAGE_KEY);
@@ -201,8 +184,9 @@ export const authenticateUser = async ({ username, password }) =>
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'X-Device-Id': getOrCreateDeviceId(),
     },
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ username, password, deviceId: getOrCreateDeviceId() }),
   });
 
 export const fetchCurrentSession = async () => {

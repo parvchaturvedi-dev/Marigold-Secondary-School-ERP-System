@@ -124,7 +124,7 @@ const AcademicCalendarViewer = ({ portalLabel = 'Portal' }) => {
           </div>
           <h4 className="text-sm font-black text-[#1A1A1A]">No Academic Calendar Published</h4>
           <p className="text-xs text-gray-500 mt-1">
-            The PDF will appear here after Admin uploads it.
+            No PDF has been uploaded by Admin yet.
           </p>
         </div>
       )}

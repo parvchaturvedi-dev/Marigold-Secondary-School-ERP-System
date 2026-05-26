@@ -2,6 +2,7 @@ import express from 'express';
 import AttendanceLog from '../models/AttendanceLog.js';
 import AttendanceSetting from '../models/AttendanceSetting.js';
 import BiometricProfile from '../models/BiometricProfile.js';
+import FraudAlert from '../models/FraudAlert.js';
 import ModuleState from '../models/ModuleState.js';
 import User from '../models/User.js';
 import { isMongoConnected } from '../db.js';
@@ -28,6 +29,41 @@ const ensureMongo = (_request, response, next) => {
 const todayKey = () => new Date().toISOString().slice(0, 10);
 const clean = (value = '') => String(value || '').trim();
 const upper = (value = '') => clean(value).toUpperCase();
+const toNumber = (value) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+};
+const normalizeBssid = (value = '') => upper(value).replace(/-/g, ':');
+
+const haversineDistanceMeters = (pointA = {}, pointB = {}) => {
+  const lat1 = toNumber(pointA.latitude);
+  const lon1 = toNumber(pointA.longitude);
+  const lat2 = toNumber(pointB.latitude);
+  const lon2 = toNumber(pointB.longitude);
+  if ([lat1, lon1, lat2, lon2].some((value) => value === null)) return Number.POSITIVE_INFINITY;
+
+  const radius = 6371000;
+  const toRadians = (degree) => (degree * Math.PI) / 180;
+  const deltaLat = toRadians(lat2 - lat1);
+  const deltaLon = toRadians(lon2 - lon1);
+  const a =
+    Math.sin(deltaLat / 2) ** 2 +
+    Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(deltaLon / 2) ** 2;
+  return 2 * radius * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+
+const logFraudAlert = async (request, reason, payload = {}, severity = 'high') =>
+  FraudAlert.create({
+    username: request.auth?.username || '',
+    role: request.auth?.role || '',
+    sessionId: request.sessionID || '',
+    deviceId: clean(payload.deviceId || request.body?.deviceId),
+    reason,
+    severity,
+    payload,
+  }).catch((error) => {
+    console.error('[attendance:fraud-alert]', { reason, message: error.message });
+  });
 
 const parseMinutes = (value = '00:00') => {
   const [hours = 0, minutes = 0] = String(value).split(':').map((part) => Number(part) || 0);
@@ -60,6 +96,56 @@ const getSettings = () =>
     { $setOnInsert: { key: 'default' } },
     { new: true, upsert: true, setDefaultsOnInsert: true }
   ).lean();
+
+const validateAttendanceExecution = async (request, response, next) => {
+  const setting = await getSettings();
+  request.attendanceSetting = setting;
+  request.serverTimestamp = new Date();
+
+  const metadata = request.body?.metadata || {};
+  const mockLocation = request.body?.isMockLocation === true || metadata.isMockLocation === true || metadata.mockLocation === true;
+  if (mockLocation) {
+    await logFraudAlert(request, 'Mock location provider detected.', request.body, 'critical');
+    if (request.session) request.session.fraudBlacklisted = true;
+    response.status(403).json({ message: 'Mock location provider detected. Session blacklisted.' });
+    return;
+  }
+
+  const latitude = toNumber(request.body?.gpsLatitude ?? request.body?.latitude ?? metadata.latitude);
+  const longitude = toNumber(request.body?.gpsLongitude ?? request.body?.longitude ?? metadata.longitude);
+  const hasSchoolFence = setting.geofenceLatitude !== null && setting.geofenceLongitude !== null;
+  const requiresFence =
+    hasSchoolFence &&
+    (request.body?.requiresGeofence === true ||
+      ['clock-in', 'clock-out'].includes(clean(request.body?.action).toLowerCase()) ||
+      ['self-service', 'teacher-mobile', 'clerk-self'].includes(clean(request.body?.source).toLowerCase()));
+
+  if (requiresFence) {
+    const distance = haversineDistanceMeters(
+      { latitude, longitude },
+      { latitude: setting.geofenceLatitude, longitude: setting.geofenceLongitude }
+    );
+    if (distance > Number(setting.geofenceRadiusMeters || 100)) {
+      response.status(403).json({ message: 'Out of school boundary', distanceMeters: Math.round(distance) });
+      return;
+    }
+    request.geofenceDistanceMeters = Math.round(distance);
+  }
+
+  const incomingBssid = normalizeBssid(request.body?.wifiBssid || metadata.wifiBssid);
+  const authorizedBssid = normalizeBssid(setting.authorizedWifiBssid);
+  if (authorizedBssid && incomingBssid && incomingBssid !== authorizedBssid) {
+    response.status(403).json({ message: 'Unauthorized school WiFi router.' });
+    return;
+  }
+
+  if (setting.enforceReceptionQr && request.body?.receptionQrVerified === false) {
+    response.status(403).json({ message: 'Reception QR verification is required.' });
+    return;
+  }
+
+  next();
+};
 
 const readStateArray = async (namespace) => {
   const record = await ModuleState.findOne({ namespace }).lean();
@@ -175,6 +261,11 @@ const buildLogPayload = (person, body, status, setting, scannedAt) => ({
   status,
   source: body.source,
   deviceId: clean(body.deviceId),
+  deviceType: clean(body.deviceType),
+  gpsLatitude: toNumber(body.gpsLatitude ?? body.latitude),
+  gpsLongitude: toNumber(body.gpsLongitude ?? body.longitude),
+  wifiBssid: normalizeBssid(body.wifiBssid),
+  action: clean(body.action) || 'scan',
   note: clean(body.note),
   recordedBy: clean(body.recordedBy),
   audit: {
@@ -182,6 +273,8 @@ const buildLogPayload = (person, body, status, setting, scannedAt) => ({
     halfDayUntil: setting.halfDayUntil,
     closeAfter: setting.closeAfter,
     timezone: setting.timezone,
+    geofenceDistanceMeters: body.geofenceDistanceMeters,
+    serverTimestampApplied: true,
   },
 });
 
@@ -200,7 +293,7 @@ router.get('/settings', requireRole('admin', 'clerk', 'teacher'), async (_reques
   response.json(await getSettings());
 });
 
-router.put('/settings', requireRole('admin', 'clerk'), async (request, response) => {
+router.put('/settings', requireRole('admin'), async (request, response) => {
   const setting = await AttendanceSetting.findOneAndUpdate(
     { key: 'default' },
     {
@@ -209,6 +302,12 @@ router.put('/settings', requireRole('admin', 'clerk'), async (request, response)
       closeAfter: clean(request.body.closeAfter) || '11:00',
       timezone: clean(request.body.timezone) || 'Asia/Kolkata',
       allowTeacherQrScan: request.body.allowTeacherQrScan !== false,
+      schoolAddress: clean(request.body.schoolAddress),
+      geofenceLatitude: toNumber(request.body.geofenceLatitude),
+      geofenceLongitude: toNumber(request.body.geofenceLongitude),
+      geofenceRadiusMeters: Math.max(25, Number(request.body.geofenceRadiusMeters) || 100),
+      authorizedWifiBssid: normalizeBssid(request.body.authorizedWifiBssid),
+      enforceReceptionQr: request.body.enforceReceptionQr === true,
       updatedBy: request.auth.username,
     },
     { new: true, upsert: true, setDefaultsOnInsert: true }
@@ -264,9 +363,9 @@ router.put('/biometrics', requireRole('admin', 'clerk'), async (request, respons
   response.json({ message: 'Biometric profile saved.', biometric });
 });
 
-router.post('/scan', requireRole('admin', 'clerk', 'teacher'), async (request, response) => {
+router.post('/scan', requireRole('admin', 'clerk', 'teacher'), validateAttendanceExecution, async (request, response) => {
   const source = clean(request.body.source || request.body.mode || 'qr').toLowerCase();
-  const setting = await getSettings();
+  const setting = request.attendanceSetting || (await getSettings());
 
   if (source === 'biometric' && !['admin', 'clerk'].includes(request.auth.role)) {
     response.status(403).json({ message: 'Only admin and clerk can mark biometric attendance.' });
@@ -294,7 +393,7 @@ router.post('/scan', requireRole('admin', 'clerk', 'teacher'), async (request, r
     return;
   }
 
-  const scannedAt = request.body.scannedAt ? new Date(request.body.scannedAt) : new Date();
+  const scannedAt = request.serverTimestamp || new Date();
   const requestedStatus = clean(request.body.status).toLowerCase();
   const resolvedStatus = ['manual', 'absent', 'present', 'half-day'].includes(requestedStatus)
     ? requestedStatus
@@ -310,7 +409,13 @@ router.post('/scan', requireRole('admin', 'clerk', 'teacher'), async (request, r
 
   const logPayload = buildLogPayload(
     person,
-    { ...request.body, source, recordedBy: request.auth.username },
+    {
+      ...request.body,
+      source,
+      recordedBy: request.auth.username,
+      geofenceDistanceMeters: request.geofenceDistanceMeters,
+      action: request.body.action || 'scan',
+    },
     resolvedStatus,
     setting,
     scannedAt
@@ -328,6 +433,120 @@ router.post('/scan', requireRole('admin', 'clerk', 'teacher'), async (request, r
 
   emitRealtimeEvent(eventName, { type: 'scan', log });
   response.json({ message: 'Attendance marked.', log, setting });
+});
+
+router.post('/clock', requireRole('admin', 'clerk', 'teacher'), validateAttendanceExecution, async (request, response) => {
+  const source = clean(request.body.source || 'self-service').toLowerCase();
+  const action = clean(request.body.action || 'clock-in').toLowerCase();
+  const setting = request.attendanceSetting || (await getSettings());
+  const person = await findDirectoryPerson({
+    entityType: request.auth.role,
+    entityId: request.auth.username,
+  });
+
+  if (!person) {
+    response.status(404).json({ message: 'No linked staff profile found for this account.' });
+    return;
+  }
+
+  const logPayload = buildLogPayload(
+    person,
+    {
+      ...request.body,
+      source,
+      action: action === 'clock-out' ? 'clock-out' : 'clock-in',
+      attendanceDate: todayKey(),
+      status: 'present',
+      recordedBy: request.auth.username,
+      geofenceDistanceMeters: request.geofenceDistanceMeters,
+    },
+    'present',
+    setting,
+    request.serverTimestamp || new Date()
+  );
+
+  const log = await AttendanceLog.findOneAndUpdate(
+    {
+      entityType: logPayload.entityType,
+      entityId: logPayload.entityId,
+      attendanceDate: logPayload.attendanceDate,
+    },
+    logPayload,
+    { new: true, upsert: true, setDefaultsOnInsert: true }
+  );
+
+  emitRealtimeEvent(eventName, { type: 'clock', log });
+  response.json({ message: `${action === 'clock-out' ? 'Clock-out' : 'Clock-in'} recorded.`, log, setting });
+});
+
+router.post('/students/batch', requireRole('admin', 'clerk', 'teacher'), async (request, response) => {
+  const attendanceDate = clean(request.body.attendanceDate) || todayKey();
+  const className = clean(request.body.className);
+  const overrideToken = clean(request.body.adminOverrideToken);
+  const isHistorical = attendanceDate !== todayKey();
+  const isTeacher = request.auth.role === 'teacher';
+
+  if (!className || !Array.isArray(request.body.records)) {
+    response.status(400).json({ message: 'Class and attendance records are required.' });
+    return;
+  }
+
+  if (isTeacher) {
+    const user = await User.findOne({ username: request.auth.username }).lean();
+    const assigned = clean(user?.profile?.teacherProfile?.assignedClassTeacherFor || user?.profile?.assignedClassTeacherFor);
+    if (assigned !== className) {
+      response.status(403).json({ message: 'Only the assigned class teacher can update this class register.' });
+      return;
+    }
+    if (isHistorical && !overrideToken) {
+      response.status(403).json({ message: 'Historical edits require an Admin override token.' });
+      return;
+    }
+  }
+
+  const setting = await getSettings();
+  const directory = await listDirectory();
+  const studentsById = new Map(
+    directory
+      .filter((item) => item.entityType === 'student' && item.className === className)
+      .map((item) => [item.entityId, item])
+  );
+  const scannedAt = new Date();
+  const writes = [];
+
+  for (const record of request.body.records) {
+    const entityId = upper(record.entityId || record.admissionNumber);
+    const person = studentsById.get(entityId);
+    if (!person) continue;
+
+    const status = clean(record.status).toLowerCase() === 'absent' ? 'absent' : 'present';
+    const logPayload = buildLogPayload(
+      person,
+      {
+        source: 'manual',
+        action: request.auth.role === 'admin' ? 'override' : 'student-register',
+        attendanceDate,
+        recordedBy: request.auth.username,
+        note: clean(request.body.note) || (request.auth.role === 'admin' ? 'Admin override register update' : 'Class register update'),
+      },
+      status,
+      setting,
+      scannedAt
+    );
+
+    writes.push({
+      updateOne: {
+        filter: { entityType: 'student', entityId: person.entityId, attendanceDate },
+        update: { $set: logPayload },
+        upsert: true,
+      },
+    });
+  }
+
+  if (writes.length) await AttendanceLog.bulkWrite(writes);
+  const logs = await AttendanceLog.find({ attendanceDate, className, entityType: 'student' }).lean();
+  emitRealtimeEvent(eventName, { type: 'student-batch', attendanceDate, className });
+  response.json({ message: `Saved ${writes.length} attendance records.`, count: writes.length, logs });
 });
 
 router.get('/logs', requireRole('admin', 'clerk', 'teacher', 'student'), async (request, response) => {
@@ -370,6 +589,20 @@ router.get('/overview', requireRole('admin', 'clerk', 'teacher'), async (request
   ]);
 
   const logByKey = new Map(logs.map((log) => [`${log.entityType}:${log.entityId}`, log]));
+  const buildCountsForType = (entityType) => {
+    const people = directory.filter((item) => item.entityType === entityType);
+    return people.reduce(
+      (acc, item) => {
+        const status = logByKey.get(`${item.entityType}:${item.entityId}`)?.status || 'absent';
+        if (status === 'present' || status === 'manual') acc.present += 1;
+        else if (status === 'half-day') acc.late += 1;
+        else acc.absent += 1;
+        acc.total += 1;
+        return acc;
+      },
+      { total: 0, present: 0, absent: 0, late: 0 }
+    );
+  };
   const roster = directory
     .filter((item) => item.entityType === 'student')
     .filter((item) => !className || item.className === className)
@@ -397,6 +630,11 @@ router.get('/overview', requireRole('admin', 'clerk', 'teacher'), async (request
     date,
     settings,
     counts,
+    roleSummary: {
+      clerk: buildCountsForType('clerk'),
+      teacher: buildCountsForType('teacher'),
+      student: buildCountsForType('student'),
+    },
     roster,
     logs,
     trend: Object.values(trend).sort((a, b) => a.date.localeCompare(b.date)),

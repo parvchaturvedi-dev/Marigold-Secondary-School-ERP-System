@@ -44,7 +44,8 @@ const withTeacherUsername = (items) =>
     teacherUsername: teacherDirectory[item.teacherName] || '',
   }));
 
-export const getSubjectsForClass = (className = 'Class 9') => {
+export const getSubjectsForClass = (className = '') => {
+  if (!className) return [];
   const configuredSubjects = examMasterData.subjectsByClass[className] || [];
   if (configuredSubjects.length) return withTeacherUsername(configuredSubjects);
 
@@ -71,7 +72,11 @@ export const getSubjectTeacher = (className, subjectName) =>
 export const getTeacherExamAssignments = (session) => {
   const username = session?.username || '';
   const profile = getUserProfile(username, 'teacher');
-  const allottedClasses = profile.allottedClasses?.length ? sortClassNames(profile.allottedClasses) : [];
+  const allottedClasses = session?.allottedClasses?.length
+    ? sortClassNames(session.allottedClasses)
+    : profile.allottedClasses?.length
+      ? sortClassNames(profile.allottedClasses)
+      : [];
 
   const allAssignments = allottedClasses.flatMap((className) =>
     getSubjectsForClass(className).map((item) => ({ ...item, className }))
@@ -86,7 +91,7 @@ export const getTeacherExamAssignments = (session) => {
 
 export const studentDirectory = [];
 
-const normalizeExamStudent = (student = {}, index = 0, className = 'Class 9') => ({
+const normalizeExamStudent = (student = {}, index = 0, className = '') => ({
   id: student.id || student.admissionNumber || `student-${className}-${index + 1}`,
   displayName: student.displayName || student.name || `Student ${index + 1}`,
   className: student.className || className,
@@ -100,7 +105,8 @@ const normalizeExamStudent = (student = {}, index = 0, className = 'Class 9') =>
   address: student.address || '',
 });
 
-export const getStudentsForClass = (className = 'Class 9') => {
+export const getStudentsForClass = (className = '') => {
+  if (!className) return [];
   const directory = examMasterData.students.length ? examMasterData.students : studentDirectory;
   const students = directory
     .filter((student) => student.className === className)
@@ -112,7 +118,7 @@ export const getStudentsForClass = (className = 'Class 9') => {
 };
 
 export const ensureStudentInRoster = (student) => {
-  if (!student?.className) return getStudentsForClass('Class 9');
+  if (!student?.className) return [];
 
   const roster = getStudentsForClass(student.className);
   const exists = roster.some(
@@ -529,7 +535,7 @@ export const getFocusRemark = (marks, maxMarks = 100) => {
 };
 
 export const getReportRowsForStudent = (state, student, examId) => {
-  const className = student?.reportClassName || student?.className || 'Class 9';
+  const className = student?.reportClassName || student?.className || '';
   const records = state.marks.filter(
     (record) => record.examId === examId && record.className === className
   );

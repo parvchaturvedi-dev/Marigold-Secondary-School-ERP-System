@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Layers, ArrowRightLeft, Users, UserCheck } from 'lucide-react';
-import ClassDetail from './ClassDetail'; // Formatted view screen placeholder
+import ClassDetail from './ClassDetail';
 import { useMongoState } from '../../components/common/mongoState';
 import { getClassName, sortClassNames, useMasterData } from '../../components/common/masterData';
 

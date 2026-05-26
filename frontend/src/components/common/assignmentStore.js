@@ -112,7 +112,7 @@ export const getAssignmentIdentity = (session = {}) => {
 
 export const getTeacherAllowedClasses = (session) => {
   const profile = getAssignmentIdentity(session);
-  return profile.allottedClasses?.length ? sortClassNames(profile.allottedClasses) : ['Class 9'];
+  return profile.allottedClasses?.length ? sortClassNames(profile.allottedClasses) : [];
 };
 
 export const getStudentOptions = (session) => {

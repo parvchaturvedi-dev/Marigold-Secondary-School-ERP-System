@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   LayoutGrid, 
   Calendar, 
@@ -14,6 +14,7 @@ import {
   GraduationCap, 
   Sparkles, 
   Wallet, 
+  CalendarClock,
   IdCard, 
   LogOut, 
   Video, 
@@ -36,22 +37,24 @@ import {
 
 // --- Typing Animation Component ---
 const TypingLogo = () => {
-  const words = [
-    "MARIGOLD",
-    "M - Minds",
-    "A - Achievers",
-    "R - Radiant",
-    "I - Inspire",
-    "G - Guidance",
-    "O - Opportunity",
-    "L - Leadership",
-    "D - Discipline"
-  ];
-
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
   const [currentText, setCurrentText] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
   const [typingSpeed, setTypingSpeed] = useState(100);
+  const words = useMemo(
+    () => [
+      "MARIGOLD",
+      "M - Minds",
+      "A - Achievers",
+      "R - Radiant",
+      "I - Inspire",
+      "G - Guidance",
+      "O - Opportunity",
+      "L - Leadership",
+      "D - Discipline"
+    ],
+    []
+  );
 
   useEffect(() => {
     const handleTyping = () => {
@@ -83,7 +86,7 @@ const TypingLogo = () => {
 
     const timer = setTimeout(handleTyping, typingSpeed);
     return () => clearTimeout(timer);
-  }, [currentText, isDeleting, currentWordIndex]);
+  }, [currentText, isDeleting, currentWordIndex, typingSpeed, words]);
 
   return (
     <span className="inline-flex items-center text-md font-bold tracking-wider text-[#1A1A1A] whitespace-nowrap">
@@ -175,6 +178,7 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
     },
     { name: 'Feature Page', icon: Sparkles },
     { name: 'Finance', icon: Wallet },
+    { name: 'Timetable', icon: CalendarClock },
     {
       name: 'Faculty Desk',
       icon: GraduationCap,
@@ -258,6 +262,7 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
     { name: 'Id Card', icon: IdCard },
     { name: 'Leave Requests', icon: LogOut },
     { name: 'Meetings', icon: Video },
+    { name: 'Timetable', icon: CalendarClock },
     { name: 'Notices', icon: Bell },
     { name: 'Profile', icon: User },
     { name: 'Vault', icon: Lock },
@@ -269,6 +274,7 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
     { name: 'Dashboard', icon: LayoutGrid },
     { name: 'Academic Calender', icon: Calendar },
     { name: 'My Class', icon: Layers },
+    { name: 'Timetable', icon: CalendarClock },
     { name: 'Application', icon: FileText },
     { name: 'Assignment', icon: ClipboardList },
     { name: 'Attendance', icon: CheckSquare },
@@ -289,6 +295,7 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
     { name: 'Dashboard', icon: LayoutGrid },
     { name: 'Academic Calender', icon: Calendar },
     { name: 'My Class', icon: Layers },
+    { name: 'Timetable', icon: CalendarClock },
     { name: 'Application', icon: FileText },
     { name: 'Assignment', icon: ClipboardList },
     { name: 'Attendance', icon: CheckSquare },

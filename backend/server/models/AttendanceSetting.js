@@ -28,6 +28,33 @@ const attendanceSettingSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    schoolAddress: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    geofenceLatitude: {
+      type: Number,
+      default: null,
+    },
+    geofenceLongitude: {
+      type: Number,
+      default: null,
+    },
+    geofenceRadiusMeters: {
+      type: Number,
+      default: 100,
+    },
+    authorizedWifiBssid: {
+      type: String,
+      uppercase: true,
+      trim: true,
+      default: '',
+    },
+    enforceReceptionQr: {
+      type: Boolean,
+      default: false,
+    },
     updatedBy: {
       type: String,
       default: '',

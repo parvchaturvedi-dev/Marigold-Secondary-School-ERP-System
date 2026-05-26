@@ -1,5 +1,5 @@
-import { getUserProfile } from '../../components/common/auth';
 import { compareClassNames, sortClassNames } from '../../components/common/masterData';
+import { getSessionTeacherProfile } from '../../components/common/portalProfiles';
 import {
   getTeacherAllowedClasses,
   readAssignments,
@@ -9,66 +9,10 @@ import {
   getSubjectsForClass,
   getTeacherExamAssignments,
   readExaminationState,
-  teacherDirectory,
 } from '../../components/common/examinationStore';
 
 const hashText = (value = '') =>
   value.split('').reduce((total, char) => total + char.charCodeAt(0), 0);
-
-const teacherNamesByUsername = Object.fromEntries(
-  Object.entries(teacherDirectory).map(([name, username]) => [username, name])
-);
-
-const teacherProfiles = {
-  'TCH-501': {
-    displayName: 'Dr. Ramesh Verma',
-    designation: 'Senior Mathematics Faculty',
-    department: 'Science & Mathematics',
-    qualification: 'Ph.D. Mathematics, M.Sc.',
-    employeeId: 'MGPS-TCH-501',
-    phone: '9829005010',
-    email: 'ramesh.verma@mgps.edu.in',
-    joiningDate: '2018-04-02',
-    dob: '1984-09-12',
-    gender: 'Male',
-    bloodGroup: 'B+',
-    address: 'Vaishali Nagar, Jaipur',
-    classTeacherFor: 'Class 10-A',
-    emergencyContact: '9829005011',
-  },
-  'TCH-502': {
-    displayName: 'Mrs. Sunita Sharma',
-    designation: 'Primary & Middle School Faculty',
-    department: 'Foundational Academics',
-    qualification: 'M.Sc., B.Ed.',
-    employeeId: 'MGPS-TCH-502',
-    phone: '9829005020',
-    email: 'sunita.sharma@mgps.edu.in',
-    joiningDate: '2019-07-15',
-    dob: '1988-01-21',
-    gender: 'Female',
-    bloodGroup: 'O+',
-    address: 'Mansarovar, Jaipur',
-    classTeacherFor: 'Class 6-B',
-    emergencyContact: '9829005021',
-  },
-  'TCH-503': {
-    displayName: 'Mrs. Kavita Rao',
-    designation: 'English Faculty',
-    department: 'Languages',
-    qualification: 'M.A. English, B.Ed.',
-    employeeId: 'MGPS-TCH-503',
-    phone: '9829005030',
-    email: 'kavita.rao@mgps.edu.in',
-    joiningDate: '2020-06-08',
-    dob: '1987-05-18',
-    gender: 'Female',
-    bloodGroup: 'A+',
-    address: 'C-Scheme, Jaipur',
-    classTeacherFor: 'Class 9-A',
-    emergencyContact: '9829005031',
-  },
-};
 
 const fallbackNameFromUsername = (username = '') =>
   username
@@ -78,35 +22,28 @@ const fallbackNameFromUsername = (username = '') =>
     .toUpperCase();
 
 export const getTeacherProfile = (session = {}) => {
-  const username = (session.username || 'TCH-501').trim().toUpperCase();
-  const authProfile = getUserProfile(username, 'teacher');
-  const configuredProfile = teacherProfiles[username] || {};
-  const displayName =
-    configuredProfile.displayName ||
-    teacherNamesByUsername[username] ||
-    session.displayName ||
-    authProfile.displayName ||
-    fallbackNameFromUsername(username);
+  const profile = getSessionTeacherProfile(session);
+  const username = (profile.username || session.username || '').trim().toUpperCase();
+  const displayName = profile.displayName || session.displayName || fallbackNameFromUsername(username);
 
   return {
+    ...profile,
     username,
     displayName,
-    designation: configuredProfile.designation || 'Faculty Member',
-    department: configuredProfile.department || 'Academic Department',
-    qualification: configuredProfile.qualification || 'B.Ed., Graduate',
-    employeeId: configuredProfile.employeeId || `MGPS-${username}`,
-    phone: configuredProfile.phone || 'Not updated',
-    email:
-      configuredProfile.email ||
-      `${username.toLowerCase().replace(/[^a-z0-9]/g, '.')}@mgps.edu.in`,
-    joiningDate: configuredProfile.joiningDate || '2021-04-01',
-    dob: configuredProfile.dob || '1985-01-01',
-    gender: configuredProfile.gender || 'Not updated',
-    bloodGroup: configuredProfile.bloodGroup || 'Not updated',
-    address: configuredProfile.address || 'Registered residential address',
-    classTeacherFor: configuredProfile.classTeacherFor || 'Class 9-A',
-    emergencyContact: configuredProfile.emergencyContact || 'Not updated',
-    allottedClasses: sortClassNames(getTeacherAllowedClasses({ ...session, username })),
+    designation: profile.designation || 'Faculty',
+    department: profile.department || 'Not assigned',
+    qualification: profile.qualification || 'Not updated',
+    employeeId: profile.employeeId || username,
+    phone: profile.phone || profile.mobile || 'Not updated',
+    email: profile.email || 'Not updated',
+    joiningDate: profile.joiningDate || 'Not updated',
+    dob: profile.dob || 'Not updated',
+    gender: profile.gender || 'Not updated',
+    bloodGroup: profile.bloodGroup || 'Not updated',
+    address: profile.address || 'Not updated',
+    classTeacherFor: profile.classTeacherFor || '',
+    emergencyContact: profile.emergencyContact || 'Not updated',
+    allottedClasses: sortClassNames(getTeacherAllowedClasses({ ...session, username, allottedClasses: profile.allottedClasses })),
   };
 };
 
@@ -175,6 +112,7 @@ export const getTeacherSubjectLoad = (session = {}) => {
 
 export const getTeacherTimetable = (session = {}) => {
   const load = getTeacherSubjectLoad(session);
+  if (!load.length) return [];
   const dayPlan = [
     ['1', '08:30 - 09:10'],
     ['2', '09:10 - 09:50'],
@@ -189,16 +127,16 @@ export const getTeacherTimetable = (session = {}) => {
     return {
       period,
       time,
-      className: item.className || 'Class 9',
-      section: item.section || 'A',
-      subject: item.subject || 'General',
+      className: item.className || 'Not assigned',
+      section: item.section || '',
+      subject: item.subject || 'Not assigned',
       room: item.room || `Room ${201 + index}`,
     };
   });
 };
 
 export const getTeacherRoster = (session = {}, className = '') => {
-  const firstClass = getTeacherClassSections(session)[0]?.className || 'Class 9';
+  const firstClass = getTeacherClassSections(session)[0]?.className || '';
   const selectedClass = className || firstClass;
 
   return getStudentsForClass(selectedClass).map((student, index) => ({
@@ -266,7 +204,7 @@ export const getTeacherMetrics = (session = {}) => {
 
 export const getTeacherNotices = (session = {}) => {
   const sections = getTeacherClassSections(session);
-  const firstLabel = sections[0]?.label || 'Class 9-A';
+  const firstLabel = sections[0]?.label || 'assigned class';
 
   return [
     {
@@ -313,12 +251,12 @@ export const getTeacherMeetings = (session = {}) => {
     },
     {
       id: 'meet-teacher-2',
-      title: `${sections[0]?.label || 'Class 9-A'} parent interaction`,
+      title: `${sections[0]?.label || 'assigned class'} parent interaction`,
       owner: profile.displayName,
       date: 'May 27, 2026',
       time: '10:30 AM',
       mode: 'On Campus',
-      scope: sections[0]?.label || 'Class 9-A',
+      scope: sections[0]?.label || 'assigned class',
       agenda: 'Discuss student progress, pending notebooks, and classroom conduct.',
     },
     {
@@ -366,9 +304,11 @@ export const getTeacherMessages = (session = {}) => {
   ];
 };
 
-export const getTeacherDocuments = () => [
-  { name: 'Appointment Letter', status: 'Verified', updatedAt: 'Apr 10, 2026' },
-  { name: 'Qualification Certificates', status: 'Verified', updatedAt: 'Apr 12, 2026' },
-  { name: 'Identity Proof', status: 'Verified', updatedAt: 'Apr 15, 2026' },
-  { name: 'Bank Details', status: 'Pending Review', updatedAt: 'May 18, 2026' },
-];
+export const getTeacherDocuments = (session = {}) => {
+  const profile = getTeacherProfile(session);
+  return (profile.documentsAttached || []).map((name, index) => ({
+    name,
+    status: 'Uploaded',
+    updatedAt: profile.updatedAt || profile.timestamp || `Document ${index + 1}`,
+  }));
+};

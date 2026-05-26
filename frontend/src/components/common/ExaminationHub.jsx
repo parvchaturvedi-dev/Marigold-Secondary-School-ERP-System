@@ -1102,7 +1102,7 @@ const PaperAnalysisSection = ({ state, actor, role, session, onRefresh, onRework
             <EmptyAccess
               icon={ClipboardList}
               title="No papers found"
-              message="Papers will appear here after they are sent for teacher or admin approval."
+              message="No papers are currently waiting for teacher or admin approval."
             />
           </div>
         )}

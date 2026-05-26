@@ -29,6 +29,9 @@ export const fetchAttendanceLogs = (params = {}) =>
 export const fetchAttendanceDirectory = (params = {}) =>
   apiFetch(`/attendance/directory?${normalizeParams(params)}`);
 
+export const fetchAttendanceSettings = () =>
+  apiFetch('/attendance/settings');
+
 export const saveAttendanceSettings = (settings) =>
   postJson('/attendance/settings', settings, 'PUT');
 
@@ -37,6 +40,12 @@ export const registerBiometric = (payload) =>
 
 export const scanAttendance = (payload) =>
   postJson('/attendance/scan', payload, 'POST');
+
+export const clockAttendance = (payload) =>
+  postJson('/attendance/clock', payload, 'POST');
+
+export const saveStudentAttendanceBatch = (payload) =>
+  postJson('/attendance/students/batch', payload, 'POST');
 
 export const useAttendanceOverview = ({ date, className, period } = {}) => {
   const [state, setState] = useState({

@@ -397,7 +397,7 @@ const ApplicationUserHub = ({ session, role }) => {
                 <div className="p-8 text-center text-gray-400">
                   <FileText className="w-10 h-10 mx-auto mb-2 stroke-[1.4]" />
                   <p className="text-xs font-black text-[#1A1A1A]">No applications yet</p>
-                  <p className="text-[11px] mt-1">Submitted applications and class consent requests will appear here.</p>
+                  <p className="text-[11px] mt-1">There are no submitted applications or class consent requests for this account.</p>
                 </div>
               )}
 
