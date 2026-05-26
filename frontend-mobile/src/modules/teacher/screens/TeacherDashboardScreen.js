@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+cimport React, { useState } from "react";
 import {
   View,
   Text,
@@ -17,13 +17,12 @@ import { teacherModules, teacherBottomTabs } from "../data/teacherModules";
 import ModuleCard from "../../../components/cards/ModuleCard";
 import OverviewCard from "../../../components/cards/OverviewCard";
 import AttendanceScreen from "../../../screens/AttendanceScreen";
-import { getTeacherProfile } from "../../../shared/profile";
 
 const logo = require("../../../../assets/images/logo.png");
 const width = Dimensions.get("window").width;
 
 export default function TeacherDashboardScreen() {
-  const { user, logout, openConnectedModule } = useAuth();
+  const { user, logout, openComingSoon } = useAuth();
   const { summary, loading, error } = useDashboardSummary();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("home");
@@ -39,18 +38,18 @@ export default function TeacherDashboardScreen() {
       if (module.title === "Profile") {
         setActiveTab("profile");
       } else if (module.title === "Notices") {
-        openConnectedModule("Notices");
+        setActiveTab("notices");
       } else if (module.title === "Attendance") {
         setActiveTab("attendance");
       } else {
-        openConnectedModule(module.title);
+        openComingSoon(module.title);
       }
     }
   }
 
   function handleSubItemPress(subItem, parentTitle) {
     setSubModalOpen(false);
-    openConnectedModule(`${parentTitle} > ${subItem.title}`);
+    openComingSoon(`${parentTitle} > ${subItem.title}`);
   }
 
   if (activeTab === "attendance") {
@@ -94,7 +93,7 @@ export default function TeacherDashboardScreen() {
               </Text>
             </View>
 
-            <TouchableOpacity onPress={() => openConnectedModule("Notices")}>
+            <TouchableOpacity onPress={() => setActiveTab("notices")}>
               <View>
                 <Ionicons name="notifications-outline" size={28} color="#0F172A" />
                 <View
@@ -129,11 +128,27 @@ export default function TeacherDashboardScreen() {
             />
           )}
 
+          {activeTab === "assignment" && (
+            <SimpleTabPage
+              title="Assignments Desk"
+              icon="clipboard-outline"
+              text="Track class submissions and grading stats from connected ERP assignments."
+            />
+          )}
+
+          {activeTab === "notices" && (
+            <SimpleTabPage
+              title="Notices"
+              icon="notifications-outline"
+              text="View important school notices, assemblies, and upcoming holidays."
+            />
+          )}
+
           {activeTab === "profile" && (
             <SimpleTabPage
               title="Profile"
               icon="person-circle-outline"
-              profile={getTeacherProfile(user)}
+              text="Faculty details, class teacher mapping, and active classes will appear here."
               logout={logout}
             />
           )}
@@ -141,7 +156,7 @@ export default function TeacherDashboardScreen() {
       </ScrollView>
 
       {/* Bottom Navigation */}
-      <BottomTabs activeTab={activeTab} setActiveTab={setActiveTab} openConnectedModule={openConnectedModule} />
+      <BottomTabs activeTab={activeTab} setActiveTab={setActiveTab} />
 
       {/* Main Drawer Menu */}
       <Drawer
@@ -201,24 +216,16 @@ export default function TeacherDashboardScreen() {
   );
 }
 
-const getGreeting = () => {
-  const hour = new Date().getHours();
-  if (hour >= 4 && hour < 12) return "Good Morning";
-  if (hour >= 12 && hour < 16) return "Good Afternoon";
-  return "Good Evening";
-};
-
 function HomeContent({ user, summary, loading, error, onModulePress }) {
-  const teacher = getTeacherProfile(user);
   const profile = summary?.profile || {};
   const action = summary?.action || {};
   const stats = summary?.stats?.length
     ? summary.stats
     : [
-        { title: "Classes", value: loading ? "..." : "0", subtitle: "Allotted", color: "#22C55E" },
-        { title: "Assignments", value: loading ? "..." : "0", subtitle: "Visible", color: "#F97316" },
-        { title: "Notices", value: loading ? "..." : "0", subtitle: "Unread", color: "#2563EB" },
-      ];
+      { title: "Classes", value: loading ? "..." : "0", subtitle: "Allotted", color: "#22C55E" },
+      { title: "Assignments", value: loading ? "..." : "0", subtitle: "Visible", color: "#F97316" },
+      { title: "Notices", value: loading ? "..." : "0", subtitle: "Unread", color: "#2563EB" },
+    ];
 
   return (
     <View style={{ marginTop: 36 }}>
@@ -232,7 +239,7 @@ function HomeContent({ user, summary, loading, error, onModulePress }) {
         }}
       >
         <View>
-          <Text style={{ fontSize: 18, color: "#0F172A" }}>{getGreeting()}</Text>
+          <Text style={{ fontSize: 18, color: "#0F172A" }}>Good Morning, 👋</Text>
           <Text
             style={{
               fontSize: 26,
@@ -241,10 +248,10 @@ function HomeContent({ user, summary, loading, error, onModulePress }) {
               marginTop: 8,
             }}
           >
-            {profile.displayName || teacher.displayName || "Teacher Portal"}
+            {user?.name || "Teacher Portal"}
           </Text>
           <Text style={{ marginTop: 8, color: "#475569", fontSize: 16 }}>
-            {[profile.classLabel || teacher.assignedClassTeacherFor || "No class assigned", profile.designation || teacher.designation || "Faculty"].filter(Boolean).join(" | ")}
+            {[profile.classLabel || "No class assigned", profile.designation || "Faculty"].filter(Boolean).join(" | ")}
           </Text>
         </View>
 
@@ -384,7 +391,7 @@ function HomeContent({ user, summary, loading, error, onModulePress }) {
   );
 }
 
-function SimpleTabPage({ title, icon, text, profile, logout }) {
+function SimpleTabPage({ title, icon, text, logout }) {
   return (
     <View style={{ marginTop: 60 }}>
       <View
@@ -409,32 +416,17 @@ function SimpleTabPage({ title, icon, text, profile, logout }) {
         >
           {title}
         </Text>
-        {profile ? (
-          <View style={{ alignSelf: "stretch", marginTop: 16 }}>
-            <ProfileRow label="Name" value={profile.displayName} />
-            <ProfileRow label="Employee ID" value={profile.employeeId || profile.username} />
-            <ProfileRow label="Designation" value={profile.designation} />
-            <ProfileRow label="Department" value={profile.department} />
-            <ProfileRow label="Qualification" value={profile.qualification} />
-            <ProfileRow label="Class Teacher" value={profile.assignedClassTeacherFor} />
-            <ProfileRow label="Allotted Classes" value={(profile.allottedClasses || []).join(", ")} />
-            <ProfileRow label="Mobile" value={profile.mobile} />
-            <ProfileRow label="Email" value={profile.email} />
-            <ProfileRow label="Address" value={profile.address} />
-          </View>
-        ) : (
-          <Text
-            style={{
-              textAlign: "center",
-              marginTop: 12,
-              fontSize: 16,
-              lineHeight: 24,
-              color: "#64748B",
-            }}
-          >
-            {text}
-          </Text>
-        )}
+        <Text
+          style={{
+            textAlign: "center",
+            marginTop: 12,
+            fontSize: 16,
+            lineHeight: 24,
+            color: "#64748B",
+          }}
+        >
+          {text}
+        </Text>
 
         {logout && (
           <TouchableOpacity
@@ -455,21 +447,7 @@ function SimpleTabPage({ title, icon, text, profile, logout }) {
   );
 }
 
-function ProfileRow({ label, value }) {
-  return (
-    <View style={{ paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#EEF2F7" }}>
-      <Text style={{ color: "#64748B", fontSize: 12, fontWeight: "800" }}>{label}</Text>
-      <Text style={{ color: "#0F172A", fontSize: 15, fontWeight: "900", marginTop: 3 }}>{value || "Not updated"}</Text>
-    </View>
-  );
-}
-
-function BottomTabs({ activeTab, setActiveTab, openConnectedModule }) {
-  const moduleTargets = {
-    assignment: "Assignment",
-    notices: "Notices",
-  };
-
+function BottomTabs({ activeTab, setActiveTab }) {
   return (
     <View
       style={{
@@ -492,13 +470,7 @@ function BottomTabs({ activeTab, setActiveTab, openConnectedModule }) {
         return (
           <TouchableOpacity
             key={tab.key}
-            onPress={() => {
-              if (moduleTargets[tab.key]) {
-                openConnectedModule(moduleTargets[tab.key]);
-                return;
-              }
-              setActiveTab(tab.key);
-            }}
+            onPress={() => setActiveTab(tab.key)}
             style={{ alignItems: "center", justifyContent: "center" }}
           >
             <Ionicons

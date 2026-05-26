@@ -1,10 +1,19 @@
-﻿{
+{
   "expo": {
     "name": "MGPS ERP Mobile",
     "slug": "mgps-erp-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "scheme": "mgpserp",
-    "userInterfaceStyle": "automatic"
+    "userInterfaceStyle": "automatic",
+    "android": {
+      "package": "com.parvchaturvediofficial.mgpserpmobile"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "ec9d1ec2-9236-498a-bd82-e1b8180cf68d"
+      }
+    },
+    "owner": "parvchaturvediofficial"
   }
 }
