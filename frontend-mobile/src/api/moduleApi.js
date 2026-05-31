@@ -156,6 +156,11 @@ export async function saveModuleState(namespace, value) {
   });
 }
 
+export async function fetchModuleState(namespace) {
+  const payload = await apiRequest(`/module-state/${encodeURIComponent(namespace)}`);
+  return payload?.value ?? null;
+}
+
 export async function createApplication(payload) {
   return apiRequest("/applications", {
     method: "POST",

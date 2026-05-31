@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   RefreshControl,
   ScrollView,
   Text,
@@ -10,6 +11,8 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import * as DocumentPicker from "expo-document-picker";
+import * as FileSystem from "expo-file-system";
 
 import { useAuth } from "../auth/AuthContext";
 import PageHeader from "../components/cards/PageHeader";
@@ -20,6 +23,7 @@ import {
   createEvent,
   createLeaveRequest,
   deleteEvent,
+  fetchModuleState,
   fetchModuleData,
   markApplicationReplyRead,
   markNotificationsRead,
@@ -112,6 +116,94 @@ function getCountLabel(title, rows) {
 const todayIsoDate = () => new Date().toISOString().slice(0, 10);
 const canManage = (user) => user?.role === "admin" || user?.role === "clerk";
 const activeIdentity = (user = {}) => getActiveStudentProfile(user) || {};
+const STUDENTS_NAMESPACE = "admin-student-management-students";
+const TEACHERS_NAMESPACE = "admin-teacher-management-list";
+const CLASSES_NAMESPACE = "admin-class-management-classes";
+
+async function pickStoredFile(types = ["image/*", "application/pdf"]) {
+  const result = await DocumentPicker.getDocumentAsync({
+    type: types,
+    multiple: false,
+    copyToCacheDirectory: true,
+  });
+  if (result.canceled || !result.assets?.[0]) return null;
+  const asset = result.assets[0];
+  const base64 = await FileSystem.readAsStringAsync(asset.uri, { encoding: "base64" });
+  const mimeType = asset.mimeType || "application/octet-stream";
+  return {
+    file: asset.name || "document",
+    name: asset.name || "document",
+    size: asset.size || 0,
+    type: mimeType,
+    dataUrl: `data:${mimeType};base64,${base64}`,
+    uploadedAt: new Date().toISOString(),
+    status: "Uploaded",
+  };
+}
+
+function normalizeStudentCardRecord(student = {}, index = 0) {
+  const raw = student.rawProfile || {};
+  const id = student.admissionNumber || student.id || raw.admissionNumber || `STD-${index + 1}`;
+  return {
+    type: "student",
+    id,
+    displayName: student.displayName || student.name || raw.studentName || `Student ${index + 1}`,
+    roleLabel: "Student",
+    primaryLine: [student.className || student.class || raw.targetClass, student.section || raw.section].filter(Boolean).join("-"),
+    photoDataUrl: student.photoDataUrl || raw.photoDataUrl || "",
+    frontFields: [
+      ["NAME", student.displayName || student.name || raw.studentName],
+      ["ADM NO.", id],
+      ["FATHER NAME", student.fatherName || raw.fatherName],
+      ["MOTHER NAME", student.motherName || raw.motherName],
+      ["MOBILE NUMBER", student.guardianPhone || student.mobile || raw.guardianMobile || raw.mobileNo],
+      ["GENDER", student.gender || raw.gender],
+      ["CATEGORY", student.category || raw.category],
+    ],
+    backFields: [
+      ["Class :", student.className || student.class || raw.targetClass],
+      ["Section :", student.section || raw.section],
+      ["Roll No :", student.rollNo || raw.rollNo],
+      ["DOB :", student.dob || raw.dob],
+      ["Religion :", student.religion || raw.religion],
+      ["PEN Number :", student.penNumber || raw.penNumber],
+      ["Email :", student.guardianEmail || student.email || raw.email],
+      ["Permanent Address :", raw.permAddress || student.address],
+    ],
+  };
+}
+
+function normalizeStaffCardRecord(person = {}, role = "staff", index = 0) {
+  const source = person.teacherProfile || person.clerkProfile || person.profile?.teacherProfile || person.profile?.clerkProfile || person;
+  const id = person.username || source.id || source.empId || `${role.toUpperCase()}-${index + 1}`;
+  const designation = source.designation || source.role || (role === "admin" ? "Administrator" : role);
+  return {
+    type: role,
+    id,
+    displayName: person.displayName || source.displayName || source.name || id,
+    roleLabel: role.replace(/^\w/, (char) => char.toUpperCase()),
+    primaryLine: designation,
+    photoDataUrl: person.photoDataUrl || person.profile?.photoDataUrl || source.photoDataUrl || "",
+    frontFields: [
+      ["NAME", person.displayName || source.displayName || source.name || id],
+      ["EMP ID", id],
+      ["ROLE", designation],
+      ["DEPARTMENT", source.department || (role === "admin" ? "Administration" : "Office")],
+      ["MOBILE NUMBER", source.mobile || source.phone || person.mobile],
+      ["EMAIL", source.email || person.email],
+      ["GENDER", source.gender],
+    ],
+    backFields: [
+      ["Username :", id],
+      ["Designation :", designation],
+      ["Joining Date :", source.joiningDate || source.dateOfJoining],
+      ["DOB :", source.dob],
+      ["Aadhaar :", source.aadharNumber || source.aadhaar],
+      ["Allotted Classes :", Array.isArray(person.allottedClasses) ? person.allottedClasses.join(", ") : source.assignedClassTeacherFor],
+      ["Status :", person.isActive === false ? "Inactive" : "Active"],
+    ],
+  };
+}
 
 function initialForm(title) {
   if (title === "Application") {
@@ -125,6 +217,23 @@ function initialForm(title) {
   }
   if (title === "Notices") {
     return { title: "", description: "", category: "General", targetClasses: "ALL CLASSES" };
+  }
+  if (title === "Teacher Assignment") {
+    return {
+      name: "",
+      email: "",
+      mobile: "",
+      gender: "",
+      dob: "",
+      category: "",
+      address: "",
+      aadharNumber: "",
+      dateOfJoining: todayIsoDate(),
+      className: "",
+      subject: "",
+      isClassTeacher: false,
+      documentsAttached: [],
+    };
   }
   return {};
 }
@@ -252,6 +361,37 @@ export default function ConnectedModuleScreen() {
           targetClasses: form.targetClasses.split(",").map((item) => item.trim()).filter(Boolean),
         };
         await saveModuleState(config.namespace, [nextNotice, ...rows]);
+      } else if (title === "Teacher Assignment") {
+        const currentTeachers = (await fetchModuleState(TEACHERS_NAMESPACE)) || [];
+        const teacherId = `TCH-2026-${Math.floor(100 + Math.random() * 900)}`;
+        const finalRecord = {
+          id: teacherId,
+          empId: teacherId,
+          name: form.name.trim(),
+          email: form.email.trim(),
+          mobile: form.mobile.trim(),
+          gender: form.gender.trim(),
+          dob: form.dob,
+          category: form.category.trim(),
+          address: form.address.trim(),
+          aadharNumber: form.aadharNumber.trim(),
+          dateOfJoining: form.dateOfJoining,
+          classAssignments: form.className && form.subject ? [{ className: form.className, subject: form.subject }] : [],
+          isClassTeacher: form.isClassTeacher ? "Yes" : "No",
+          assignedClassTeacherFor: form.isClassTeacher ? form.className : "",
+          documentsAttached: form.documentsAttached || [],
+        };
+        await saveModuleState(TEACHERS_NAMESPACE, [finalRecord, ...currentTeachers]);
+        if (finalRecord.isClassTeacher === "Yes" && finalRecord.assignedClassTeacherFor) {
+          const currentClasses = (await fetchModuleState(CLASSES_NAMESPACE)) || [];
+          const hasClass = currentClasses.some((item) => item.name === finalRecord.assignedClassTeacherFor);
+          const nextClasses = (hasClass ? currentClasses : [...currentClasses, { id: finalRecord.assignedClassTeacherFor, name: finalRecord.assignedClassTeacherFor }]).map((item) =>
+            item.name === finalRecord.assignedClassTeacherFor
+              ? { ...item, classTeacherId: teacherId, classTeacherName: finalRecord.name, teacher: finalRecord.name }
+              : item
+          );
+          await saveModuleState(CLASSES_NAMESPACE, nextClasses);
+        }
       }
       setForm(initialForm(title));
       await load();
@@ -310,6 +450,7 @@ export default function ConnectedModuleScreen() {
 
   const showForm =
     (title === "Application" || title === "Leave Requests") ||
+    (canManage(user) && title === "Teacher Assignment") ||
     (canManage(user) && (title === "Events" || title === "Notices"));
 
   return (
@@ -383,6 +524,7 @@ export default function ConnectedModuleScreen() {
 function DataCard({ row, index, title, onParticipate, onRowAction, acting, user }) {
   const details = getDetails(row);
   const canParticipate = title === "Events" && row.participationEnabled && row.id;
+  const [expanded, setExpanded] = useState(false);
   const isAdmin = user?.role === "admin";
   const isTeacher = user?.role === "teacher";
   const canDelete = canManage(user) && (title === "Events" || title === "Notices");
@@ -395,6 +537,11 @@ function DataCard({ row, index, title, onParticipate, onRowAction, acting, user 
 
   return (
     <View style={styles.card}>
+      {title === "Events" && (
+        <EventContent row={row} expanded={expanded} setExpanded={setExpanded} />
+      )}
+      {title !== "Events" && (
+        <>
       <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
         <View style={styles.indexBadge}>
           <Text style={styles.indexText}>{index + 1}</Text>
@@ -417,6 +564,8 @@ function DataCard({ row, index, title, onParticipate, onRowAction, acting, user 
             </View>
           ))}
         </View>
+      )}
+        </>
       )}
 
       {canParticipate && (
@@ -461,11 +610,79 @@ function DataCard({ row, index, title, onParticipate, onRowAction, acting, user 
   );
 }
 
+function EventContent({ row, expanded, setExpanded }) {
+  const description = valueToText(row.description);
+  const shouldCompress = description.length > 140;
+  const visibleDescription = shouldCompress && !expanded ? `${description.slice(0, 140)}...` : description;
+  return (
+    <View>
+      <Text style={styles.cardTitle}>{row.title || "Event"}</Text>
+      {!!description && (
+        <Text style={styles.eventDescription}>
+          {visibleDescription}
+        </Text>
+      )}
+      {shouldCompress && (
+        <TouchableOpacity onPress={() => setExpanded((value) => !value)}>
+          <Text style={styles.readMoreText}>{expanded ? "Show less" : "Read more"}</Text>
+        </TouchableOpacity>
+      )}
+      {!!row.imageDataUrl && (
+        <Image source={{ uri: row.imageDataUrl }} style={styles.eventImage} resizeMode="cover" />
+      )}
+      <Text style={styles.cardSubtitle}>
+        {[row.durationType === "multiple" ? `${row.fromDate} to ${row.toDate}` : row.date, row.participationEnabled ? "Participation open" : ""].filter(Boolean).join(" | ")}
+      </Text>
+    </View>
+  );
+}
+
 function ActionForm({ title, form, updateForm, onSubmit, acting, user }) {
   const disabled =
-    !form.title?.trim() ||
-    (!(title === "Application") && !form.description?.trim()) ||
-    (title === "Application" && !form.message?.trim());
+    title === "Teacher Assignment"
+      ? !form.name?.trim() || !form.email?.trim() || !form.mobile?.trim()
+      : !form.title?.trim() ||
+        (!(title === "Application") && !form.description?.trim()) ||
+        (title === "Application" && !form.message?.trim());
+
+  async function pickTeacherDocument() {
+    const file = await pickStoredFile();
+    if (!file) return;
+    updateForm("documentsAttached", [...(form.documentsAttached || []), file]);
+  }
+
+  if (title === "Teacher Assignment") {
+    return (
+      <View style={styles.formCard}>
+        <Text style={styles.formTitle}>Teacher Registration</Text>
+        <TextInput style={styles.input} value={form.name} onChangeText={(value) => updateForm("name", value)} placeholder="Teacher full name" />
+        <TextInput style={styles.input} value={form.email} onChangeText={(value) => updateForm("email", value)} placeholder="Official email" />
+        <TextInput style={styles.input} value={form.mobile} onChangeText={(value) => updateForm("mobile", value)} placeholder="Mobile" />
+        <TextInput style={styles.input} value={form.aadharNumber} onChangeText={(value) => updateForm("aadharNumber", value)} placeholder="Aadhaar number" />
+        <TextInput style={styles.input} value={form.address} onChangeText={(value) => updateForm("address", value)} placeholder="Address" />
+        <View style={styles.actionRow}>
+          <TextInput style={[styles.input, { flex: 1 }]} value={form.gender} onChangeText={(value) => updateForm("gender", value)} placeholder="Gender" />
+          <TextInput style={[styles.input, { flex: 1 }]} value={form.category} onChangeText={(value) => updateForm("category", value)} placeholder="Category" />
+        </View>
+        <View style={styles.actionRow}>
+          <TextInput style={[styles.input, { flex: 1 }]} value={form.className} onChangeText={(value) => updateForm("className", value)} placeholder="Class" />
+          <TextInput style={[styles.input, { flex: 1 }]} value={form.subject} onChangeText={(value) => updateForm("subject", value)} placeholder="Subject" />
+        </View>
+        <SmallButton label={form.isClassTeacher ? "Class Teacher: Yes" : "Class Teacher: No"} icon="school-outline" active={form.isClassTeacher} onPress={() => updateForm("isClassTeacher", !form.isClassTeacher)} />
+        <TouchableOpacity style={styles.secondaryButton} onPress={pickTeacherDocument}>
+          <Ionicons name="cloud-upload-outline" size={18} color="#4F46E5" />
+          <Text style={styles.secondaryButtonText}>Upload Document</Text>
+        </TouchableOpacity>
+        {(form.documentsAttached || []).map((doc) => (
+          <Text key={doc.uploadedAt} style={styles.cardSubtitle}>{doc.file}</Text>
+        ))}
+        <TouchableOpacity style={[styles.primaryButton, disabled && { opacity: 0.45 }]} onPress={onSubmit} disabled={disabled || acting}>
+          <Ionicons name="save-outline" size={20} color="#fff" />
+          <Text style={styles.primaryButtonText}>Save Teacher</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.formCard}>
@@ -518,7 +735,55 @@ function ActionForm({ title, form, updateForm, onSubmit, acting, user }) {
 }
 
 function ProfileCard({ user }) {
-  const profile = user?.role === "teacher" ? getTeacherProfile(user) : user?.role === "student" ? activeIdentity(user) : getStaffProfile(user);
+  const originalProfile = user?.role === "teacher" ? getTeacherProfile(user) : user?.role === "student" ? activeIdentity(user) : getStaffProfile(user);
+  const [profile, setProfile] = useState(originalProfile);
+  const documents = profile.documents || profile.rawProfile?.documents || [];
+
+  async function saveStudentPatch(patch) {
+    if (user?.role !== "student") return;
+    const students = (await fetchModuleState(STUDENTS_NAMESPACE)) || [];
+    const studentId = profile.admissionNumber || profile.id;
+    const nextStudents = students.map((student) => {
+      const isMatch = student.admissionNumber === studentId || student.id === studentId;
+      if (!isMatch) return student;
+      return {
+        ...student,
+        ...patch,
+        rawProfile: {
+          ...(student.rawProfile || {}),
+          ...patch.rawProfile,
+        },
+      };
+    });
+    await saveModuleState(STUDENTS_NAMESPACE, nextStudents);
+    setProfile((current) => ({ ...current, ...patch, rawProfile: { ...(current.rawProfile || {}), ...patch.rawProfile } }));
+  }
+
+  async function uploadPhoto() {
+    const file = await pickStoredFile(["image/*"]);
+    if (!file) return;
+    await saveStudentPatch({ photoDataUrl: file.dataUrl, rawProfile: { photoDataUrl: file.dataUrl } });
+  }
+
+  async function uploadDocument(existingName = "") {
+    const file = await pickStoredFile();
+    if (!file) return;
+    const doc = {
+      ...file,
+      name: existingName || file.name || file.file,
+      status: "Uploaded",
+    };
+    const nextDocuments = existingName
+      ? documents.map((item) => (item.name === existingName ? doc : item))
+      : [doc, ...documents];
+    await saveStudentPatch({ documents: nextDocuments, rawProfile: { documents: nextDocuments } });
+  }
+
+  async function deleteDocument(name) {
+    const nextDocuments = documents.filter((item) => item.name !== name);
+    await saveStudentPatch({ documents: nextDocuments, rawProfile: { documents: nextDocuments } });
+  }
+
   const rows = user?.role === "student"
     ? [
         ["Name", profile.displayName],
@@ -552,7 +817,25 @@ function ProfileCard({ user }) {
 
   return (
     <View style={styles.card}>
-      <Text style={styles.cardTitle}>{profile.displayName || user?.displayName || user?.username}</Text>
+      <View style={styles.profileHeader}>
+        <View style={styles.profilePhoto}>
+          {profile.photoDataUrl ? (
+            <Image source={{ uri: profile.photoDataUrl }} style={styles.profilePhotoImage} />
+          ) : (
+            <Ionicons name="person" size={42} color="#4F46E5" />
+          )}
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.cardTitle}>{profile.displayName || user?.displayName || user?.username}</Text>
+          <Text style={styles.cardSubtitle}>{profile.className || profile.designation || user?.role}</Text>
+        </View>
+      </View>
+      {user?.role === "student" && (
+        <TouchableOpacity style={styles.secondaryButton} onPress={uploadPhoto}>
+          <Ionicons name="camera-outline" size={18} color="#4F46E5" />
+          <Text style={styles.secondaryButtonText}>Update Profile Photo</Text>
+        </TouchableOpacity>
+      )}
       <View style={styles.detailBox}>
         {rows.filter(([, value]) => value).map(([label, value]) => (
           <View key={label} style={styles.detailRow}>
@@ -561,6 +844,32 @@ function ProfileCard({ user }) {
           </View>
         ))}
       </View>
+      {user?.role === "student" && (
+        <View style={styles.detailBox}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.formTitle}>Documents</Text>
+            <TouchableOpacity onPress={() => uploadDocument()} style={styles.iconButton}>
+              <Ionicons name="add-outline" size={20} color="#4F46E5" />
+            </TouchableOpacity>
+          </View>
+          {documents.length ? documents.map((doc) => (
+            <View key={`${doc.name}-${doc.uploadedAt}`} style={styles.documentRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cardTitle}>{doc.name}</Text>
+                <Text style={styles.cardSubtitle}>{doc.status || "Uploaded"} | {doc.file || "File saved"}</Text>
+              </View>
+              <TouchableOpacity onPress={() => uploadDocument(doc.name)} style={styles.iconButton}>
+                <Ionicons name="cloud-upload-outline" size={18} color="#4F46E5" />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => deleteDocument(doc.name)} style={[styles.iconButton, { backgroundColor: "#FEF2F2" }]}>
+                <Ionicons name="trash-outline" size={18} color="#DC2626" />
+              </TouchableOpacity>
+            </View>
+          )) : (
+            <Text style={styles.cardSubtitle}>No documents uploaded yet.</Text>
+          )}
+        </View>
+      )}
     </View>
   );
 }
@@ -568,36 +877,55 @@ function ProfileCard({ user }) {
 function IdCards({ user, rows = [] }) {
   const cards = (user?.role === "admin" || user?.role === "clerk") && rows.length
     ? rows.flatMap((item) => {
-        if (Array.isArray(item.linkedStudents) && item.linkedStudents.length) return item.linkedStudents;
-        return [{
-          displayName: item.displayName,
-          username: item.username,
-          employeeId: item.username,
-          designation: item.role,
-          mobile: item.profile?.mobile,
-          email: item.email,
-        }];
+        if (Array.isArray(item.linkedStudents) && item.linkedStudents.length) return item.linkedStudents.map(normalizeStudentCardRecord);
+        return [normalizeStaffCardRecord(item, item.role || "staff")];
       })
     : user?.role === "student"
-    ? (user.studentProfiles || [activeIdentity(user)]).filter(Boolean)
-    : [user?.role === "teacher" ? getTeacherProfile(user) : getStaffProfile(user)];
+    ? (user.studentProfiles || [activeIdentity(user)]).filter(Boolean).map(normalizeStudentCardRecord)
+    : [normalizeStaffCardRecord(user?.role === "teacher" ? getTeacherProfile(user) : getStaffProfile(user), user?.role)];
 
   return cards.map((profile, index) => (
-    <View key={profile.id || profile.employeeId || index} style={styles.idCard}>
-      <View style={styles.idTop}>
-        <Ionicons name="school-outline" size={28} color="#fff" />
-        <Text style={styles.idSchool}>Marigold Secondary School</Text>
+    <View key={profile.id || index} style={styles.idPair}>
+      <View style={styles.webIdFront}>
+        <View style={styles.webIdLeft}>
+          <Ionicons name="school" size={48} color="#fff" />
+          <View style={styles.webIdPhoto}>
+            {profile.photoDataUrl ? <Image source={{ uri: profile.photoDataUrl }} style={styles.webIdPhotoImage} /> : <Text style={styles.webIdInitials}>{String(profile.displayName || "ID").slice(0, 2).toUpperCase()}</Text>}
+          </View>
+        </View>
+        <View style={styles.webIdMain}>
+          <Text style={styles.webIdSchool}>MARIGOLD SECONDARY SCHOOL</Text>
+          <Text style={styles.webIdTagline}>LEARN - GROW - SUCCEED</Text>
+          <Text style={styles.webIdSession}>SESSION: 2026-27</Text>
+          {profile.frontFields.filter(([, value]) => value).map(([label, value]) => (
+            <View key={label} style={styles.webIdLine}>
+              <Text style={styles.webIdLabel}>{label}</Text>
+              <Text style={styles.webIdColon}>:</Text>
+              <Text style={styles.webIdValue}>{String(value)}</Text>
+            </View>
+          ))}
+          <View style={styles.webQrBox}><Text style={styles.webQrText}>QR</Text></View>
+        </View>
+        <Text style={styles.webIdFooter}>www.marigoldschoolbehror.com</Text>
       </View>
-      <View style={styles.idBody}>
-        <View style={styles.photoBox}>
-          <Ionicons name="person" size={52} color="#4F46E5" />
+      <View style={styles.webIdBack}>
+        <View style={styles.webIdBackHeader}>
+          <Ionicons name="school" size={32} color="#08285f" />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.webIdBackSchool}>MARIGOLD SECONDARY SCHOOL</Text>
+            <Text style={styles.webIdBackSub}>{profile.roleLabel} Identity Details</Text>
+          </View>
+          <View style={[styles.webQrBox, { width: 54, height: 54 }]}><Text style={styles.webQrText}>QR</Text></View>
         </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.idName}>{profile.displayName || profile.name || user?.displayName}</Text>
-          <Text style={styles.idMeta}>{profile.className ? `${profile.className} ${profile.section || ""}` : profile.designation || user?.role}</Text>
-          <Text style={styles.idMeta}>ID: {profile.admissionNumber || profile.employeeId || profile.username || user?.username}</Text>
-          <Text style={styles.idMeta}>Contact: {profile.guardianPhone || profile.mobile || "Not updated"}</Text>
+        <View style={styles.webIdBackGrid}>
+          {profile.backFields.filter(([, value]) => value).map(([label, value]) => (
+            <View key={label} style={styles.webIdBackCell}>
+              <Text style={styles.webIdBackLabel}>{label}</Text>
+              <Text style={styles.webIdBackValue}>{String(value)}</Text>
+            </View>
+          ))}
         </View>
+        <Text style={styles.webIdBackNote}>If found, please return this card to the school office. This card is ERP generated.</Text>
       </View>
     </View>
   ));
@@ -696,6 +1024,24 @@ const styles = {
     lineHeight: 20,
     marginTop: 5,
   },
+  eventDescription: {
+    color: "#334155",
+    lineHeight: 21,
+    marginTop: 8,
+    fontWeight: "700",
+  },
+  readMoreText: {
+    color: "#4F46E5",
+    fontWeight: "900",
+    marginTop: 6,
+  },
+  eventImage: {
+    width: "100%",
+    height: 230,
+    borderRadius: 18,
+    marginTop: 14,
+    backgroundColor: "#EEF2F7",
+  },
   unreadDot: {
     width: 12,
     height: 12,
@@ -792,6 +1138,47 @@ const styles = {
     gap: 8,
     marginTop: 10,
   },
+  profileHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+  },
+  profilePhoto: {
+    width: 92,
+    height: 92,
+    borderRadius: 28,
+    backgroundColor: "#EEF2FF",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+    borderWidth: 3,
+    borderColor: "#fff",
+  },
+  profilePhotoImage: {
+    width: "100%",
+    height: "100%",
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 13,
+    backgroundColor: "#EEF2FF",
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 8,
+  },
+  documentRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#EEF2F7",
+  },
   smallButton: {
     minHeight: 42,
     borderRadius: 13,
@@ -808,51 +1195,57 @@ const styles = {
     fontWeight: "900",
     fontSize: 12,
   },
-  idCard: {
+  idPair: { gap: 12, marginBottom: 20 },
+  webIdFront: {
+    minHeight: 224,
     backgroundColor: "#fff",
     borderRadius: 22,
     overflow: "hidden",
-    marginBottom: 14,
     borderWidth: 1,
-    borderColor: "#DDE7FF",
+    borderColor: "#D7DCE7",
+    flexDirection: "row",
     elevation: 3,
   },
-  idTop: {
-    backgroundColor: "#102A83",
-    padding: 14,
-    flexDirection: "row",
+  webIdLeft: {
+    width: 98,
+    backgroundColor: "#08285f",
     alignItems: "center",
-    gap: 10,
+    paddingTop: 18,
+    gap: 20,
   },
-  idSchool: {
-    color: "#fff",
-    fontWeight: "900",
-    fontSize: 16,
-  },
-  idBody: {
-    padding: 16,
-    flexDirection: "row",
-    gap: 14,
-    alignItems: "center",
-  },
-  photoBox: {
-    width: 82,
-    height: 94,
-    borderRadius: 16,
-    backgroundColor: "#EEF2FF",
+  webIdPhoto: {
+    width: 74,
+    height: 88,
+    borderRadius: 10,
+    borderWidth: 3,
+    borderColor: "#F4F8FF",
+    backgroundColor: "#EAF2FB",
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
   },
-  idName: {
-    color: "#0F172A",
-    fontSize: 18,
-    fontWeight: "900",
-  },
-  idMeta: {
-    color: "#475569",
-    fontWeight: "800",
-    marginTop: 5,
-  },
+  webIdPhotoImage: { width: "100%", height: "100%" },
+  webIdInitials: { color: "#08285f", fontWeight: "900", fontSize: 24 },
+  webIdMain: { flex: 1, padding: 14, paddingBottom: 34 },
+  webIdSchool: { color: "#08285f", fontWeight: "900", fontSize: 18, letterSpacing: 1 },
+  webIdTagline: { color: "#174c9d", fontWeight: "900", fontSize: 9, letterSpacing: 2, marginTop: 4, marginBottom: 8 },
+  webIdSession: { alignSelf: "flex-start", backgroundColor: "#08285f", color: "#fff", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, fontWeight: "900", fontSize: 10, marginBottom: 8 },
+  webIdLine: { flexDirection: "row", marginBottom: 4, alignItems: "flex-start" },
+  webIdLabel: { width: 92, color: "#111", fontWeight: "900", fontSize: 10 },
+  webIdColon: { color: "#111", fontWeight: "900", marginRight: 5 },
+  webIdValue: { flex: 1, color: "#08285f", fontWeight: "900", fontSize: 11 },
+  webQrBox: { width: 58, height: 58, borderRadius: 10, borderWidth: 2, borderColor: "#08285f", alignItems: "center", justifyContent: "center", backgroundColor: "#fff", alignSelf: "flex-end", marginTop: -36 },
+  webQrText: { color: "#08285f", fontWeight: "900", fontSize: 11 },
+  webIdFooter: { position: "absolute", left: 0, right: 0, bottom: 0, backgroundColor: "#08285f", color: "#fff", textAlign: "center", paddingVertical: 8, fontWeight: "900", fontSize: 10, letterSpacing: 1 },
+  webIdBack: { minHeight: 224, backgroundColor: "#fff", borderRadius: 22, borderWidth: 1, borderColor: "#D7DCE7", padding: 14, overflow: "hidden", elevation: 3 },
+  webIdBackHeader: { flexDirection: "row", alignItems: "center", gap: 10, borderBottomWidth: 2, borderBottomColor: "#E7ECF5", paddingBottom: 10 },
+  webIdBackSchool: { color: "#08285f", fontWeight: "900", fontSize: 14, letterSpacing: 1 },
+  webIdBackSub: { color: "#174c9d", fontWeight: "900", fontSize: 9, marginTop: 2 },
+  webIdBackGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 },
+  webIdBackCell: { width: "48%", borderBottomWidth: 1, borderBottomColor: "#EDF1F7", paddingBottom: 4 },
+  webIdBackLabel: { color: "#5B6472", fontSize: 8, fontWeight: "900" },
+  webIdBackValue: { color: "#111827", fontSize: 10, fontWeight: "900", marginTop: 2 },
+  webIdBackNote: { position: "absolute", left: 0, right: 0, bottom: 0, backgroundColor: "#08285f", color: "#fff", textAlign: "center", padding: 8, fontWeight: "800", fontSize: 9 },
   loadingCard: {
     backgroundColor: "#fff",
     borderRadius: 22,

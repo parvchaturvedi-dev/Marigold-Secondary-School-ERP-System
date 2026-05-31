@@ -167,6 +167,7 @@ export default function TeacherDashboardScreen() {
           setDrawerOpen(false);
           handleModulePress(module);
         }}
+        logout={logout}
       />
 
       {/* Sub-items Modal Popup for Desks */}
@@ -506,7 +507,7 @@ function BottomTabs({ activeTab, setActiveTab, openConnectedModule }) {
   );
 }
 
-function Drawer({ visible, onClose, modules, onModulePress }) {
+function Drawer({ visible, onClose, modules, onModulePress, logout }) {
   const [expandedModule, setExpandedModule] = useState(null);
 
   function toggleExpand(title) {
@@ -595,6 +596,13 @@ function Drawer({ visible, onClose, modules, onModulePress }) {
                 </View>
               );
             })}
+            <View style={{ height: 18 }} />
+            <DrawerItem
+              title="Logout"
+              icon="log-out-outline"
+              color="#DC2626"
+              onPress={logout}
+            />
           </ScrollView>
         </View>
 

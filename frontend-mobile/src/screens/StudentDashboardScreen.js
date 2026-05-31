@@ -79,6 +79,7 @@ export default function StudentDashboardScreen() {
         }}
         user={user}
         selectStudent={selectStudent}
+        logout={logout}
       />
     </View>
   );
@@ -307,7 +308,7 @@ function BottomTabs({ activeTab, setActiveTab, openModule }) {
   );
 }
 
-function Drawer({ visible, onClose, openModule, user, selectStudent }) {
+function Drawer({ visible, onClose, openModule, user, selectStudent, logout }) {
   const students = Array.isArray(user?.studentProfiles) ? user.studentProfiles : [];
   const activeStudent = getActiveStudentProfile(user);
   return (
@@ -342,6 +343,8 @@ function Drawer({ visible, onClose, openModule, user, selectStudent }) {
             {studentModules.map((module) => (
               <DrawerItem key={module.title} title={module.title} icon={module.icon} color={module.color} onPress={() => openModule(module.title)} />
             ))}
+            <View style={{ height: 18 }} />
+            <DrawerItem title="Logout" icon="log-out-outline" color="#DC2626" onPress={logout} />
           </ScrollView>
         </View>
 
