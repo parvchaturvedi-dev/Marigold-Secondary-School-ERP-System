@@ -34,14 +34,14 @@ const getGreeting = () => {
 };
 
 export default function StudentDashboardScreen() {
-  const { user, logout, openStudentModule } = useAuth();
+  const { user, logout, openStudentModule, selectStudent } = useAuth();
   const { summary, loading, error } = useDashboardSummary();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("home");
 
   function openModule(title) {
     if (title === "Home" || title === "Dashboard (Home)") return setActiveTab("home");
-    if (title === "Profile") return setActiveTab("profile");
+    if (title === "Profile") return openStudentModule("Profile");
     openStudentModule(title);
   }
 
@@ -51,7 +51,7 @@ export default function StudentDashboardScreen() {
     <View style={{ flex: 1, backgroundColor: "#F8FAFF" }}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
         <LinearGradient colors={["#F8FAFF", "#FFFFFF"]} style={{ paddingTop: 50, paddingHorizontal: 18, minHeight: 180 }}>
-          <Header onMenu={() => setDrawerOpen(true)} onNotices={() => openModule("Notices")} noticeCount={noticeCount} />
+          <Header onMenu={() => setDrawerOpen(true)} onNotices={() => openModule("Notifications")} noticeCount={noticeCount} />
 
           {activeTab === "home" && (
             <HomeContent user={user} summary={summary} loading={loading} error={error} openModule={openModule} />
@@ -77,6 +77,8 @@ export default function StudentDashboardScreen() {
           setDrawerOpen(false);
           openModule(title);
         }}
+        user={user}
+        selectStudent={selectStudent}
       />
     </View>
   );
@@ -262,6 +264,7 @@ function BottomTabs({ activeTab, setActiveTab, openModule }) {
   const moduleTargets = {
     assignment: "Assignment",
     notices: "Notices",
+    profile: "Profile",
   };
 
   return (
@@ -304,7 +307,9 @@ function BottomTabs({ activeTab, setActiveTab, openModule }) {
   );
 }
 
-function Drawer({ visible, onClose, openModule }) {
+function Drawer({ visible, onClose, openModule, user, selectStudent }) {
+  const students = Array.isArray(user?.studentProfiles) ? user.studentProfiles : [];
+  const activeStudent = getActiveStudentProfile(user);
   return (
     <Modal visible={visible} transparent animationType="fade">
       <View style={{ flex: 1, flexDirection: "row" }}>
@@ -315,6 +320,24 @@ function Drawer({ visible, onClose, openModule }) {
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false}>
+            {students.length > 1 && (
+              <View style={{ backgroundColor: "#F8FAFF", borderRadius: 16, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: "#EEF2F7" }}>
+                <Text style={{ color: "#64748B", fontSize: 11, fontWeight: "900", marginBottom: 8 }}>Select Student</Text>
+                {students.map((student) => {
+                  const isActive = (student.id || student.admissionNumber) === (activeStudent?.id || activeStudent?.admissionNumber);
+                  return (
+                    <TouchableOpacity
+                      key={student.id || student.admissionNumber}
+                      onPress={() => selectStudent(student.id || student.admissionNumber)}
+                      style={{ paddingVertical: 9, paddingHorizontal: 10, borderRadius: 12, backgroundColor: isActive ? "#EEF2FF" : "transparent" }}
+                    >
+                      <Text style={{ color: isActive ? "#3949FF" : "#0F172A", fontWeight: "900" }}>{student.displayName || student.name}</Text>
+                      <Text style={{ color: "#64748B", fontSize: 12, marginTop: 2 }}>{student.className || "Class not assigned"}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
             <DrawerItem title="Dashboard (Home)" icon="home" color="#4F46E5" active onPress={() => openModule("Home")} />
             {studentModules.map((module) => (
               <DrawerItem key={module.title} title={module.title} icon={module.icon} color={module.color} onPress={() => openModule(module.title)} />

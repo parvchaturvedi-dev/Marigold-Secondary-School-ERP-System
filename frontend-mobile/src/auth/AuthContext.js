@@ -137,6 +137,20 @@ export function AuthProvider({ children }) {
     setScreen("login");
   }
 
+  async function selectStudent(studentId) {
+    if (!user || !Array.isArray(user.studentProfiles)) return;
+    const selected = user.studentProfiles.find((student) => student.id === studentId || student.admissionNumber === studentId);
+    if (!selected) return;
+
+    const nextUser = hydrateUser({
+      ...user,
+      selectedStudentId: selected.id || selected.admissionNumber,
+      activeStudent: selected,
+    });
+    setUser(nextUser);
+    await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(nextUser));
+  }
+
   return (
     <AuthContext.Provider
       value={{
@@ -153,6 +167,7 @@ export function AuthProvider({ children }) {
           setScreen("timetable");
         },
         openConnectedModule,
+        selectStudent,
         goHome,
         goBack: goHome,
         setHome: goHome,

@@ -6,14 +6,33 @@
     "orientation": "portrait",
     "scheme": "mgpserp",
     "userInterfaceStyle": "automatic",
+    "owner": "parvchaturvediofficial",
+    "description": "Marigold Secondary School ERP Mobile Application",
+    "sdkVersion": "54.0.0",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
     "android": {
       "package": "com.parvchaturvediofficial.mgpserpmobile"
     },
     "extra": {
       "eas": {
-        "projectId": "ec9d1ec2-9236-498a-bd82-e1b8180cf68d"
+        "projectId": "bacdeda8-7b83-4529-84c2-18328c2eaf4d"
       }
     },
-    "owner": "parvchaturvediofficial"
+    "ios": {
+      "bundleIdentifier": "com.parvchaturvediofficial.mgpserpmobile",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/bacdeda8-7b83-4529-84c2-18328c2eaf4d"
+    }
   }
 }

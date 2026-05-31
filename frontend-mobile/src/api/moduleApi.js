@@ -14,6 +14,7 @@ const moduleNamespaces = {
   "Subject Management": "admin-subjects-global",
   "Teacher Management": "admin-teacher-management-list",
   "Teacher Assignment": "admin-teacher-management-list",
+  "Notices": "admin-notices-list",
 };
 
 const endpointByModule = {
@@ -34,7 +35,7 @@ const endpointByModule = {
   "Leave Requests": { endpoint: "/leave-requests" },
   "Meetings": { endpoint: "/meetings" },
   "My Class": { endpoint: "/dashboard/summary", extractor: (payload) => [payload?.profile || {}] },
-  "Notices": { endpoint: "/notifications" },
+  "Notifications": { endpoint: "/notifications" },
   "Profile": { endpoint: "/dashboard/summary", extractor: (payload) => [payload?.profile || {}] },
   "Settings": { endpoint: "/auth/session", extractor: (payload) => [payload || {}] },
   "Users Management": { endpoint: "/auth/users", extractor: (payload) => payload?.users || payload || [] },
@@ -123,6 +124,14 @@ export function getModuleConfig(moduleName) {
 export async function fetchModuleData(moduleName, user) {
   const config = getModuleConfig(moduleName);
   const scoped = scopedParams(user);
+  if ((config.title === "ID Card" || config.title === "Id Card") && (user?.role === "admin" || user?.role === "clerk")) {
+    const payload = await apiRequest("/auth/users");
+    return {
+      config,
+      payload,
+      rows: payload?.users || payload || [],
+    };
+  }
   const endpointNeedsQuery = !config.endpoint.includes("/dashboard/summary") && !config.endpoint.includes("/auth/session");
   const payload = await apiRequest(`${config.endpoint}${endpointNeedsQuery ? buildQuery(scoped) : ""}`);
   const rows = config.extractor ? config.extractor(payload) : payload;
@@ -138,6 +147,73 @@ export async function markNotificationsRead(ids = []) {
     method: "PATCH",
     body: JSON.stringify({ ids }),
   });
+}
+
+export async function saveModuleState(namespace, value) {
+  return apiRequest(`/module-state/${encodeURIComponent(namespace)}`, {
+    method: "PUT",
+    body: JSON.stringify({ value }),
+  });
+}
+
+export async function createApplication(payload) {
+  return apiRequest("/applications", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function voteOnApplication(applicationId, payload) {
+  return apiRequest(`/applications/${applicationId}/vote`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function adminActionApplication(applicationId, payload) {
+  return apiRequest(`/applications/${applicationId}/admin-action`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function markApplicationReplyRead(applicationId, username) {
+  return apiRequest(`/applications/${applicationId}/reply-read`, {
+    method: "PATCH",
+    body: JSON.stringify({ username }),
+  });
+}
+
+export async function createLeaveRequest(payload) {
+  return apiRequest("/leave-requests", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function adminActionLeaveRequest(requestId, payload) {
+  return apiRequest(`/leave-requests/${requestId}/admin-action`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function teacherActionLeaveRequest(requestId, payload) {
+  return apiRequest(`/leave-requests/${requestId}/teacher-action`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function createEvent(payload) {
+  return apiRequest("/events", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteEvent(eventId) {
+  return apiRequest(`/events/${eventId}`, { method: "DELETE" });
 }
 
 export async function participateInEvent(eventId, user = {}) {

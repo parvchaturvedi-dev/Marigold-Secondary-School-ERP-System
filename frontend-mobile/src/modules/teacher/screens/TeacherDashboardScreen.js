@@ -1,4 +1,4 @@
-cimport React, { useState } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -22,7 +22,7 @@ const logo = require("../../../../assets/images/logo.png");
 const width = Dimensions.get("window").width;
 
 export default function TeacherDashboardScreen() {
-  const { user, logout, openComingSoon } = useAuth();
+  const { user, logout, openConnectedModule } = useAuth();
   const { summary, loading, error } = useDashboardSummary();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("home");
@@ -36,20 +36,20 @@ export default function TeacherDashboardScreen() {
     } else {
       setSubModalOpen(false);
       if (module.title === "Profile") {
-        setActiveTab("profile");
+        openConnectedModule("Profile");
       } else if (module.title === "Notices") {
-        setActiveTab("notices");
+        openConnectedModule("Notices");
       } else if (module.title === "Attendance") {
         setActiveTab("attendance");
       } else {
-        openComingSoon(module.title);
+        openConnectedModule(module.title);
       }
     }
   }
 
   function handleSubItemPress(subItem, parentTitle) {
     setSubModalOpen(false);
-    openComingSoon(`${parentTitle} > ${subItem.title}`);
+    openConnectedModule(`${parentTitle} > ${subItem.title}`);
   }
 
   if (activeTab === "attendance") {
@@ -93,7 +93,7 @@ export default function TeacherDashboardScreen() {
               </Text>
             </View>
 
-            <TouchableOpacity onPress={() => setActiveTab("notices")}>
+            <TouchableOpacity onPress={() => openConnectedModule("Notifications")}>
               <View>
                 <Ionicons name="notifications-outline" size={28} color="#0F172A" />
                 <View
@@ -156,7 +156,7 @@ export default function TeacherDashboardScreen() {
       </ScrollView>
 
       {/* Bottom Navigation */}
-      <BottomTabs activeTab={activeTab} setActiveTab={setActiveTab} />
+      <BottomTabs activeTab={activeTab} setActiveTab={setActiveTab} openConnectedModule={openConnectedModule} />
 
       {/* Main Drawer Menu */}
       <Drawer
@@ -447,7 +447,12 @@ function SimpleTabPage({ title, icon, text, logout }) {
   );
 }
 
-function BottomTabs({ activeTab, setActiveTab }) {
+function BottomTabs({ activeTab, setActiveTab, openConnectedModule }) {
+  const moduleTargets = {
+    assignment: "Assignment",
+    notices: "Notices",
+    profile: "Profile",
+  };
   return (
     <View
       style={{
@@ -470,7 +475,13 @@ function BottomTabs({ activeTab, setActiveTab }) {
         return (
           <TouchableOpacity
             key={tab.key}
-            onPress={() => setActiveTab(tab.key)}
+            onPress={() => {
+              if (moduleTargets[tab.key]) {
+                openConnectedModule(moduleTargets[tab.key]);
+                return;
+              }
+              setActiveTab(tab.key);
+            }}
             style={{ alignItems: "center", justifyContent: "center" }}
           >
             <Ionicons

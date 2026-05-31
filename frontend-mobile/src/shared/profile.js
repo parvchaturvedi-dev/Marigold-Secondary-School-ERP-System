@@ -64,3 +64,26 @@ export function getTeacherProfile(user = {}) {
     allottedClasses: Array.isArray(user.allottedClasses) ? user.allottedClasses : [],
   };
 }
+
+export function getStaffProfile(user = {}) {
+  const source = user.clerkProfile || user.adminProfile || {};
+  const username = clean(user.username || source.id || source.empId).toUpperCase();
+  const displayName = clean(firstValue(source.name, source.displayName, user.displayName, user.name, username));
+
+  return {
+    ...source,
+    username,
+    displayName,
+    employeeId: clean(firstValue(source.id, source.empId, username)),
+    designation: clean(firstValue(source.designation, source.role)) || (user.role === "admin" ? "Administrator" : "Office Administration"),
+    department: clean(source.department),
+    mobile: clean(firstValue(source.mobile, source.phone, user.mobile)),
+    email: clean(firstValue(source.email, user.email)),
+    dob: clean(source.dob),
+    gender: clean(source.gender),
+    address: clean(source.address),
+    joiningDate: clean(source.joiningDate),
+    shift: clean(source.shift),
+    deskWindow: clean(source.deskWindow),
+  };
+}

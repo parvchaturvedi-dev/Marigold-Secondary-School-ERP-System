@@ -129,7 +129,7 @@ export default function TimetableScreen() {
         {canEdit && (
           <View style={styles.panel}>
             <Text style={styles.title}>Admin / Clerk Editor</Text>
-            <Text style={styles.muted}>Edit default grid. Use web ERP for full date-range override control.</Text>
+            <Text style={styles.muted}>Edit and publish the default timetable grid.</Text>
             <TextInput
               value={draft.name}
               onChangeText={(name) => setDraft((current) => ({ ...current, name }))}

@@ -36,7 +36,7 @@ export default function ClerkDashboardScreen() {
     } else {
       setSubModalOpen(false);
       if (module.title === "Profile") {
-        setActiveTab("profile");
+        openConnectedModule("Profile");
       } else if (module.title === "Notices") {
         openConnectedModule("Notices");
       } else if (module.title === "Attendance" || module.title === "Biometric Attendance") {
@@ -93,7 +93,7 @@ export default function ClerkDashboardScreen() {
               </Text>
             </View>
 
-            <TouchableOpacity onPress={() => openConnectedModule("Notices")}>
+            <TouchableOpacity onPress={() => openConnectedModule("Notifications")}>
               <View>
                 <Ionicons name="notifications-outline" size={28} color="#0F172A" />
                 <View
@@ -442,6 +442,7 @@ function BottomTabs({ activeTab, setActiveTab, openConnectedModule }) {
   const moduleTargets = {
     documents: "Documents Management",
     notices: "Notices",
+    profile: "Profile",
   };
 
   return (
