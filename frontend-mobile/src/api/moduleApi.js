@@ -22,6 +22,7 @@ const endpointByModule = {
   "Admin Management": { endpoint: "/auth/users", extractor: (payload) => payload?.users || payload || [] },
   "Application": { endpoint: "/applications" },
   "Assignment": { endpoint: "/assignments" },
+  "Assignments": { endpoint: "/assignments" },
   "Events": { endpoint: "/events" },
   "Examination Desk": { endpoint: "/examinations/state", extractor: flattenExamState },
   "Exam Creation": { endpoint: "/examinations/state", extractor: (payload) => payload?.exams || [] },
@@ -193,6 +194,34 @@ export async function createLeaveRequest(payload) {
   return apiRequest("/leave-requests", {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+export async function createAssignment(payload) {
+  const formData = new FormData();
+  formData.append("title", payload.title);
+  formData.append("description", payload.description);
+  formData.append("subject", payload.subject || "General");
+  formData.append("targetClasses", JSON.stringify(payload.targetClasses || []));
+  formData.append("checkingDate", payload.checkingDate || "");
+  formData.append("createdByRole", payload.createdByRole || "");
+  formData.append("createdByUsername", payload.createdByUsername || "");
+  formData.append("createdByName", payload.createdByName || "");
+  formData.append("actorRole", payload.actorRole || payload.createdByRole || "");
+  formData.append("actorUsername", payload.actorUsername || payload.createdByUsername || "");
+  formData.append("actorName", payload.actorName || payload.createdByName || "");
+
+  if (payload.attachment?.uri) {
+    formData.append("attachment", {
+      uri: payload.attachment.uri,
+      name: payload.attachment.name || "assignment-attachment",
+      type: payload.attachment.type || "application/octet-stream",
+    });
+  }
+
+  return apiRequest("/assignments", {
+    method: "POST",
+    body: formData,
   });
 }
 

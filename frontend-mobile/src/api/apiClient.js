@@ -22,8 +22,9 @@ export async function apiRequest(endpoint, options = {}) {
     console.error("Failed to fetch token", err);
   }
 
+  const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
   const headers = {
-    "Content-Type": "application/json",
+    ...(isFormData ? {} : { "Content-Type": "application/json" }),
     ...(options.headers || {}),
   };
 

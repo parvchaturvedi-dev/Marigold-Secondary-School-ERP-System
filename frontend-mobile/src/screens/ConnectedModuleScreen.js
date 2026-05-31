@@ -19,6 +19,7 @@ import PageHeader from "../components/cards/PageHeader";
 import {
   adminActionApplication,
   adminActionLeaveRequest,
+  createAssignment,
   createApplication,
   createEvent,
   createLeaveRequest,
@@ -115,6 +116,7 @@ function getCountLabel(title, rows) {
 
 const todayIsoDate = () => new Date().toISOString().slice(0, 10);
 const canManage = (user) => user?.role === "admin" || user?.role === "clerk";
+const canCreateAssignment = (user) => ["admin", "clerk", "teacher"].includes(user?.role);
 const activeIdentity = (user = {}) => getActiveStudentProfile(user) || {};
 const STUDENTS_NAMESPACE = "admin-student-management-students";
 const TEACHERS_NAMESPACE = "admin-teacher-management-list";
@@ -131,6 +133,7 @@ async function pickStoredFile(types = ["image/*", "application/pdf"]) {
   const base64 = await FileSystem.readAsStringAsync(asset.uri, { encoding: "base64" });
   const mimeType = asset.mimeType || "application/octet-stream";
   return {
+    uri: asset.uri,
     file: asset.name || "document",
     name: asset.name || "document",
     size: asset.size || 0,
@@ -205,12 +208,23 @@ function normalizeStaffCardRecord(person = {}, role = "staff", index = 0) {
   };
 }
 
-function initialForm(title) {
+function getDefaultAssignmentTargets(user = {}) {
+  const teacherProfile = getTeacherProfile(user);
+  const classes = Array.isArray(user.allottedClasses) && user.allottedClasses.length
+    ? user.allottedClasses
+    : teacherProfile.allottedClasses || [];
+  return user.role === "teacher" ? classes.slice(0, 1).join(", ") : "";
+}
+
+function initialForm(title, user = {}) {
   if (title === "Application") {
     return { title: "", category: "General", kind: "simple", audienceMode: "individual", message: "" };
   }
   if (title === "Leave Requests") {
     return { title: "", description: "", leaveMode: "single", startDate: todayIsoDate(), endDate: todayIsoDate() };
+  }
+  if (title === "Assignment" || title === "Assignments") {
+    return { title: "", description: "", subject: "", targetClasses: getDefaultAssignmentTargets(user), checkingDate: todayIsoDate(), attachment: null };
   }
   if (title === "Events") {
     return { title: "", description: "", durationType: "single", date: todayIsoDate(), fromDate: todayIsoDate(), toDate: todayIsoDate(), participationEnabled: false };
@@ -246,7 +260,7 @@ export default function ConnectedModuleScreen() {
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
   const [error, setError] = useState("");
-  const [form, setForm] = useState(() => initialForm(title));
+  const [form, setForm] = useState(() => initialForm(selectedModule, user));
 
   const title = config?.title || selectedModule || "Module";
   const unreadIds = useMemo(
@@ -270,9 +284,9 @@ export default function ConnectedModuleScreen() {
   }, [selectedModule, user]);
 
   useEffect(() => {
-    setForm(initialForm(title));
+    setForm(initialForm(title, user));
     load();
-  }, [load, title]);
+  }, [load, title, user]);
 
   async function handleMarkRead() {
     if (!unreadIds.length) return;
@@ -339,6 +353,27 @@ export default function ConnectedModuleScreen() {
           startDate: form.startDate,
           endDate: form.leaveMode === "single" ? form.startDate : form.endDate,
         });
+      } else if (title === "Assignment" || title === "Assignments") {
+        const teacherProfile = getTeacherProfile(user);
+        const staffProfile = getStaffProfile(user);
+        const targetClasses = String(form.targetClasses || "")
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean);
+        await createAssignment({
+          title: form.title.trim(),
+          description: form.description.trim(),
+          subject: form.subject.trim() || "General",
+          targetClasses,
+          checkingDate: form.checkingDate,
+          attachment: form.attachment,
+          createdByRole: user.role,
+          createdByUsername: user.username,
+          createdByName: teacherProfile.displayName || staffProfile.displayName || user.displayName || user.name || user.username,
+          actorRole: user.role,
+          actorUsername: user.username,
+          actorName: teacherProfile.displayName || staffProfile.displayName || user.displayName || user.name || user.username,
+        });
       } else if (title === "Events") {
         await createEvent({
           title: form.title.trim(),
@@ -393,7 +428,7 @@ export default function ConnectedModuleScreen() {
           await saveModuleState(CLASSES_NAMESPACE, nextClasses);
         }
       }
-      setForm(initialForm(title));
+      setForm(initialForm(title, user));
       await load();
       Alert.alert(title, "Saved successfully.");
     } catch (actionError) {
@@ -450,6 +485,7 @@ export default function ConnectedModuleScreen() {
 
   const showForm =
     (title === "Application" || title === "Leave Requests") ||
+    (canCreateAssignment(user) && (title === "Assignment" || title === "Assignments")) ||
     (canManage(user) && title === "Teacher Assignment") ||
     (canManage(user) && (title === "Events" || title === "Notices"));
 
@@ -641,6 +677,8 @@ function ActionForm({ title, form, updateForm, onSubmit, acting, user }) {
   const disabled =
     title === "Teacher Assignment"
       ? !form.name?.trim() || !form.email?.trim() || !form.mobile?.trim()
+      : title === "Assignment" || title === "Assignments"
+      ? !form.title?.trim() || !form.description?.trim() || !form.checkingDate || !form.targetClasses?.trim()
       : !form.title?.trim() ||
         (!(title === "Application") && !form.description?.trim()) ||
         (title === "Application" && !form.message?.trim());
@@ -649,6 +687,12 @@ function ActionForm({ title, form, updateForm, onSubmit, acting, user }) {
     const file = await pickStoredFile();
     if (!file) return;
     updateForm("documentsAttached", [...(form.documentsAttached || []), file]);
+  }
+
+  async function pickAssignmentAttachment() {
+    const file = await pickStoredFile(["image/*", "application/pdf", "video/*"]);
+    if (!file) return;
+    updateForm("attachment", file);
   }
 
   if (title === "Teacher Assignment") {
@@ -687,11 +731,14 @@ function ActionForm({ title, form, updateForm, onSubmit, acting, user }) {
   return (
     <View style={styles.formCard}>
       <Text style={styles.formTitle}>
-        {title === "Application" ? "New Application" : title === "Leave Requests" ? "New Leave Request" : title === "Events" ? "Create Event" : "Publish Notice"}
+        {title === "Application" ? "New Application" : title === "Leave Requests" ? "New Leave Request" : title === "Events" ? "Create Event" : title === "Assignment" || title === "Assignments" ? "Issue Assignment" : "Publish Notice"}
       </Text>
       <TextInput style={styles.input} value={form.title} onChangeText={(value) => updateForm("title", value)} placeholder="Title" />
       {(title === "Application" || title === "Notices") && (
         <TextInput style={styles.input} value={form.category} onChangeText={(value) => updateForm("category", value)} placeholder="Category" />
+      )}
+      {(title === "Assignment" || title === "Assignments") && (
+        <TextInput style={styles.input} value={form.subject} onChangeText={(value) => updateForm("subject", value)} placeholder="Subject e.g. Mathematics" />
       )}
       <TextInput
         style={[styles.input, styles.textArea]}
@@ -714,6 +761,16 @@ function ActionForm({ title, form, updateForm, onSubmit, acting, user }) {
           <TextInput style={[styles.input, { flex: 1 }]} value={form.startDate} onChangeText={(value) => updateForm("startDate", value)} placeholder="From YYYY-MM-DD" />
           <TextInput style={[styles.input, { flex: 1 }]} value={form.endDate} onChangeText={(value) => updateForm("endDate", value)} placeholder="To YYYY-MM-DD" />
         </View>
+      )}
+      {(title === "Assignment" || title === "Assignments") && (
+        <>
+          <TextInput style={styles.input} value={form.targetClasses} onChangeText={(value) => updateForm("targetClasses", value)} placeholder="Target classes e.g. Class 8, Class 9" />
+          <TextInput style={styles.input} value={form.checkingDate} onChangeText={(value) => updateForm("checkingDate", value)} placeholder="Checking date YYYY-MM-DD" />
+          <TouchableOpacity style={styles.secondaryButton} onPress={pickAssignmentAttachment}>
+            <Ionicons name="attach-outline" size={18} color="#4F46E5" />
+            <Text style={styles.secondaryButtonText}>{form.attachment?.name ? form.attachment.name : "Attach Image / Video / PDF"}</Text>
+          </TouchableOpacity>
+        </>
       )}
       {title === "Events" && (
         <>
