@@ -6,6 +6,25 @@ import { getClassName, sortClassNames, useMasterData } from '../../components/co
 
 const getTeacherId = (teacher = {}) => teacher.id || teacher.teacherId || teacher.empId || teacher.employeeId || '';
 
+const normalizeClassKey = (className = '') => String(className).trim().toLowerCase();
+
+const getStudentClassName = (student = {}) =>
+  student.className || student.class || student.targetClass || student.rawProfile?.targetClass || '';
+
+const updateStudentClass = (student, nextClassName, currentClassName) => ({
+  ...student,
+  previousClass: currentClassName,
+  class: nextClassName,
+  className: nextClassName,
+  targetClass: nextClassName,
+  promotedOut: !nextClassName,
+  status: nextClassName ? student.status || 'Active' : 'Promoted Out',
+  rawProfile: {
+    ...(student.rawProfile || {}),
+    targetClass: nextClassName,
+  },
+});
+
 const resolveClassTeacher = (classRecord = {}, teachers = []) => {
   const storedTeacherId = classRecord.classTeacherId || classRecord.teacherId || '';
   const storedTeacherName = classRecord.classTeacherName || classRecord.teacher || '';
@@ -31,9 +50,8 @@ const ClassManagement = () => {
 
   // Main Dashboard Workspace State
   const [classes, setClasses] = useMongoState('admin-class-management-classes', []);
-  const [students, setStudents] = useMongoState('admin-student-management-students', []);
   const [orderedClasses] = useMongoState('admin-class-preferences', []);
-  const { classes: derivedClasses, teachers } = useMasterData();
+  const { classes: derivedClasses, teachers, raw, actions } = useMasterData();
   const hierarchySequence = orderedClasses.length
     ? orderedClasses.map(getClassName).filter(Boolean)
     : sortClassNames([...(derivedClasses.length ? derivedClasses : classes).map(getClassName)]);
@@ -66,49 +84,44 @@ const ClassManagement = () => {
       return;
     }
 
-    const promotedStudents = students.map((student) => {
-      const currentClassName = student.className || student.class || student.rawProfile?.targetClass || '';
-      const currentRankIndex = hierarchySequence.indexOf(currentClassName);
+    const classIndexByName = new Map(
+      hierarchySequence.map((className, index) => [normalizeClassKey(className), index])
+    );
+    let movedCount = 0;
+    let retainedCount = 0;
+    let promotedOutCount = 0;
 
-      if (student.isRepeating || currentRankIndex === -1) {
+    const promotedStudents = raw.students.map((student) => {
+      const currentClassName = getStudentClassName(student);
+      const currentRankIndex = classIndexByName.get(normalizeClassKey(currentClassName));
+
+      if (student.isRepeating || currentRankIndex === undefined) {
+        if (student.isRepeating) retainedCount += 1;
         return student;
       }
 
       if (currentRankIndex === hierarchySequence.length - 1) {
-        return {
-          ...student,
-          status: student.status || 'Promoted Out',
-          promotedOut: true,
-          previousClass: currentClassName,
-          class: '',
-          className: '',
-          rawProfile: {
-            ...(student.rawProfile || {}),
-            targetClass: '',
-          },
-        };
+        promotedOutCount += 1;
+        return updateStudentClass(student, '', currentClassName);
       }
 
       const nextClassName = hierarchySequence[currentRankIndex + 1];
-      return {
-        ...student,
-        previousClass: currentClassName,
-        class: nextClassName,
-        className: nextClassName,
-        rawProfile: {
-          ...(student.rawProfile || {}),
-          targetClass: nextClassName,
-        },
-      };
+      movedCount += 1;
+      return updateStudentClass(student, nextClassName, currentClassName);
     });
 
     const studentCountByClass = promotedStudents.reduce((acc, student) => {
-      const className = student.className || student.class || student.rawProfile?.targetClass || '';
+      const className = getStudentClassName(student);
       if (className) acc[className] = (acc[className] || 0) + 1;
       return acc;
     }, {});
 
-    setStudents(promotedStudents);
+    if (movedCount === 0 && promotedOutCount === 0) {
+      alert('No eligible students found for promotion. Please check class hierarchy and roster allocation.');
+      return;
+    }
+
+    actions.setStudents(promotedStudents);
     setClasses((currentClasses) => {
       const classMap = new Map(currentClasses.map((classRecord) => [getClassName(classRecord), classRecord]));
       hierarchySequence.forEach((className) => {
@@ -122,7 +135,7 @@ const ClassManagement = () => {
         studentCount: studentCountByClass[getClassName(classRecord)] || 0,
       }));
     });
-    alert('Academic journey shifted successfully! Records updated.');
+    alert(`Academic journey shifted successfully!\nMoved to next class: ${movedCount}\nPromoted out: ${promotedOutCount}\nRetained/repeating: ${retainedCount}`);
   };
 
   // If a card was triggered, swap engine to detail component view dynamically

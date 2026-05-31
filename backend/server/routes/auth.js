@@ -300,28 +300,12 @@ router.post('/login', ensureMongo, async (request, response) => {
   const assignedHardwareId = String(
     user.profile?.assignedHardwareId || user.profile?.hardwareDeviceId || user.profile?.deviceId || ''
   ).trim();
-  if (deviceId && assignedHardwareId && assignedHardwareId !== deviceId) {
-    user.profile = {
-      ...(user.profile || {}),
-      pendingDeviceApproval: {
-        deviceId,
-        requestedAt: new Date(),
-        previousDeviceId: assignedHardwareId,
-      },
-    };
-    await user.save();
-    response.status(403).json({
-      message: 'New device detected. Admin approval is required before login.',
-      requiresAdminDeviceApproval: true,
-    });
-    return;
-  }
-
-  if (deviceId && !assignedHardwareId) {
+  if (deviceId && assignedHardwareId !== deviceId) {
     user.profile = {
       ...(user.profile || {}),
       assignedHardwareId: deviceId,
       assignedHardwareIdAt: new Date(),
+      pendingDeviceApproval: undefined,
     };
     await user.save();
   }

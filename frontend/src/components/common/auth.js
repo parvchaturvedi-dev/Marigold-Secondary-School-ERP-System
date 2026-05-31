@@ -184,9 +184,8 @@ export const authenticateUser = async ({ username, password }) =>
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'X-Device-Id': getOrCreateDeviceId(),
     },
-    body: JSON.stringify({ username, password, deviceId: getOrCreateDeviceId() }),
+    body: JSON.stringify({ username, password }),
   });
 
 export const fetchCurrentSession = async () => {

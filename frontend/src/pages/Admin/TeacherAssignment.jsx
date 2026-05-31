@@ -4,7 +4,7 @@ import { useMongoState } from '../../components/common/mongoState';
 import { useMasterData } from '../../components/common/masterData';
 
 const TeacherAssignment = () => {
-  const { classNames, globalSubjectNames, subjectsByClass } = useMasterData();
+  const { classNames, subjectsByClass } = useMasterData();
   // CORE MASTER REGISTER STATE FORM INITIALIZER
   const [teacherForm, setTeacherForm] = useState({
     name: '',
@@ -63,9 +63,17 @@ const TeacherAssignment = () => {
   // =========================================================
   // DYNAMIC REPEATER LOGIC CHANNEL 2: CLASS & SUBJECT SCHEDULER
   // =========================================================
+  const getLinkedSubjectNames = (className = '') =>
+    (subjectsByClass[className] || [])
+      .map((item) => item.subject)
+      .filter((value, optionIndex, values) => value && values.indexOf(value) === optionIndex);
+
   const handleAssignmentChange = (index, field, value) => {
     const updatedAssign = [...teacherForm.classAssignments];
     updatedAssign[index][field] = value;
+    if (field === 'className') {
+      updatedAssign[index].subject = '';
+    }
     setTeacherForm(prev => ({ ...prev, classAssignments: updatedAssign }));
   };
 
@@ -340,6 +348,10 @@ const TeacherAssignment = () => {
           <div className="space-y-3">
             {teacherForm.classAssignments.map((assign, index) => (
               <div key={index} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end bg-[#EAEAEA]/30 p-4 rounded-2xl border border-[#EAEAEA]">
+                {(() => {
+                  const linkedSubjects = getLinkedSubjectNames(assign.className);
+                  return (
+                    <>
                 <div className="md:col-span-5 flex flex-col gap-1">
                   <label className="text-[10px] text-[#555555] uppercase">Target Class Bracket</label>
                   <select required value={assign.className} onChange={(e) => handleAssignmentChange(index, 'className', e.target.value)} className="p-2.5 bg-white border border-[#C8C8C8] rounded-xl outline-none">
@@ -352,15 +364,21 @@ const TeacherAssignment = () => {
                 <div className="md:col-span-6 flex flex-col gap-1">
                   <label className="text-[10px] text-[#555555] uppercase">Assigned Subject Domain</label>
                   <select required value={assign.subject} onChange={(e) => handleAssignmentChange(index, 'subject', e.target.value)} className="p-2.5 bg-white border border-[#C8C8C8] rounded-xl outline-none">
-                    <option value="">-- Choose Subject --</option>
-                    {[
-                      ...(subjectsByClass[assign.className] || []).map((item) => item.subject),
-                      ...globalSubjectNames,
-                    ].filter((value, optionIndex, values) => value && values.indexOf(value) === optionIndex).map((subjectName) => (
+                    <option value="">
+                      {assign.className
+                        ? linkedSubjects.length
+                          ? '-- Choose Subject --'
+                          : '-- No linked subjects for this class --'
+                        : '-- Choose class first --'}
+                    </option>
+                    {linkedSubjects.map((subjectName) => (
                       <option key={subjectName} value={subjectName}>{subjectName}</option>
                     ))}
                   </select>
                 </div>
+                    </>
+                  );
+                })()}
                 <div className="md:col-span-1 flex justify-center">
                   <button 
                     type="button" 
