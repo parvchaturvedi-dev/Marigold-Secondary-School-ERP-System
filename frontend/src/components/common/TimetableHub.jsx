@@ -211,13 +211,13 @@ const TimetableHub = ({ mode = 'manage', portalLabel = 'Portal', session }) => {
   const dayRows = getClassDayRows(effective, selectedClass);
 
   return (
-    <div className="space-y-6 pb-8 select-none font-sans text-[#1A1A1A]">
-      <section className="bg-white border border-[#C8C8C8] rounded-3xl p-6 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+    <div className="space-y-6 pb-8 select-none font-sans text-slate-900">
+      <section className="glass-card rounded-3xl p-6 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-black flex items-center gap-2">
             <CalendarClock className="w-5 h-5" /> Timetable
           </h2>
-          <p className="text-xs font-bold text-[#555555] mt-1">
+          <p className="text-xs font-bold text-slate-500 mt-1">
             {isManage ? 'Admin and Clerk can manage default and date-specific timetables.' : `${portalLabel} live timetable view.`}
           </p>
         </div>
@@ -227,12 +227,12 @@ const TimetableHub = ({ mode = 'manage', portalLabel = 'Portal', session }) => {
             type="date"
             value={selectedDate}
             onChange={(event) => setSelectedDate(event.target.value)}
-            className="bg-[#F8F8F8] border border-[#C8C8C8] rounded-2xl px-3 py-2 text-xs font-bold outline-none"
+            className="bg-white/60 border border-white/80 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none transition-all rounded-2xl px-3 py-2 text-xs font-bold"
           />
           <select
             value={selectedClass}
             onChange={(event) => setSelectedClass(event.target.value)}
-            className="bg-[#F8F8F8] border border-[#C8C8C8] rounded-2xl px-3 py-2 text-xs font-bold outline-none"
+            className="bg-white/60 border border-white/80 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none transition-all rounded-2xl px-3 py-2 text-xs font-bold"
           >
             {availableClasses.map((className) => (
               <option key={className} value={className}>{className}</option>
@@ -242,29 +242,29 @@ const TimetableHub = ({ mode = 'manage', portalLabel = 'Portal', session }) => {
       </section>
 
       <section className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-        <div className="xl:col-span-4 bg-white border border-[#C8C8C8] rounded-3xl p-5">
-          <div className="flex items-center justify-between border-b border-[#EAEAEA] pb-3 mb-4">
+        <div className="xl:col-span-4 glass-card rounded-3xl p-5">
+          <div className="flex items-center justify-between border-b border-slate-100/80 pb-3 mb-4">
             <h3 className="text-sm font-black flex items-center gap-2">
               <Eye className="w-4 h-4" /> {selectedClass || 'Class'} View
             </h3>
-            <span className="text-[10px] font-black uppercase text-[#555555]">{source}</span>
+            <span className="text-[10px] font-black uppercase text-slate-500">{source}</span>
           </div>
 
           <div className="space-y-3">
             {dayRows.length ? dayRows.map((period) => (
-              <div key={`${period.period}-${period.time}`} className="bg-[#F8F8F8] border border-[#EAEAEA] rounded-2xl p-3 flex gap-3">
-                <span className="w-12 h-10 rounded-2xl bg-[#1A1A1A] text-[#E1FA6C] font-black flex items-center justify-center text-xs">
+              <div key={`${period.period}-${period.time}`} className="glass-soft rounded-2xl p-3 flex gap-3">
+                <span className="w-12 h-10 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white font-black flex items-center justify-center text-xs">
                   {period.period.replace(/^Period\s*/i, '')}
                 </span>
                 <div className="min-w-0">
                   <p className="text-xs font-black truncate">{period.subject}</p>
-                  <p className="text-[10px] font-bold text-[#555555]">
+                  <p className="text-[10px] font-bold text-slate-500">
                     {[period.time, period.teacher, period.room].filter(Boolean).join(' | ') || 'Timing not set'}
                   </p>
                 </div>
               </div>
             )) : (
-              <div className="bg-[#F8F8F8] border border-[#EAEAEA] rounded-2xl p-4 text-xs font-bold text-[#555555]">
+              <div className="glass-soft rounded-2xl p-4 text-xs font-bold text-slate-500">
                 No timetable published for this class yet.
               </div>
             )}
@@ -272,42 +272,42 @@ const TimetableHub = ({ mode = 'manage', portalLabel = 'Portal', session }) => {
         </div>
 
         {isManage && (
-          <div className="xl:col-span-8 bg-white border border-[#C8C8C8] rounded-3xl p-5">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-[#EAEAEA] pb-3 mb-4">
+          <div className="xl:col-span-8 glass-card rounded-3xl p-5">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-slate-100/80 pb-3 mb-4">
               <h3 className="text-sm font-black flex items-center gap-2">
                 <Grid3X3 className="w-4 h-4" /> Timetable Builder
               </h3>
               <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={createOverride} className="px-3 py-2 rounded-2xl bg-[#F8F8F8] border border-[#C8C8C8] text-xs font-black flex items-center gap-2">
+                <button type="button" onClick={createOverride} className="px-3 py-2 rounded-2xl btn-ghost text-xs font-black flex items-center gap-2">
                   <CopyPlus className="w-4 h-4" /> Date Override
                 </button>
-                <button type="button" onClick={addPeriod} className="px-3 py-2 rounded-2xl bg-[#F8F8F8] border border-[#C8C8C8] text-xs font-black flex items-center gap-2">
+                <button type="button" onClick={addPeriod} className="px-3 py-2 rounded-2xl btn-ghost text-xs font-black flex items-center gap-2">
                   <Plus className="w-4 h-4" /> Row
                 </button>
-                <button type="button" onClick={addClass} className="px-3 py-2 rounded-2xl bg-[#F8F8F8] border border-[#C8C8C8] text-xs font-black flex items-center gap-2">
+                <button type="button" onClick={addClass} className="px-3 py-2 rounded-2xl btn-ghost text-xs font-black flex items-center gap-2">
                   <Plus className="w-4 h-4" /> Column
                 </button>
-                <button type="button" onClick={saveDraft} className="px-4 py-2 rounded-2xl bg-[#E1FA6C] border border-[#C8C8C8] text-xs font-black flex items-center gap-2">
+                <button type="button" onClick={saveDraft} className="px-4 py-2 rounded-2xl btn-primary text-xs font-black flex items-center gap-2">
                   <Save className="w-4 h-4" /> Save
                 </button>
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
-              <input value={draft.name || ''} onChange={(event) => setDraft({ ...draft, name: event.target.value })} className="md:col-span-2 bg-[#F8F8F8] border border-[#C8C8C8] rounded-2xl px-3 py-2 text-xs font-bold outline-none" placeholder="Timetable name" />
-              <select value={draft.mode || 'default'} onChange={(event) => setDraft({ ...draft, mode: event.target.value, fromDate: event.target.value === 'default' ? '' : selectedDate, toDate: event.target.value === 'default' ? '' : selectedDate })} className="bg-[#F8F8F8] border border-[#C8C8C8] rounded-2xl px-3 py-2 text-xs font-bold outline-none">
+              <input value={draft.name || ''} onChange={(event) => setDraft({ ...draft, name: event.target.value })} className="md:col-span-2 bg-white/60 border border-white/80 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none transition-all rounded-2xl px-3 py-2 text-xs font-bold" placeholder="Timetable name" />
+              <select value={draft.mode || 'default'} onChange={(event) => setDraft({ ...draft, mode: event.target.value, fromDate: event.target.value === 'default' ? '' : selectedDate, toDate: event.target.value === 'default' ? '' : selectedDate })} className="bg-white/60 border border-white/80 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none transition-all rounded-2xl px-3 py-2 text-xs font-bold">
                 <option value="default">Default</option>
                 <option value="override">Date range override</option>
               </select>
               <div className="grid grid-cols-2 gap-2">
-                <input type="date" disabled={draft.mode === 'default'} value={draft.fromDate || ''} onChange={(event) => setDraft({ ...draft, fromDate: event.target.value })} className="bg-[#F8F8F8] disabled:opacity-50 border border-[#C8C8C8] rounded-2xl px-2 py-2 text-xs font-bold outline-none" />
-                <input type="date" disabled={draft.mode === 'default'} value={draft.toDate || ''} onChange={(event) => setDraft({ ...draft, toDate: event.target.value })} className="bg-[#F8F8F8] disabled:opacity-50 border border-[#C8C8C8] rounded-2xl px-2 py-2 text-xs font-bold outline-none" />
+                <input type="date" disabled={draft.mode === 'default'} value={draft.fromDate || ''} onChange={(event) => setDraft({ ...draft, fromDate: event.target.value })} className="bg-white/60 disabled:opacity-50 border border-white/80 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none transition-all rounded-2xl px-2 py-2 text-xs font-bold" />
+                <input type="date" disabled={draft.mode === 'default'} value={draft.toDate || ''} onChange={(event) => setDraft({ ...draft, toDate: event.target.value })} className="bg-white/60 disabled:opacity-50 border border-white/80 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none transition-all rounded-2xl px-2 py-2 text-xs font-bold" />
               </div>
             </div>
 
-            <div className="overflow-x-auto rounded-2xl border border-[#EAEAEA]">
+            <div className="overflow-x-auto rounded-2xl border border-slate-100/80">
               <table className="w-full min-w-[960px] text-left text-xs font-bold">
-                <thead className="bg-[#EAEAEA] text-[#555555] uppercase text-[10px]">
+                <thead className="bg-indigo-50/60 text-slate-500 uppercase text-[10px]">
                   <tr>
                     <th className="px-3 py-2 w-44">Period</th>
                     {draft.classes.map((className) => (
@@ -322,13 +322,13 @@ const TimetableHub = ({ mode = 'manage', portalLabel = 'Portal', session }) => {
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#EAEAEA]">
+                <tbody className="divide-y divide-slate-100/80">
                   {draft.periods.map((period) => (
                     <tr key={period.id} className="align-top">
-                      <td className="px-3 py-3 bg-[#F8F8F8]">
+                      <td className="px-3 py-3 bg-white/50">
                         <div className="space-y-2">
-                          <input value={period.label} onChange={(event) => updatePeriod(period.id, 'label', event.target.value)} className="w-full bg-white border border-[#EAEAEA] rounded-xl px-2 py-2 outline-none" />
-                          <input value={period.time} onChange={(event) => updatePeriod(period.id, 'time', event.target.value)} className="w-full bg-white border border-[#EAEAEA] rounded-xl px-2 py-2 outline-none" placeholder="08:30 - 09:10" />
+                          <input value={period.label} onChange={(event) => updatePeriod(period.id, 'label', event.target.value)} className="w-full bg-white/60 border border-white/80 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none transition-all rounded-xl px-2 py-2" />
+                          <input value={period.time} onChange={(event) => updatePeriod(period.id, 'time', event.target.value)} className="w-full bg-white/60 border border-white/80 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none transition-all rounded-xl px-2 py-2" placeholder="08:30 - 09:10" />
                           <button type="button" onClick={() => removePeriod(period.id)} className="text-[10px] font-black text-rose-600 flex items-center gap-1">
                             <Trash2 className="w-3.5 h-3.5" /> Remove row
                           </button>
@@ -340,9 +340,9 @@ const TimetableHub = ({ mode = 'manage', portalLabel = 'Portal', session }) => {
                         return (
                           <td key={key} className="px-3 py-3">
                             <div className="space-y-2">
-                              <input value={cell.subject || ''} onChange={(event) => updateCell(period.id, className, 'subject', event.target.value)} className="w-full bg-[#F8F8F8] border border-[#EAEAEA] rounded-xl px-2 py-2 outline-none" placeholder="Subject" />
-                              <input value={cell.teacher || ''} onChange={(event) => updateCell(period.id, className, 'teacher', event.target.value)} className="w-full bg-[#F8F8F8] border border-[#EAEAEA] rounded-xl px-2 py-2 outline-none" placeholder="Teacher" />
-                              <input value={cell.room || ''} onChange={(event) => updateCell(period.id, className, 'room', event.target.value)} className="w-full bg-[#F8F8F8] border border-[#EAEAEA] rounded-xl px-2 py-2 outline-none" placeholder="Room" />
+                              <input value={cell.subject || ''} onChange={(event) => updateCell(period.id, className, 'subject', event.target.value)} className="w-full bg-white/60 border border-white/80 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none transition-all rounded-xl px-2 py-2" placeholder="Subject" />
+                              <input value={cell.teacher || ''} onChange={(event) => updateCell(period.id, className, 'teacher', event.target.value)} className="w-full bg-white/60 border border-white/80 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none transition-all rounded-xl px-2 py-2" placeholder="Teacher" />
+                              <input value={cell.room || ''} onChange={(event) => updateCell(period.id, className, 'room', event.target.value)} className="w-full bg-white/60 border border-white/80 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none transition-all rounded-xl px-2 py-2" placeholder="Room" />
                             </div>
                           </td>
                         );
@@ -354,10 +354,10 @@ const TimetableHub = ({ mode = 'manage', portalLabel = 'Portal', session }) => {
             </div>
 
             <div className="mt-4 flex flex-col lg:flex-row gap-3 justify-between">
-              <p className="text-xs font-bold text-[#555555]">{status}</p>
+              <p className="text-xs font-bold text-slate-500">{status}</p>
               <div className="flex flex-wrap gap-2">
                 {templates.map((item) => (
-                  <button key={item.id} type="button" onClick={() => setDraft(normalizeDraft(item, classNames))} className="px-3 py-2 rounded-2xl bg-[#F8F8F8] border border-[#EAEAEA] text-[10px] font-black">
+                  <button key={item.id} type="button" onClick={() => setDraft(normalizeDraft(item, classNames))} className="px-3 py-2 rounded-2xl btn-ghost text-[10px] font-black">
                     {item.mode === 'default' ? 'Default' : `${item.fromDate} to ${item.toDate}`}
                   </button>
                 ))}

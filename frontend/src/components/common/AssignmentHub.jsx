@@ -321,12 +321,12 @@ const AssignmentHub = ({ role, session }) => {
 
   return (
     <div className="space-y-6 pb-8 select-none font-sans">
-      <div className="bg-white p-5 rounded-3xl border border-[#EAEAEA] shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="glass-card p-5 rounded-3xl flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h3 className="text-base font-bold text-[#1A1A1A] flex items-center gap-2">
+          <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
             <ClipboardList className="w-5 h-5 text-[#8b5cf6]" /> Assignment Control Room
           </h3>
-          <p className="text-xs text-[#666666] mt-0.5">
+          <p className="text-xs text-slate-400 mt-0.5">
             {role === 'student'
               ? 'View assignments assigned to your class.'
               : 'Create, update, and monitor assignment reports with checking-date controls.'}
@@ -337,7 +337,7 @@ const AssignmentHub = ({ role, session }) => {
           <button
             type="button"
             onClick={openCreateModal}
-            className="flex items-center gap-2 px-5 py-2.5 bg-[#E1FA6C] text-[#1A1A1A] rounded-full text-xs font-bold shadow-sm hover:scale-[1.02] transition-all"
+            className="flex items-center gap-2 px-5 py-2.5 btn-primary rounded-full text-xs font-bold hover:scale-[1.02] transition-all"
           >
             <PlusCircle className="w-4 h-4" /> Issue Assignment
           </button>
@@ -345,7 +345,7 @@ const AssignmentHub = ({ role, session }) => {
       </div>
 
       {role === 'student' && studentOptions.length > 1 && (
-        <div className="bg-white border border-[#EAEAEA] rounded-3xl p-4 shadow-sm">
+        <div className="glass-card rounded-3xl p-4">
           <label className="text-[10px] font-black uppercase text-gray-400 block mb-2">
             Select student before viewing assignments
           </label>
@@ -357,7 +357,7 @@ const AssignmentHub = ({ role, session }) => {
               setSelectedStudentId(nextStudentId);
               if (nextStudent?.className) setSelectedClass(nextStudent.className);
             }}
-            className="w-full md:w-80 bg-[#EAEAEA] border border-[#C8C8C8] rounded-2xl px-3 py-2.5 text-xs font-bold outline-none"
+            className="w-full md:w-80 bg-white/60 border border-white/80 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none transition-all rounded-2xl px-3 py-2.5 text-xs font-bold"
           >
             {studentOptions.map((student) => (
               <option key={student.id} value={student.id}>
@@ -369,8 +369,8 @@ const AssignmentHub = ({ role, session }) => {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        <div className="lg:col-span-1 bg-[#EAEAEA] p-4 rounded-3xl flex flex-col gap-2 shadow-sm max-h-[640px] overflow-y-auto no-scrollbar">
-          <h4 className="text-xs font-bold text-[#1A1A1A] px-1 mb-2 flex items-center gap-1.5">
+        <div className="lg:col-span-1 bg-white/50 p-4 rounded-3xl flex flex-col gap-2 max-h-[640px] overflow-y-auto no-scrollbar">
+          <h4 className="text-xs font-bold text-slate-900 px-1 mb-2 flex items-center gap-1.5">
             <Layers className="w-3.5 h-3.5" /> Classrooms Grid
           </h4>
           <div className="flex flex-row lg:flex-col gap-1.5 overflow-x-auto lg:overflow-x-visible pb-2 lg:pb-0">
@@ -382,7 +382,7 @@ const AssignmentHub = ({ role, session }) => {
                 className={`px-4 py-2.5 rounded-full text-xs font-bold text-left transition-all whitespace-nowrap w-full ${
             activeSelectedClass === className
                     ? 'bg-[#8b5cf6] text-white shadow-md'
-                    : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+                    : 'bg-white/60 text-gray-700 border border-white/80 hover:bg-white/70'
                 }`}
               >
                 {className}
@@ -391,9 +391,9 @@ const AssignmentHub = ({ role, session }) => {
           </div>
         </div>
 
-        <div className="lg:col-span-3 bg-white p-6 rounded-3xl border border-[#EAEAEA] shadow-sm min-h-[580px] flex flex-col">
+        <div className="lg:col-span-3 glass-card p-6 rounded-3xl min-h-[580px] flex flex-col">
           <div className="border-b border-gray-100 pb-3 mb-6 flex items-center justify-between">
-            <h4 className="text-sm font-black text-[#1A1A1A]">Assignment Feed Stack: {activeSelectedClass}</h4>
+            <h4 className="text-sm font-black text-slate-900">Assignment Feed Stack: {activeSelectedClass}</h4>
             <span className="text-[10px] bg-purple-50 text-purple-600 px-2 py-0.5 rounded font-bold uppercase">
               {visibleAssignments.length} Logs
             </span>
@@ -416,7 +416,7 @@ const AssignmentHub = ({ role, session }) => {
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-center text-gray-400 my-auto">
               <ClipboardList className="w-12 h-12 stroke-[1.2] mb-1.5" />
-              <p className="text-xs font-bold text-[#1A1A1A]">No Assignments Found</p>
+              <p className="text-xs font-bold text-slate-900">No Assignments Found</p>
             </div>
           )}
 
@@ -449,10 +449,10 @@ const AssignmentHub = ({ role, session }) => {
       )}
 
       {extensionAssignment && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fadeIn">
-          <div className="bg-white rounded-3xl p-6 w-full max-w-md border border-gray-100 shadow-2xl space-y-4">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fadeIn">
+          <div className="glass-strong rounded-3xl p-6 w-full max-w-md space-y-4 animate-scaleUp">
             <div>
-              <h4 className="text-sm font-black text-[#1A1A1A]">Checking Date Extension</h4>
+              <h4 className="text-sm font-black text-slate-900">Checking Date Extension</h4>
               <p className="text-[11px] text-gray-400">
                 Assignment: <b>{extensionAssignment.title}</b>
               </p>
@@ -503,13 +503,13 @@ const AssignmentHub = ({ role, session }) => {
       )}
 
       {isCameraOpen && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-5 w-full max-w-xl border border-gray-100 shadow-2xl space-y-4">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="glass-strong rounded-3xl p-5 w-full max-w-xl space-y-4 animate-scaleUp">
             <div className="flex items-center justify-between">
-              <h4 className="text-sm font-black text-[#1A1A1A] flex items-center gap-2">
+              <h4 className="text-sm font-black text-slate-900 flex items-center gap-2">
                 <Camera className="w-4 h-4" /> Camera Capture
               </h4>
-              <button type="button" onClick={stopCamera} className="p-1 hover:bg-[#EAEAEA] rounded-full">
+              <button type="button" onClick={stopCamera} className="p-1 hover:bg-white/70 rounded-full">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -518,7 +518,7 @@ const AssignmentHub = ({ role, session }) => {
             <button
               type="button"
               onClick={captureCameraImage}
-              className="w-full py-3 bg-[#E1FA6C] rounded-2xl text-xs font-black"
+              className="w-full py-3 btn-primary rounded-2xl text-xs font-black"
             >
               Capture and Attach Photo
             </button>
@@ -560,7 +560,7 @@ const AssignmentCard = ({ assignment, classOrder, getAttachmentMeta, canMutate, 
             <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-gray-200 text-gray-700 uppercase">
               {sortClassNames(assignment.targetClasses, classOrder).join(', ')}
             </span>
-            <h5 className="text-xs font-bold text-[#1A1A1A] flex items-center gap-1">
+            <h5 className="text-xs font-bold text-slate-900 flex items-center gap-1">
               <BookOpen className="w-3.5 h-3.5 text-gray-400" /> {assignment.subject}
             </h5>
           </div>
@@ -625,12 +625,12 @@ const AssignmentCard = ({ assignment, classOrder, getAttachmentMeta, canMutate, 
 
 const AssignmentReport = ({ assignments, selectedClass, classOrder }) => (
   <div className="mt-8 border-t border-gray-100 pt-5">
-    <h4 className="text-xs font-black uppercase text-[#1A1A1A] mb-3">
+    <h4 className="text-xs font-black uppercase text-slate-900 mb-3">
       Class Assignment Report: {selectedClass}
     </h4>
     <div className="overflow-x-auto rounded-2xl border border-gray-200">
       <table className="w-full min-w-[780px] text-left text-[10px] font-bold">
-        <thead className="bg-[#EAEAEA] text-[#555555] uppercase">
+        <thead className="bg-indigo-50/60 text-slate-500 uppercase">
           <tr>
             <th className="px-3 py-2">Teacher / Sender</th>
             <th className="px-3 py-2">Date & Time</th>
@@ -640,7 +640,7 @@ const AssignmentReport = ({ assignments, selectedClass, classOrder }) => (
             <th className="px-3 py-2">Checking Date</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100 bg-white text-[#1A1A1A]">
+        <tbody className="divide-y divide-gray-100 bg-white text-slate-900">
           {assignments.map((assignment) => (
             <tr key={assignment.id}>
               <td className="px-3 py-2">{assignment.createdByName}</td>
@@ -672,18 +672,18 @@ const AssignmentModal = ({
   onCameraOpen,
   onSubmit,
 }) => (
-  <div className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fadeIn">
-    <div className="bg-white rounded-3xl p-6 w-full max-w-2xl border border-gray-100 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
+  <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fadeIn">
+    <div className="glass-strong rounded-3xl p-6 w-full max-w-2xl space-y-4 max-h-[92vh] overflow-y-auto animate-scaleUp">
       <div className="border-b border-gray-100 pb-2 flex items-start justify-between gap-3">
         <div>
-          <h4 className="text-sm font-black text-[#1A1A1A]">
+          <h4 className="text-sm font-black text-slate-900">
             {editingAssignmentId ? 'Update Assignment' : 'Compose Assignment'}
           </h4>
           <p className="text-[11px] text-gray-400">
             Title and description are mandatory. Assignment cannot be deleted after upload.
           </p>
         </div>
-        <button type="button" onClick={onClose} className="p-1 hover:bg-[#EAEAEA] rounded-full">
+        <button type="button" onClick={onClose} className="p-1 hover:bg-white/70 rounded-full">
           <X className="w-4 h-4" />
         </button>
       </div>
@@ -817,7 +817,7 @@ const AssignmentModal = ({
           <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-100 rounded-full font-bold text-gray-600">
             Cancel
           </button>
-          <button type="submit" className="px-5 py-2 bg-[#E1FA6C] text-[#1A1A1A] rounded-full font-bold shadow-sm flex items-center gap-1">
+          <button type="submit" className="px-5 py-2 btn-primary rounded-full font-bold flex items-center gap-1">
             <Send className="w-3.5 h-3.5" /> {editingAssignmentId ? 'Update' : 'Broadcast'}
           </button>
         </div>

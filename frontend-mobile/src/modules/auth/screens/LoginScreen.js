@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -10,12 +10,16 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Animated,
 } from "react-native";
 
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 
 import { colors } from "../../../shared/theme/colors";
+import { gradients, glassColors } from "../../../shared/theme/glass";
+import AuroraBackground from "../../../shared/components/AuroraBackground";
+import GlassCard from "../../../shared/components/GlassCard";
 import { useAuth } from "../../../auth/AuthContext";
 
 const logo = require("../../../../assets/images/logo.png");
@@ -27,6 +31,17 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
+  // Entrance animation (visual only)
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(24)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, { toValue: 1, duration: 550, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: 0, duration: 550, useNativeDriver: true }),
+    ]).start();
+  }, [fadeAnim, slideAnim]);
+
   async function handleLogin() {
     try {
       await login(username, password);
@@ -36,10 +51,8 @@ export default function LoginScreen() {
   }
 
   return (
-    <LinearGradient
-      colors={["#EEF2FF", "#FFFFFF", "#E8EEFF"]}
-      style={{ flex: 1 }}
-    >
+    <View style={{ flex: 1 }}>
+      <AuroraBackground />
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={{ flex: 1 }}
@@ -52,15 +65,27 @@ export default function LoginScreen() {
             padding: 24,
           }}
         >
-          <View style={{ alignItems: "center" }}>
+          <Animated.View
+            style={{
+              alignItems: "center",
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            }}
+          >
             <View
               style={{
                 width: 130,
                 height: 130,
                 borderRadius: 65,
-                backgroundColor: "#fff",
+                backgroundColor: "rgba(255,255,255,0.8)",
+                borderWidth: 1,
+                borderColor: "rgba(255,255,255,0.9)",
                 alignItems: "center",
                 justifyContent: "center",
+                shadowColor: "#4f46e5",
+                shadowOpacity: 0.15,
+                shadowRadius: 24,
+                shadowOffset: { width: 0, height: 12 },
                 elevation: 10,
               }}
             >
@@ -79,7 +104,7 @@ export default function LoginScreen() {
                 marginTop: 24,
                 fontSize: 34,
                 fontWeight: "900",
-                color: colors.primary,
+                color: glassColors.accentDeep,
               }}
             >
               Marigold
@@ -97,126 +122,132 @@ export default function LoginScreen() {
               SCHOOL ERP
             </Text>
 
-            <View
+            <GlassCard
               style={{
                 width: "100%",
-                backgroundColor: "rgba(255,255,255,0.95)",
                 borderRadius: 28,
-                padding: 22,
                 marginTop: 34,
-                elevation: 8,
               }}
             >
-              <Text
-                style={{
-                  fontSize: 28,
-                  fontWeight: "900",
-                  textAlign: "center",
-                  color: colors.text,
-                }}
-              >
-                Welcome Back
-              </Text>
-
-              <Text
-                style={{
-                  textAlign: "center",
-                  marginTop: 8,
-                  marginBottom: 24,
-                  color: colors.muted,
-                }}
-              >
-                Login to manage your school account
-              </Text>
-
-              <InputBox
-                icon="person-outline"
-                placeholder="Username (e.g. ADM-USER)"
-                value={username}
-                onChangeText={setUsername}
-              />
-
-              <InputBox
-                icon="lock-closed-outline"
-                placeholder="Password"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-                rightIcon={
-                  <TouchableOpacity
-                    onPress={() => setShowPassword(!showPassword)}
-                  >
-                    <Ionicons
-                      name={showPassword ? "eye-off-outline" : "eye-outline"}
-                      size={24}
-                      color="#64748B"
-                    />
-                  </TouchableOpacity>
-                }
-              />
-
-              <TouchableOpacity
-                style={{
-                  alignSelf: "flex-end",
-                  marginBottom: 24,
-                }}
-              >
+              <View style={{ padding: 22 }}>
                 <Text
                   style={{
-                    color: colors.primary,
+                    fontSize: 28,
                     fontWeight: "900",
+                    textAlign: "center",
+                    color: colors.text,
                   }}
                 >
-                  Forgot Password?
+                  Welcome Back
                 </Text>
-              </TouchableOpacity>
 
-              <TouchableOpacity
-                onPress={handleLogin}
-                activeOpacity={0.85}
-                style={{
-                  borderRadius: 18,
-                  overflow: "hidden",
-                }}
-              >
-                <LinearGradient
-                  colors={["#5577FF", "#3730A3"]}
+                <Text
                   style={{
-                    height: 60,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    flexDirection: "row",
+                    textAlign: "center",
+                    marginTop: 8,
+                    marginBottom: 24,
+                    color: colors.muted,
                   }}
                 >
-                  {loading ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <>
-                      <Text
-                        style={{
-                          color: "#fff",
-                          fontSize: 18,
-                          fontWeight: "900",
-                          marginRight: 10,
-                        }}
-                      >
-                        Login
-                      </Text>
+                  Login to manage your school account
+                </Text>
 
+                <InputBox
+                  icon="person-outline"
+                  placeholder="Username (e.g. ADM-USER)"
+                  value={username}
+                  onChangeText={setUsername}
+                />
+
+                <InputBox
+                  icon="lock-closed-outline"
+                  placeholder="Password"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                  rightIcon={
+                    <TouchableOpacity
+                      onPress={() => setShowPassword(!showPassword)}
+                    >
                       <Ionicons
-                        name="arrow-forward"
-                        size={22}
-                        color="#fff"
+                        name={showPassword ? "eye-off-outline" : "eye-outline"}
+                        size={24}
+                        color="#64748b"
                       />
-                    </>
-                  )}
-                </LinearGradient>
-              </TouchableOpacity>
-            </View>
-          </View>
+                    </TouchableOpacity>
+                  }
+                />
+
+                <TouchableOpacity
+                  style={{
+                    alignSelf: "flex-end",
+                    marginBottom: 24,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: colors.primary,
+                      fontWeight: "900",
+                    }}
+                  >
+                    Forgot Password?
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={handleLogin}
+                  activeOpacity={0.85}
+                  style={{
+                    borderRadius: 18,
+                    overflow: "hidden",
+                    shadowColor: "#6366f1",
+                    shadowOpacity: 0.35,
+                    shadowRadius: 16,
+                    shadowOffset: { width: 0, height: 8 },
+                    elevation: 8,
+                  }}
+                >
+                  <LinearGradient
+                    colors={gradients.primary}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={{
+                      height: 60,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexDirection: "row",
+                    }}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <>
+                        <Text
+                          style={{
+                            color: "#fff",
+                            fontSize: 18,
+                            fontWeight: "900",
+                            marginRight: 10,
+                          }}
+                        >
+                          Login
+                        </Text>
+
+                        <Ionicons
+                          name="arrow-forward"
+                          size={22}
+                          color="#fff"
+                        />
+                      </>
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            </GlassCard>
+          </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </LinearGradient>
+    </View>
   );
 }
 
@@ -233,10 +264,10 @@ function InputBox({
       style={{
         flexDirection: "row",
         alignItems: "center",
-        backgroundColor: "#fff",
+        backgroundColor: "rgba(255,255,255,0.6)",
         borderRadius: 18,
         borderWidth: 1,
-        borderColor: "#E2E8F0",
+        borderColor: "rgba(255,255,255,0.85)",
         paddingHorizontal: 14,
         height: 60,
         marginBottom: 16,
@@ -251,7 +282,7 @@ function InputBox({
 
       <TextInput
         placeholder={placeholder}
-        placeholderTextColor="#94A3B8"
+        placeholderTextColor="#94a3b8"
         value={value}
         onChangeText={onChangeText}
         secureTextEntry={secureTextEntry}

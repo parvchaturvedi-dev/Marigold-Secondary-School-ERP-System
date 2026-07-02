@@ -31,19 +31,19 @@ const Profile = ({ session }) => {
   ];
 
   return (
-    <div className="space-y-6 pb-8 select-none font-sans text-[#1A1A1A]">
-      <section className="bg-white border border-[#C8C8C8] rounded-3xl p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+    <div className="space-y-6 pb-8 select-none font-sans text-slate-900 animate-fadeIn">
+      <section className="glass-card rounded-3xl p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-4 text-center space-y-4">
           <div className="relative">
             <ProfilePhotoUploader session={{ ...session, displayName: student.displayName }} />
-            <span className="absolute -bottom-2 bg-[#E1FA6C] border border-[#1A1A1A]/10 text-[9px] font-black px-2 py-1 rounded-md">
+            <span className="absolute -bottom-2 bg-indigo-100 text-indigo-700 border border-indigo-200 text-[9px] font-black px-2 py-1 rounded-md">
               ACTIVE USER
             </span>
           </div>
 
           <div>
             <h2 className="text-xl font-black">{student.displayName}</h2>
-            <p className="text-xs font-bold text-[#555555] mt-1">
+            <p className="text-xs font-bold text-slate-500 mt-1">
               {student.admissionNumber} | {getClassLabel(student)}
             </p>
           </div>
@@ -57,8 +57,8 @@ const Profile = ({ session }) => {
         </div>
 
         <div className="lg:col-span-8 space-y-4">
-          <div className="bg-[#F8F8F8] border border-[#EAEAEA] rounded-2xl p-4">
-            <p className="text-[10px] font-black uppercase text-[#555555] mb-1">Account Scope</p>
+          <div className="glass-soft rounded-2xl p-4">
+            <p className="text-[10px] font-black uppercase text-slate-500 mb-1">Account Scope</p>
             <p className="text-xs font-semibold leading-relaxed">
               {session?.isSiblingAccount
                 ? `${session.accountDisplayName} has ${session.studentProfiles?.length || 0} linked students. Current records belong to ${student.displayName}.`
@@ -66,7 +66,7 @@ const Profile = ({ session }) => {
             </p>
           </div>
 
-          <div className="bg-white border border-[#C8C8C8] rounded-2xl p-2 flex flex-wrap gap-1">
+          <div className="bg-white/60 border border-white/70 rounded-2xl p-2 flex flex-wrap gap-1">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -77,7 +77,7 @@ const Profile = ({ session }) => {
                   type="button"
                   onClick={() => setActiveTab(tab.id)}
                   className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black transition-colors ${
-                    isActive ? 'bg-[#1A1A1A] text-white' : 'text-[#555555] hover:bg-[#EAEAEA]'
+                    isActive ? 'bg-gradient-to-r from-indigo-500 to-violet-500 text-white' : 'text-slate-500 hover:bg-white/70'
                   }`}
                 >
                   <Icon className="w-3.5 h-3.5" /> {tab.label}
@@ -86,7 +86,7 @@ const Profile = ({ session }) => {
             })}
           </div>
 
-          <div className="bg-white border border-[#C8C8C8] rounded-3xl p-5 min-h-[340px]">
+          <div className="glass-card rounded-3xl p-5 min-h-[340px]">
             {activeTab === 'personal' && (
               <InfoGrid
                 items={[
@@ -111,9 +111,9 @@ const Profile = ({ session }) => {
                   ]}
                 />
 
-                <div className="overflow-x-auto rounded-2xl border border-[#EAEAEA]">
+                <div className="overflow-x-auto rounded-2xl border border-slate-100/80">
                   <table className="w-full min-w-[640px] text-left text-xs font-bold">
-                    <thead className="bg-[#EAEAEA] text-[#555555] uppercase text-[10px]">
+                    <thead className="bg-indigo-50/60 text-slate-500 uppercase text-[10px]">
                       <tr>
                         <th className="px-3 py-2">Subject</th>
                         <th className="px-3 py-2">Teacher</th>
@@ -121,11 +121,11 @@ const Profile = ({ session }) => {
                         <th className="px-3 py-2">Grade</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[#EAEAEA]">
+                    <tbody className="divide-y divide-slate-100/80">
                       {exams.map((exam) => (
                         <tr key={exam.subject}>
                           <td className="px-3 py-2">{exam.subject}</td>
-                          <td className="px-3 py-2 text-[#555555]">{exam.teacher}</td>
+                          <td className="px-3 py-2 text-slate-500">{exam.teacher}</td>
                           <td className="px-3 py-2 font-mono">{exam.marks}/100</td>
                           <td className="px-3 py-2">{exam.grade}</td>
                         </tr>
@@ -148,7 +148,7 @@ const Profile = ({ session }) => {
                 />
 
                 {session?.studentProfiles?.length > 1 && (
-                  <div className="border-t border-[#EAEAEA] pt-4">
+                  <div className="border-t border-slate-100/80 pt-4">
                     <p className="text-xs font-black mb-3">Linked Siblings</p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {session.studentProfiles.map((item) => (
@@ -156,12 +156,12 @@ const Profile = ({ session }) => {
                           key={item.id}
                           className={`p-3 rounded-2xl border ${
                             item.id === student.id
-                              ? 'bg-[#E1FA6C] border-[#1A1A1A]/10'
-                              : 'bg-[#F8F8F8] border-[#EAEAEA]'
+                              ? 'bg-indigo-100 border-indigo-200'
+                              : 'glass-soft'
                           }`}
                         >
                           <p className="text-xs font-black">{item.displayName}</p>
-                          <p className="text-[10px] font-mono text-[#555555] mt-1">
+                          <p className="text-[10px] font-mono text-slate-500 mt-1">
                             {item.admissionNumber} | {getClassLabel(item)}
                           </p>
                         </div>
@@ -175,10 +175,10 @@ const Profile = ({ session }) => {
             {activeTab === 'documents' && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {documents.map((doc) => (
-                  <div key={doc.id} className="bg-[#F8F8F8] border border-[#EAEAEA] rounded-2xl p-4 flex items-center justify-between gap-3">
+                  <div key={doc.id} className="glass-soft rounded-2xl p-4 flex items-center justify-between gap-3">
                     <span className="min-w-0">
                       <span className="block text-xs font-black truncate">{doc.name}</span>
-                      <span className="block text-[10px] font-bold text-[#555555] mt-1 truncate">{doc.updatedOn}</span>
+                      <span className="block text-[10px] font-bold text-slate-500 mt-1 truncate">{doc.updatedOn}</span>
                     </span>
                     <span className={`text-[9px] font-black border px-2 py-1 rounded-md shrink-0 ${
                       doc.status === 'Verified'
@@ -199,8 +199,8 @@ const Profile = ({ session }) => {
 };
 
 const MiniStat = ({ label, value }) => (
-  <div className="bg-[#F8F8F8] border border-[#EAEAEA] rounded-2xl p-3">
-    <p className="text-[10px] font-black uppercase text-[#555555]">{label}</p>
+  <div className="glass-soft rounded-2xl p-3">
+    <p className="text-[10px] font-black uppercase text-slate-500">{label}</p>
     <p className="text-xs font-black mt-1 truncate">{value}</p>
   </div>
 );
@@ -208,9 +208,9 @@ const MiniStat = ({ label, value }) => (
 const InfoGrid = ({ items }) => (
   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs font-bold">
     {items.map(([label, value]) => (
-      <div key={label} className="bg-[#F8F8F8] border border-[#EAEAEA] rounded-2xl p-3">
-        <p className="text-[10px] font-black uppercase text-[#555555] mb-1">{label}</p>
-        <p className="text-[#1A1A1A] break-words">{value}</p>
+      <div key={label} className="glass-soft rounded-2xl p-3">
+        <p className="text-[10px] font-black uppercase text-slate-500 mb-1">{label}</p>
+        <p className="text-slate-900 break-words">{value}</p>
       </div>
     ))}
   </div>

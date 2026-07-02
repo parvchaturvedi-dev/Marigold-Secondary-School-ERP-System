@@ -21,28 +21,28 @@ const Settings = ({ session }) => {
   };
 
   return (
-    <div className="space-y-6 pb-8 select-none font-sans text-[#1A1A1A]">
-      <section className="bg-white border border-[#C8C8C8] rounded-3xl p-6">
+    <div className="space-y-6 pb-8 select-none font-sans text-slate-900">
+      <section className="glass-card rounded-3xl p-6">
         <h2 className="text-xl font-black flex items-center gap-2">
           <SettingsIcon className="w-5 h-5" /> Settings
         </h2>
-        <p className="text-xs font-bold text-[#555555] mt-1">
+        <p className="text-xs font-bold text-slate-500 mt-1">
           Preferences and access controls for {profile.displayName}.
         </p>
       </section>
 
       <section className="grid grid-cols-1 xl:grid-cols-5 gap-6">
-        <div className="xl:col-span-2 bg-white border border-[#C8C8C8] rounded-3xl p-5 space-y-4">
-          <div className="flex items-center gap-2 border-b border-[#EAEAEA] pb-3">
+        <div className="xl:col-span-2 glass-card rounded-3xl p-5 space-y-4">
+          <div className="flex items-center gap-2 border-b border-slate-100/80 pb-3">
             <UserRound className="w-4 h-4" />
             <h3 className="text-sm font-black">Teacher Scope</h3>
           </div>
 
-          <div className="bg-[#F8F8F8] border border-[#EAEAEA] rounded-2xl p-4 text-xs font-bold space-y-2">
-            <p><span className="text-[#555555]">Teacher:</span> {profile.displayName}</p>
-            <p><span className="text-[#555555]">Employee:</span> {profile.employeeId}</p>
-            <p><span className="text-[#555555]">Department:</span> {profile.department}</p>
-            <p><span className="text-[#555555]">Class Charge:</span> {profile.classTeacherFor}</p>
+          <div className="glass-soft rounded-2xl p-4 text-xs font-bold space-y-2">
+            <p><span className="text-slate-500">Teacher:</span> {profile.displayName}</p>
+            <p><span className="text-slate-500">Employee:</span> {profile.employeeId}</p>
+            <p><span className="text-slate-500">Department:</span> {profile.department}</p>
+            <p><span className="text-slate-500">Class Charge:</span> {profile.classTeacherFor}</p>
           </div>
 
           <div className="bg-blue-50 border border-blue-100 rounded-2xl p-3 text-xs font-bold text-blue-700 flex gap-2">
@@ -51,8 +51,8 @@ const Settings = ({ session }) => {
           </div>
         </div>
 
-        <div className="xl:col-span-3 bg-white border border-[#C8C8C8] rounded-3xl p-5 space-y-4">
-          <div className="flex items-center gap-2 border-b border-[#EAEAEA] pb-3">
+        <div className="xl:col-span-3 glass-card rounded-3xl p-5 space-y-4">
+          <div className="flex items-center gap-2 border-b border-slate-100/80 pb-3">
             <Bell className="w-4 h-4" />
             <h3 className="text-sm font-black">Notification Preferences</h3>
           </div>
@@ -67,16 +67,16 @@ const Settings = ({ session }) => {
         </div>
       </section>
 
-      <section className="bg-white border border-[#C8C8C8] rounded-3xl p-5">
+      <section className="glass-card rounded-3xl p-5">
         <h3 className="text-sm font-black flex items-center gap-2 mb-4">
           <Lock className="w-4 h-4" /> Allotted Access
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
           {sections.map((section) => (
-            <div key={section.id} className="border rounded-2xl p-4 bg-[#F8F8F8] border-[#EAEAEA]">
+            <div key={section.id} className="glass-soft rounded-2xl p-4">
               <p className="text-xs font-black">{section.label}</p>
-              <p className="text-[10px] font-bold text-[#555555] mt-1">{section.room}</p>
-              <p className="text-[10px] font-bold text-[#555555] mt-1">{section.subjects.join(', ')}</p>
+              <p className="text-[10px] font-bold text-slate-500 mt-1">{section.room}</p>
+              <p className="text-[10px] font-bold text-slate-500 mt-1">{section.subjects.join(', ')}</p>
             </div>
           ))}
         </div>
@@ -89,13 +89,13 @@ const ToggleRow = ({ label, description, checked, onClick }) => (
   <button
     type="button"
     onClick={onClick}
-    className="w-full bg-[#F8F8F8] border border-[#EAEAEA] rounded-2xl p-4 flex items-center justify-between gap-4 text-left"
+    className="w-full glass-soft rounded-2xl p-4 flex items-center justify-between gap-4 text-left"
   >
     <span>
       <span className="block text-xs font-black">{label}</span>
-      <span className="block text-[10px] font-semibold text-[#555555] mt-1">{description}</span>
+      <span className="block text-[10px] font-semibold text-slate-500 mt-1">{description}</span>
     </span>
-    <span className={`w-11 h-6 rounded-full p-0.5 transition-colors shrink-0 ${checked ? 'bg-[#1A1A1A]' : 'bg-[#C8C8C8]'}`}>
+    <span className={`w-11 h-6 rounded-full p-0.5 transition-colors shrink-0 ${checked ? 'bg-gradient-to-r from-indigo-500 to-violet-500' : 'bg-slate-300'}`}>
       <span className={`block w-5 h-5 rounded-full bg-white transition-transform ${checked ? 'translate-x-5' : 'translate-x-0'}`} />
     </span>
   </button>

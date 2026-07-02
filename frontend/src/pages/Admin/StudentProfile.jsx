@@ -376,38 +376,38 @@ const StudentProfile = ({ studentContext, onBack }) => {
   };
 
   return (
-    <div className="flex-1 min-h-screen bg-[#D9D9D9] p-6 font-sans select-none text-[#1A1A1A]">
-      
+    <div className="flex-1 min-h-screen p-6 font-sans select-none text-slate-900">
+
       {/* TOP COMPACT BANNER LAYER */}
-      <div className="bg-[#ffffff] p-4 rounded-3xl border border-[#C8C8C8] flex items-center justify-between gap-4 mb-6">
+      <div className="glass-card p-4 rounded-3xl flex items-center justify-between gap-4 mb-6">
         <div className="flex items-center gap-3">
-          <button 
+          <button
             onClick={handleBackNavigation}
-            className="p-2 hover:bg-[#EAEAEA] rounded-full transition-colors border border-[#C8C8C8]/40"
+            className="p-2 hover:bg-white/70 rounded-full transition-colors border border-slate-200/70"
           >
-            <ArrowLeft className="w-4 h-4 text-[#1A1A1A]" />
+            <ArrowLeft className="w-4 h-4 text-slate-900" />
           </button>
           <div>
             <h3 className="text-md font-black tracking-tight">Student Workspace Folder</h3>
-            <p className="text-[11px] text-[#555555]">Comprehensive profile audit node for registered identities.</p>
+            <p className="text-[11px] text-slate-500">Comprehensive profile audit node for registered identities.</p>
           </div>
         </div>
-        <span className="text-xs bg-[#EAEAEA] px-3 py-1.5 rounded-full font-mono font-bold border border-[#C8C8C8]/60 uppercase">
+        <span className="text-xs bg-indigo-50/60 px-3 py-1.5 rounded-full font-mono font-bold border border-slate-200/70 uppercase">
           ID: {profileData.admissionNumber}
         </span>
       </div>
 
-      <div className="bg-white border border-[#C8C8C8] rounded-2xl p-4 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-3">
+      <div className="glass-card rounded-2xl p-4 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div>
-          <h4 className="text-sm font-black text-[#1A1A1A]">Class-wise Student History</h4>
-          <p className="text-[11px] font-semibold text-[#555555] mt-1">
+          <h4 className="text-sm font-black text-slate-900">Class-wise Student History</h4>
+          <p className="text-[11px] font-semibold text-slate-500 mt-1">
             Switch classes to view attendance, exams, finance, documents, and sibling status for that year.
           </p>
         </div>
         <select
           value={selectedClassName}
           onChange={(event) => setSelectedClassName(event.target.value)}
-          className="bg-[#F8F8F8] border border-[#C8C8C8] rounded-xl px-3 py-2 text-xs font-black outline-none min-w-44"
+          className="bg-white/60 border border-white/80 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none transition-all rounded-xl px-3 py-2 text-xs font-black min-w-44"
         >
           {classHistory.map((className) => (
             <option key={className} value={className}>
@@ -421,42 +421,42 @@ const StudentProfile = ({ studentContext, onBack }) => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         
         {/* LEFT COLUMN: THE DISCIPLINED IDENTITY CARD PANEL (3 COLS) */}
-        <div className="lg:col-span-4 bg-[#ffffff] border border-[#C8C8C8] rounded-3xl p-6 text-center space-y-5 shadow-xs">
-          
+        <div className="lg:col-span-4 glass-card rounded-3xl p-6 text-center space-y-5">
+
           {/* Avatar Area */}
-          <div className="relative w-28 h-28 mx-auto bg-[#EAEAEA] rounded-3xl border-2 border-[#1A1A1A] flex items-center justify-center overflow-hidden">
+          <div className="relative w-28 h-28 mx-auto bg-indigo-50/60 rounded-3xl border-2 border-white/80 flex items-center justify-center overflow-hidden">
             {profileData.photoDataUrl ? (
               <img src={profileData.photoDataUrl} alt={profileData.studentName} className="w-full h-full object-cover" />
             ) : (
-              <User className="w-14 h-14 text-[#555555]/60" />
+              <User className="w-14 h-14 text-slate-400" />
             )}
-            <div className="absolute bottom-1 right-1 bg-[#E1FA6C] text-[9px] font-black font-mono border border-[#1A1A1A] px-1.5 py-0.5 rounded-md">
+            <div className="absolute bottom-1 right-1 bg-indigo-100 text-indigo-700 border-indigo-200 text-[9px] font-black font-mono border px-1.5 py-0.5 rounded-md">
               LIVE
             </div>
           </div>
 
-          <label className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-full bg-[#1A1A1A] text-[#E1FA6C] text-[10px] font-black cursor-pointer hover:bg-black transition-colors">
+          <label className="btn-primary inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-full text-[10px] font-black cursor-pointer transition-colors">
             <Camera className="w-3.5 h-3.5" />
             Update Photo
             <input type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
           </label>
 
           <div>
-            <h2 className="text-lg font-black text-[#1A1A1A] leading-tight">{profileData.studentName}</h2>
-            <p className="text-xs font-bold text-[#555555] mt-1 flex items-center justify-center gap-1.5">
+            <h2 className="text-lg font-black text-slate-900 leading-tight">{profileData.studentName}</h2>
+            <p className="text-xs font-bold text-slate-500 mt-1 flex items-center justify-center gap-1.5">
               <span>{profileData.targetClass}</span>
-              <span className="w-1 h-1 bg-[#C8C8C8] rounded-full"></span>
+              <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
               <span>Roll Number: #{profileData.rollNo}</span>
             </p>
           </div>
 
-          <hr className="border-[#EAEAEA]" />
+          <hr className="border-slate-100/80" />
 
-          <div className="bg-[#F8F8F8] border border-[#EAEAEA] rounded-2xl p-3 text-left">
-            <p className="text-[10px] font-black uppercase text-[#555555] flex items-center gap-1.5">
+          <div className="glass-soft rounded-2xl p-3 text-left">
+            <p className="text-[10px] font-black uppercase text-slate-500 flex items-center gap-1.5">
               <Users className="w-3.5 h-3.5" /> Account for {selectedClassName || 'selected class'}
             </p>
-            <p className="text-xs font-bold text-[#1A1A1A] mt-1">
+            <p className="text-xs font-bold text-slate-900 mt-1">
               {classSnapshot.siblingGroupId || matchedStudent.siblingGroupId || matchedStudent.familyId
                 ? `Family account: ${classSnapshot.siblingGroupId || matchedStudent.siblingGroupId || matchedStudent.familyId}`
                 : `Individual account: STD-${profileData.admissionNumber}`}
@@ -465,29 +465,29 @@ const StudentProfile = ({ studentContext, onBack }) => {
 
           {/* Core Mini Matrix Stats */}
           <div className="grid grid-cols-2 gap-2 text-left text-[11px] font-bold">
-            <div className="bg-[#EAEAEA]/40 border border-[#C8C8C8]/60 p-2.5 rounded-xl">
-              <span className="text-[#555555] block">Admission Date</span>
-              <span className="text-[#1A1A1A] text-xs font-black block mt-0.5">{profileData.dateOfAdmission}</span>
+            <div className="glass-soft p-2.5 rounded-xl">
+              <span className="text-slate-500 block">Admission Date</span>
+              <span className="text-slate-900 text-xs font-black block mt-0.5">{profileData.dateOfAdmission}</span>
             </div>
-            <div className="bg-[#EAEAEA]/40 border border-[#C8C8C8]/60 p-2.5 rounded-xl">
-              <span className="text-[#555555] block">Category Track</span>
-              <span className="text-[#1A1A1A] text-xs font-black block mt-0.5">{profileData.category}</span>
+            <div className="glass-soft p-2.5 rounded-xl">
+              <span className="text-slate-500 block">Category Track</span>
+              <span className="text-slate-900 text-xs font-black block mt-0.5">{profileData.category}</span>
             </div>
           </div>
 
           {/* Quick Contact Coordinates Stack */}
-          <div className="space-y-2 text-left text-xs font-semibold text-[#555555]">
-            <div className="flex items-center gap-2 bg-[#EAEAEA]/30 p-2.5 rounded-xl border border-[#EAEAEA]">
-              <Phone className="w-3.5 h-3.5 text-[#1A1A1A]" />
-              <span className="font-mono text-[#1A1A1A]">{profileData.mobileNo}</span>
+          <div className="space-y-2 text-left text-xs font-semibold text-slate-500">
+            <div className="flex items-center gap-2 glass-soft p-2.5 rounded-xl">
+              <Phone className="w-3.5 h-3.5 text-slate-900" />
+              <span className="font-mono text-slate-900">{profileData.mobileNo}</span>
             </div>
-            <div className="flex items-center gap-2 bg-[#EAEAEA]/30 p-2.5 rounded-xl border border-[#EAEAEA]">
-              <Calendar className="w-3.5 h-3.5 text-[#1A1A1A]" />
-              <span className="text-[#1A1A1A]">{profileData.dob} ({profileData.gender})</span>
+            <div className="flex items-center gap-2 glass-soft p-2.5 rounded-xl">
+              <Calendar className="w-3.5 h-3.5 text-slate-900" />
+              <span className="text-slate-900">{profileData.dob} ({profileData.gender})</span>
             </div>
-            <div className="flex items-center gap-2 bg-[#EAEAEA]/30 p-2.5 rounded-xl border border-[#EAEAEA]">
-              <MapPin className="w-3.5 h-3.5 text-[#1A1A1A] shrink-0" />
-              <span className="text-[#1A1A1A] truncate" title={profileData.tempAddress}>
+            <div className="flex items-center gap-2 glass-soft p-2.5 rounded-xl">
+              <MapPin className="w-3.5 h-3.5 text-slate-900 shrink-0" />
+              <span className="text-slate-900 truncate" title={profileData.tempAddress}>
                 {profileData.tempAddress}
               </span>
             </div>
@@ -498,123 +498,123 @@ const StudentProfile = ({ studentContext, onBack }) => {
         <div className="lg:col-span-8 space-y-4">
           
           {/* NAVIGATION TAB CONTROLLERS SELECTORS */}
-          <div className="bg-[#ffffff] p-2 rounded-2xl border border-[#C8C8C8] flex flex-wrap gap-1 text-xs font-black">
-            <button 
+          <div className="glass-card p-2 rounded-2xl flex flex-wrap gap-1 text-xs font-black">
+            <button
               onClick={() => setActiveTab('analytics')}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl transition-all ${activeTab === 'analytics' ? 'bg-[#1A1A1A] text-white' : 'text-[#555555] hover:bg-[#EAEAEA]'}`}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl transition-all ${activeTab === 'analytics' ? 'btn-primary' : 'text-slate-500 hover:bg-white/70'}`}
             >
               <BarChart3 className="w-3.5 h-3.5" /> Academic Analytics
             </button>
-            <button 
+            <button
               onClick={() => setActiveTab('details')}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl transition-all ${activeTab === 'details' ? 'bg-[#1A1A1A] text-white' : 'text-[#555555] hover:bg-[#EAEAEA]'}`}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl transition-all ${activeTab === 'details' ? 'btn-primary' : 'text-slate-500 hover:bg-white/70'}`}
             >
               <User className="w-3.5 h-3.5" /> Personal Matrix Records
             </button>
-            <button 
+            <button
               onClick={() => setActiveTab('exams')}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl transition-all ${activeTab === 'exams' ? 'bg-[#1A1A1A] text-white' : 'text-[#555555] hover:bg-[#EAEAEA]'}`}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl transition-all ${activeTab === 'exams' ? 'btn-primary' : 'text-slate-500 hover:bg-white/70'}`}
             >
               <GraduationCap className="w-3.5 h-3.5" /> Examinations
             </button>
-            <button 
+            <button
               onClick={() => setActiveTab('documents')}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl transition-all ${activeTab === 'documents' ? 'bg-[#1A1A1A] text-white' : 'text-[#555555] hover:bg-[#EAEAEA]'}`}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl transition-all ${activeTab === 'documents' ? 'btn-primary' : 'text-slate-500 hover:bg-white/70'}`}
             >
               <FileText className="w-3.5 h-3.5" /> Document Vault
             </button>
             <button
               onClick={() => setActiveTab('finance')}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl transition-all ${activeTab === 'finance' ? 'bg-[#1A1A1A] text-white' : 'text-[#555555] hover:bg-[#EAEAEA]'}`}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl transition-all ${activeTab === 'finance' ? 'btn-primary' : 'text-slate-500 hover:bg-white/70'}`}
             >
               <CreditCard className="w-3.5 h-3.5" /> Finance
             </button>
           </div>
 
           {/* DYNAMIC CONTENT SWITCHBOARD VIEWER PANELS */}
-          <div className="bg-[#ffffff] border border-[#C8C8C8] rounded-3xl p-6 min-h-[360px]">
+          <div className="glass-card rounded-3xl p-6 min-h-[360px]">
             
             {/* TAB VALUE 1: ANALYTICS & ATTENDANCE GRAPHS */}
             {activeTab === 'analytics' && (
               <div className="space-y-6 animate-fadeIn text-xs font-bold">
-                <div className="border-b border-[#EAEAEA] pb-2">
-                  <h4 className="text-sm font-black text-[#1A1A1A]">Live Attendance Metric Trackers</h4>
-                  <p className="text-[10px] font-bold text-[#555555] mt-1">
+                <div className="border-b border-slate-100/80 pb-2">
+                  <h4 className="text-sm font-black text-slate-900">Live Attendance Metric Trackers</h4>
+                  <p className="text-[10px] font-bold text-slate-500 mt-1">
                     {liveAttendanceLogs.length ? 'Connected to QR / biometric attendance logs.' : 'Using saved profile attendance until live logs are marked.'}
                   </p>
                 </div>
 
                 {/* Simulated Attendance Visual Graph Node Component */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="bg-[#EAEAEA]/40 border border-[#C8C8C8]/60 p-4 rounded-2xl text-center">
-                    <span className="text-[#555555] block text-[11px]">Total Session Days</span>
-                    <span className="text-xl font-black text-[#1A1A1A] block mt-1 font-mono">{classAttendance.totalWorkingDays}</span>
+                  <div className="glass-soft p-4 rounded-2xl text-center">
+                    <span className="text-slate-500 block text-[11px]">Total Session Days</span>
+                    <span className="text-xl font-black text-slate-900 block mt-1 font-mono">{classAttendance.totalWorkingDays}</span>
                   </div>
-                  <div className="bg-[#EAEAEA]/40 border border-[#C8C8C8]/60 p-4 rounded-2xl text-center">
-                    <span className="text-[#555555] block text-[11px]">Total Days Present</span>
+                  <div className="glass-soft p-4 rounded-2xl text-center">
+                    <span className="text-slate-500 block text-[11px]">Total Days Present</span>
                     <span className="text-xl font-black text-emerald-600 block mt-1 font-mono">{classAttendance.presentDays}</span>
                   </div>
-                  <div className="bg-[#E1FA6C]/20 border border-[#1A1A1A]/10 p-4 rounded-2xl text-center">
-                    <span className="text-[#555555] block text-[11px]">Attendance Ratio</span>
-                    <span className="text-xl font-black text-[#1A1A1A] block mt-1 font-mono">{classAttendance.attendancePercentage}%</span>
+                  <div className="bg-indigo-50/60 border border-indigo-200/60 p-4 rounded-2xl text-center">
+                    <span className="text-slate-500 block text-[11px]">Attendance Ratio</span>
+                    <span className="text-xl font-black text-slate-900 block mt-1 font-mono">{classAttendance.attendancePercentage}%</span>
                   </div>
                 </div>
 
                 {/* GRAPH SCALE REPRESENTATION LAYOUT */}
                 <div className="space-y-2 pt-2">
-                  <label className="text-[#555555] block text-[11px]">Visual Roster Percentage Bar</label>
-                  <div className="w-full h-4 bg-[#EAEAEA] rounded-full overflow-hidden border border-[#C8C8C8]/60 p-0.5">
-                    <div 
-                      className="h-full bg-gradient-to-r from-[#1A1A1A] to-[#E1FA6C] rounded-full transition-all duration-500"
+                  <label className="text-slate-500 block text-[11px]">Visual Roster Percentage Bar</label>
+                  <div className="w-full h-4 bg-white/50 rounded-full overflow-hidden border border-slate-200/70 p-0.5">
+                    <div
+                      className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 rounded-full transition-all duration-500"
                       style={{ width: `${classAttendance.attendancePercentage}%` }}
                     ></div>
                   </div>
-                  <p className="text-[10px] text-[#555555] font-semibold text-right">Target safe boundary limit threshold: 75.0%</p>
+                  <p className="text-[10px] text-slate-500 font-semibold text-right">Target safe boundary limit threshold: 75.0%</p>
                 </div>
               </div>
             )}
 
             {/* TAB VALUE 2: COMPREHENSIVE COMPACT REGISTRATION SUB-DATA GRID */}
             {activeTab === 'details' && (
-              <div className="space-y-6 animate-fadeIn text-xs font-bold text-[#1A1A1A]">
-                
+              <div className="space-y-6 animate-fadeIn text-xs font-bold text-slate-900">
+
                 {/* Academic Parent Nodes Block */}
                 <div>
-                  <h5 className="text-[11px] uppercase text-[#555555] tracking-wider border-b border-[#EAEAEA] pb-1.5 mb-3 flex items-center gap-1">
-                    <span className="w-1 h-2 bg-[#1A1A1A] inline-block rounded-xs"></span> Lineage Parent Details
+                  <h5 className="text-[11px] uppercase text-slate-500 tracking-wider border-b border-slate-100/80 pb-1.5 mb-3 flex items-center gap-1">
+                    <span className="w-1 h-2 bg-indigo-400 inline-block rounded-xs"></span> Lineage Parent Details
                   </h5>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <p className="bg-[#EAEAEA]/30 border border-[#EAEAEA] p-3 rounded-xl"><span className="text-[#555555] block text-[10px]">Father Name:</span>{profileData.fatherName}</p>
-                    <p className="bg-[#EAEAEA]/30 border border-[#EAEAEA] p-3 rounded-xl"><span className="text-[#555555] block text-[10px]">Mother Name:</span>{profileData.motherName}</p>
-                    <p className="bg-[#EAEAEA]/30 border border-[#EAEAEA] p-3 rounded-xl font-mono"><span className="text-[#555555] block text-[10px]">Father Aadhaar ID:</span>{profileData.fatherAadhar}</p>
-                    <p className="bg-[#EAEAEA]/30 border border-[#EAEAEA] p-3 rounded-xl font-mono"><span className="text-[#555555] block text-[10px]">Mother Aadhaar ID:</span>{profileData.motherAadhar}</p>
-                    <p className="bg-[#EAEAEA]/30 border border-[#EAEAEA] p-3 rounded-xl"><span className="text-[#555555] block text-[10px]">Guardian Name:</span>{profileData.guardianName || profileData.livingWith || 'Not provided'}</p>
-                    <p className="bg-[#EAEAEA]/30 border border-[#EAEAEA] p-3 rounded-xl font-mono"><span className="text-[#555555] block text-[10px]">Guardian Aadhaar:</span>{profileData.guardianAadhar || 'Not provided'}</p>
+                    <p className="glass-soft p-3 rounded-xl"><span className="text-slate-500 block text-[10px]">Father Name:</span>{profileData.fatherName}</p>
+                    <p className="glass-soft p-3 rounded-xl"><span className="text-slate-500 block text-[10px]">Mother Name:</span>{profileData.motherName}</p>
+                    <p className="glass-soft p-3 rounded-xl font-mono"><span className="text-slate-500 block text-[10px]">Father Aadhaar ID:</span>{profileData.fatherAadhar}</p>
+                    <p className="glass-soft p-3 rounded-xl font-mono"><span className="text-slate-500 block text-[10px]">Mother Aadhaar ID:</span>{profileData.motherAadhar}</p>
+                    <p className="glass-soft p-3 rounded-xl"><span className="text-slate-500 block text-[10px]">Guardian Name:</span>{profileData.guardianName || profileData.livingWith || 'Not provided'}</p>
+                    <p className="glass-soft p-3 rounded-xl font-mono"><span className="text-slate-500 block text-[10px]">Guardian Aadhaar:</span>{profileData.guardianAadhar || 'Not provided'}</p>
                   </div>
                 </div>
 
                 {/* Structural Identities Block */}
                 <div>
-                  <h5 className="text-[11px] uppercase text-[#555555] tracking-wider border-b border-[#EAEAEA] pb-1.5 mb-3 flex items-center gap-1">
-                    <span className="w-1 h-2 bg-[#1A1A1A] inline-block rounded-xs"></span> Institutional Tracking Parameters
+                  <h5 className="text-[11px] uppercase text-slate-500 tracking-wider border-b border-slate-100/80 pb-1.5 mb-3 flex items-center gap-1">
+                    <span className="w-1 h-2 bg-indigo-400 inline-block rounded-xs"></span> Institutional Tracking Parameters
                   </h5>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <p className="bg-[#EAEAEA]/30 border border-[#EAEAEA] p-3 rounded-xl font-mono"><span className="text-[#555555] block text-[10px]">PEN ID Code:</span>{profileData.penNumber || 'NOT REQUIRED / PROVIDED'}</p>
-                    <p className="bg-[#EAEAEA]/30 border border-[#EAEAEA] p-3 rounded-xl font-mono"><span className="text-[#555555] block text-[10px]">Aadhaar Number:</span>{profileData.aadharNumber || 'Not provided'}</p>
-                    <p className="bg-[#EAEAEA]/30 border border-[#EAEAEA] p-3 rounded-xl"><span className="text-[#555555] block text-[10px]">Religion Metric:</span>{profileData.religion}</p>
-                    <p className="bg-[#EAEAEA]/30 border border-[#EAEAEA] p-3 rounded-xl"><span className="text-[#555555] block text-[10px]">Previous Institute:</span>{profileData.lastSchoolName || 'None Specified'}</p>
-                    <p className="bg-[#EAEAEA]/30 border border-[#EAEAEA] p-3 rounded-xl"><span className="text-[#555555] block text-[10px]">Email:</span>{profileData.email || 'Not provided'}</p>
+                    <p className="glass-soft p-3 rounded-xl font-mono"><span className="text-slate-500 block text-[10px]">PEN ID Code:</span>{profileData.penNumber || 'NOT REQUIRED / PROVIDED'}</p>
+                    <p className="glass-soft p-3 rounded-xl font-mono"><span className="text-slate-500 block text-[10px]">Aadhaar Number:</span>{profileData.aadharNumber || 'Not provided'}</p>
+                    <p className="glass-soft p-3 rounded-xl"><span className="text-slate-500 block text-[10px]">Religion Metric:</span>{profileData.religion}</p>
+                    <p className="glass-soft p-3 rounded-xl"><span className="text-slate-500 block text-[10px]">Previous Institute:</span>{profileData.lastSchoolName || 'None Specified'}</p>
+                    <p className="glass-soft p-3 rounded-xl"><span className="text-slate-500 block text-[10px]">Email:</span>{profileData.email || 'Not provided'}</p>
                   </div>
                 </div>
 
                 {/* Permanent Demographics Addresses Block */}
                 <div>
-                  <h5 className="text-[11px] uppercase text-[#555555] tracking-wider border-b border-[#EAEAEA] pb-1.5 mb-3 flex items-center gap-1">
-                    <span className="w-1 h-2 bg-[#1A1A1A] inline-block rounded-xs"></span> Residential Addresses Coordinates
+                  <h5 className="text-[11px] uppercase text-slate-500 tracking-wider border-b border-slate-100/80 pb-1.5 mb-3 flex items-center gap-1">
+                    <span className="w-1 h-2 bg-indigo-400 inline-block rounded-xs"></span> Residential Addresses Coordinates
                   </h5>
                   <div className="space-y-2">
-                    <p className="bg-[#EAEAEA]/30 border border-[#EAEAEA] p-3 rounded-xl"><span className="text-[#555555] block text-[10px]">Current Location Location (Temporary):</span>{profileData.tempAddress}</p>
-                    <p className="bg-[#EAEAEA]/30 border border-[#EAEAEA] p-3 rounded-xl"><span className="text-[#555555] block text-[10px]">Home Registration Node (Permanent):</span>{profileData.permAddress}</p>
+                    <p className="glass-soft p-3 rounded-xl"><span className="text-slate-500 block text-[10px]">Current Location Location (Temporary):</span>{profileData.tempAddress}</p>
+                    <p className="glass-soft p-3 rounded-xl"><span className="text-slate-500 block text-[10px]">Home Registration Node (Permanent):</span>{profileData.permAddress}</p>
                   </div>
                 </div>
               </div>
@@ -623,23 +623,23 @@ const StudentProfile = ({ studentContext, onBack }) => {
             {/* TAB VALUE 3: EXAMINATION RECORDS MATRIX */}
             {activeTab === 'exams' && (
               <div className="space-y-4 animate-fadeIn text-xs font-bold">
-                <div className="border-b border-[#EAEAEA] pb-2">
-                  <h4 className="text-sm font-black text-[#1A1A1A]">Historical Examination Grade Book</h4>
+                <div className="border-b border-slate-100/80 pb-2">
+                  <h4 className="text-sm font-black text-slate-900">Historical Examination Grade Book</h4>
                 </div>
 
                 <div className="overflow-x-auto">
                   <table className="w-full text-left">
                     <thead>
-                      <tr className="text-[#555555] border-b border-[#EAEAEA] uppercase text-[10px] tracking-wider">
+                      <tr className="text-slate-500 border-b border-slate-100/80 uppercase text-[10px] tracking-wider">
                         <th className="pb-3">Assessment Term Cycle</th>
                         <th className="pb-3 text-center">Score Ratio</th>
                         <th className="pb-3 text-center">Class Rank Position</th>
                         <th className="pb-3 text-right">Status Flag</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[#EAEAEA] text-[#1A1A1A]">
+                    <tbody className="divide-y divide-slate-100/80 text-slate-900">
                       {(classExamRows.length ? classExamRows : fallbackExamRows).map((ex, idx) => (
-                        <tr key={idx} className="hover:bg-[#EAEAEA]/20">
+                        <tr key={idx} className="hover:bg-white/50">
                           <td className="py-3.5 font-black">{ex.term}</td>
                           <td className="py-3.5 text-center font-mono text-sm">{ex.score}</td>
                           <td className="py-3.5 text-center font-mono">{ex.rank}</td>
@@ -661,7 +661,7 @@ const StudentProfile = ({ studentContext, onBack }) => {
                       ))}
                       {!classExamRows.length && !fallbackExamRows.length && (
                         <tr>
-                          <td colSpan="4" className="py-8 text-center text-[#555555]">
+                          <td colSpan="4" className="py-8 text-center text-slate-500">
                             No examination records found for {selectedClassName}.
                           </td>
                         </tr>
@@ -675,21 +675,21 @@ const StudentProfile = ({ studentContext, onBack }) => {
             {/* TAB VALUE 4: DYNAMIC DOCUMENT STORAGE MANAGEMENT VAULT */}
             {activeTab === 'documents' && (
               <div className="space-y-4 animate-fadeIn text-xs font-bold">
-                <div className="border-b border-[#EAEAEA] pb-2">
-                  <h4 className="text-sm font-black text-[#1A1A1A]">Verified Structural Asset Vault</h4>
+                <div className="border-b border-slate-100/80 pb-2">
+                  <h4 className="text-sm font-black text-slate-900">Verified Structural Asset Vault</h4>
                 </div>
 
-                <form onSubmit={handleAddCustomDocument} className="flex flex-col sm:flex-row gap-2 bg-[#EAEAEA]/40 border border-[#C8C8C8]/60 rounded-2xl p-3">
+                <form onSubmit={handleAddCustomDocument} className="flex flex-col sm:flex-row gap-2 glass-soft rounded-2xl p-3">
                   <input
                     type="text"
                     value={customDocumentName}
                     onChange={(event) => setCustomDocumentName(event.target.value)}
                     placeholder="Add extra document name..."
-                    className="flex-1 bg-white border border-[#C8C8C8] rounded-xl px-3 py-2 outline-none focus:border-[#1A1A1A] text-xs font-bold"
+                    className="flex-1 bg-white/60 border border-white/80 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none transition-all rounded-xl px-3 py-2 text-xs font-bold"
                   />
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-white hover:bg-[#1A1A1A] hover:text-white border border-[#C8C8C8] rounded-xl text-[10px] font-black flex items-center justify-center gap-1.5 transition-all"
+                    className="px-4 py-2 bg-white/60 hover:bg-slate-900 hover:text-white border border-slate-200/70 rounded-xl text-[10px] font-black flex items-center justify-center gap-1.5 transition-all"
                   >
                     <PlusCircle className="w-3.5 h-3.5" /> Add Slot
                   </button>
@@ -697,10 +697,10 @@ const StudentProfile = ({ studentContext, onBack }) => {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {documentDrafts.map((doc, idx) => (
-                    <div key={`${doc.name}-${idx}`} className="bg-[#EAEAEA]/30 border border-[#C8C8C8] p-3 rounded-xl flex items-center justify-between gap-2">
+                    <div key={`${doc.name}-${idx}`} className="glass-soft p-3 rounded-xl flex items-center justify-between gap-2">
                       <div className="min-w-0">
-                        <span className="text-[#1A1A1A] font-black truncate block">{doc.name}</span>
-                        <span className="text-[10px] text-[#555555] font-mono block truncate mt-0.5">
+                        <span className="text-slate-900 font-black truncate block">{doc.name}</span>
+                        <span className="text-[10px] text-slate-500 font-mono block truncate mt-0.5">
                           {doc.file || 'No file uploaded yet'} {doc.size ? `| ${formatFileSize(doc.size)}` : ''}
                         </span>
                       </div>
@@ -716,7 +716,7 @@ const StudentProfile = ({ studentContext, onBack }) => {
                         <button
                           type="button"
                           onClick={() => handleViewDocument(doc)}
-                          className="p-2 bg-white hover:bg-[#1A1A1A] hover:text-white rounded-lg border border-[#C8C8C8] transition-all"
+                          className="p-2 bg-white/60 hover:bg-slate-900 hover:text-white rounded-lg border border-slate-200/70 transition-all"
                           title="Preview Document"
                         >
                           <Eye className="w-3.5 h-3.5" />
@@ -724,13 +724,13 @@ const StudentProfile = ({ studentContext, onBack }) => {
                         <button
                           type="button"
                           onClick={() => handleDownloadDocument(doc)}
-                          className="p-2 bg-white hover:bg-[#1A1A1A] hover:text-white rounded-lg border border-[#C8C8C8] transition-all"
+                          className="p-2 bg-white/60 hover:bg-slate-900 hover:text-white rounded-lg border border-slate-200/70 transition-all"
                           title="Download Asset File"
                         >
                           <Download className="w-3.5 h-3.5" />
                         </button>
                         <label
-                          className="p-2 bg-[#E1FA6C] hover:bg-[#d4ee59] rounded-lg border border-[#1A1A1A]/10 transition-all cursor-pointer"
+                          className="btn-primary p-2 rounded-lg transition-all cursor-pointer"
                           title={doc.file ? 'Replace Document' : 'Upload Document'}
                         >
                           <UploadCloud className="w-3.5 h-3.5" />
@@ -747,19 +747,19 @@ const StudentProfile = ({ studentContext, onBack }) => {
                 </div>
 
                 {documentDrafts.length === 0 && (
-                  <div className="text-center py-12 text-[#555555] text-xs font-medium">
+                  <div className="text-center py-12 text-slate-500 text-xs font-medium">
                     No document requirements configured for students yet.
                   </div>
                 )}
 
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#EAEAEA]/40 border border-[#C8C8C8]/60 p-3 rounded-2xl">
-                  <p className="text-[11px] text-[#555555] font-bold">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 glass-soft p-3 rounded-2xl">
+                  <p className="text-[11px] text-slate-500 font-bold">
                     {documentMessage || 'Upload or replace files here, then save the student document vault.'}
                   </p>
                   <button
                     type="button"
                     onClick={handleSaveDocuments}
-                    className="px-4 py-2 bg-[#1A1A1A] text-white hover:bg-black rounded-xl text-[10px] font-black flex items-center justify-center gap-1.5"
+                    className="btn-primary px-4 py-2 rounded-xl text-[10px] font-black flex items-center justify-center gap-1.5"
                   >
                     <Save className="w-3.5 h-3.5" /> Save Documents
                   </button>
@@ -769,14 +769,14 @@ const StudentProfile = ({ studentContext, onBack }) => {
 
             {activeTab === 'finance' && (
               <div className="space-y-4 animate-fadeIn text-xs font-bold">
-                <div className="border-b border-[#EAEAEA] pb-2">
-                  <h4 className="text-sm font-black text-[#1A1A1A]">Class-wise Finance Records</h4>
+                <div className="border-b border-slate-100/80 pb-2">
+                  <h4 className="text-sm font-black text-slate-900">Class-wise Finance Records</h4>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   {selectedClassFinance.map((record, index) => (
-                    <div key={record.id || index} className="bg-[#EAEAEA]/30 border border-[#C8C8C8] rounded-2xl p-4">
-                      <span className="text-[10px] text-[#555555] uppercase block">Session</span>
-                      <strong className="text-sm text-[#1A1A1A]">{record.session || record.academicYear || selectedClassName}</strong>
+                    <div key={record.id || index} className="glass-soft rounded-2xl p-4">
+                      <span className="text-[10px] text-slate-500 uppercase block">Session</span>
+                      <strong className="text-sm text-slate-900">{record.session || record.academicYear || selectedClassName}</strong>
                       <div className="mt-3 space-y-1 font-mono">
                         <p>Assigned: Rs. {Number(record.totalAssigned || record.total || 0).toLocaleString('en-IN')}</p>
                         <p className="text-emerald-700">Paid: Rs. {Number(record.paid || record.recovered || 0).toLocaleString('en-IN')}</p>
@@ -786,7 +786,7 @@ const StudentProfile = ({ studentContext, onBack }) => {
                   ))}
                 </div>
                 {!selectedClassFinance.length && (
-                  <div className="text-center py-12 text-[#555555] text-xs font-medium bg-[#F8F8F8] border border-[#EAEAEA] rounded-2xl">
+                  <div className="text-center py-12 text-slate-500 text-xs font-medium bg-white/50 rounded-2xl">
                     No finance ledger entries found for {selectedClassName}. Finance can still manage previous dues from its class dropdown.
                   </div>
                 )}

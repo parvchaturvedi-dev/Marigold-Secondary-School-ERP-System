@@ -32,7 +32,6 @@ export const clerkModules = [
       { title: "Sibling Assigning", icon: "people-circle-outline" }
     ]
   },
-  { title: "Communication", icon: "chatbubble-ellipses-outline", color: "#7C3AED" },
   { title: "Documents Management", icon: "folder-open-outline", color: "#06B6D4" },
   { title: "Events", icon: "calendar-number-outline", color: "#F43F5E" },
   {

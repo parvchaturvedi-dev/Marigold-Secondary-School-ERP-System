@@ -10,36 +10,68 @@ import {
   Users,
 } from 'lucide-react';
 import { fetchEffectiveTimetable, getClassDayRows, todayIsoDate } from '../../components/common/timetableStore';
-import {
-  getTeacherClassSections,
-  getTeacherProfile,
-  getTeacherRoster,
-  getTeacherSubjectLoad,
-  getTeacherTimetable,
-} from './teacherPortalData';
+import { apiFetch } from '../../components/common/api';
+import { sortClassNames } from '../../components/common/masterData';
+import { getTeacherProfile } from './teacherPortalData';
 
 const MyClass = ({ session }) => {
-  const sections = getTeacherClassSections(session);
   const profile = getTeacherProfile(session);
-  const [selectedClass, setSelectedClass] = useState(sections[0]?.className || 'Class 9');
-  const selectedSection = sections.find((item) => item.className === selectedClass) || sections[0];
-  const roster = getTeacherRoster(session, selectedClass);
-  const subjectLoad = getTeacherSubjectLoad(session).filter(
-    (item) => item.className === selectedClass
+  const allottedClasses = sortClassNames(
+    Array.isArray(session?.allottedClasses) ? session.allottedClasses : []
   );
-  const staticTimetable = getTeacherTimetable(session).filter(
-    (item) => item.className === selectedClass
-  );
-  const [liveTimetable, setLiveTimetable] = useState([]);
-  const [timetableSource, setTimetableSource] = useState('default');
-  const visibleTimetable = liveTimetable.length
-    ? liveTimetable
-    : staticTimetable.length
-      ? staticTimetable
-      : getTeacherTimetable(session).slice(0, 3);
+  const [selectedClass, setSelectedClass] = useState(allottedClasses[0] || '');
 
   useEffect(() => {
+    if (!selectedClass && allottedClasses.length) {
+      setSelectedClass(allottedClasses[0]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allottedClasses.join(',')]);
+
+  const [classInfo, setClassInfo] = useState(null);
+  const [classInfoLoading, setClassInfoLoading] = useState(false);
+  const [classInfoError, setClassInfoError] = useState('');
+
+  useEffect(() => {
+    if (!selectedClass) {
+      setClassInfo(null);
+      return undefined;
+    }
     let active = true;
+    setClassInfoLoading(true);
+    setClassInfoError('');
+    apiFetch('/class-info?className=' + encodeURIComponent(selectedClass))
+      .then((data) => {
+        if (!active) return;
+        setClassInfo(data);
+      })
+      .catch((err) => {
+        if (!active) return;
+        setClassInfo(null);
+        setClassInfoError(err?.message || 'Unable to load class information right now.');
+      })
+      .finally(() => {
+        if (active) setClassInfoLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [selectedClass]);
+
+  const roster = classInfo?.roster || [];
+  const subjects = classInfo?.subjects || [];
+
+  const [liveTimetable, setLiveTimetable] = useState([]);
+  const [timetableSource, setTimetableSource] = useState('default');
+  const [timetableLoading, setTimetableLoading] = useState(false);
+
+  useEffect(() => {
+    if (!selectedClass) {
+      setLiveTimetable([]);
+      return undefined;
+    }
+    let active = true;
+    setTimetableLoading(true);
     fetchEffectiveTimetable({ date: todayIsoDate(), className: selectedClass })
       .then((payload) => {
         if (!active) return;
@@ -49,6 +81,9 @@ const MyClass = ({ session }) => {
       })
       .catch(() => {
         if (active) setLiveTimetable([]);
+      })
+      .finally(() => {
+        if (active) setTimetableLoading(false);
       });
     return () => {
       active = false;
@@ -56,85 +91,91 @@ const MyClass = ({ session }) => {
   }, [selectedClass]);
 
   return (
-    <div className="space-y-6 pb-8 select-none font-sans text-[#1A1A1A]">
-      <section className="bg-white border border-[#C8C8C8] rounded-3xl p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+    <div className="space-y-6 pb-8 select-none font-sans text-slate-900">
+      <section className="glass-card rounded-3xl p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-black flex items-center gap-2">
             <Layers className="w-5 h-5" /> My Class Workspace
           </h2>
-          <p className="text-xs font-bold text-[#555555] mt-1">
+          <p className="text-xs font-bold text-slate-500 mt-1">
             {profile.displayName} | Class teacher charge: {profile.classTeacherFor}
           </p>
         </div>
 
         <div className="grid grid-cols-3 gap-2 min-w-full lg:min-w-[420px]">
-          <ClassStat label="Class" value={selectedSection?.label || selectedClass} icon={GraduationCap} />
+          <ClassStat label="Class" value={classInfo?.className || selectedClass || '—'} icon={GraduationCap} />
           <ClassStat label="Students" value={roster.length} icon={Users} />
-          <ClassStat label="Subjects" value={subjectLoad.length || selectedSection?.subjects.length || 0} icon={BookOpen} />
+          <ClassStat label="Subjects" value={subjects.length} icon={BookOpen} />
         </div>
       </section>
 
-      <section className="bg-white border border-[#C8C8C8] rounded-3xl p-3 flex flex-wrap gap-2">
-        {sections.map((section) => (
-          <button
-            key={section.id}
-            type="button"
-            onClick={() => setSelectedClass(section.className)}
-            className={`px-4 py-2 rounded-2xl text-xs font-black border transition-colors ${
-              selectedClass === section.className
-                ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]'
-                : 'bg-[#F8F8F8] text-[#555555] border-[#EAEAEA] hover:text-[#1A1A1A]'
-            }`}
-          >
-            {section.label}
-          </button>
-        ))}
-      </section>
+      {allottedClasses.length ? (
+        <section className="glass-card rounded-3xl p-3 flex flex-wrap gap-2">
+          {allottedClasses.map((className) => (
+            <button
+              key={className}
+              type="button"
+              onClick={() => setSelectedClass(className)}
+              className={`px-4 py-2 rounded-2xl text-xs font-black border transition-colors ${
+                selectedClass === className
+                  ? 'btn-primary'
+                  : 'bg-white/60 text-slate-500 border-slate-100/80 hover:text-slate-900'
+              }`}
+            >
+              {className}
+            </button>
+          ))}
+        </section>
+      ) : (
+        <section className="glass-card rounded-3xl p-5 text-xs font-bold text-slate-500">
+          No classes are allotted to your account yet.
+        </section>
+      )}
 
       <section className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-        <div className="xl:col-span-5 bg-white border border-[#C8C8C8] rounded-3xl p-5">
-          <div className="flex items-center justify-between border-b border-[#EAEAEA] pb-3 mb-4">
+        <div className="xl:col-span-5 glass-card rounded-3xl p-5">
+          <div className="flex items-center justify-between border-b border-slate-100/80 pb-3 mb-4">
             <h3 className="text-sm font-black flex items-center gap-2">
               <Clock className="w-4 h-4" /> Today Periods
             </h3>
-            <span className="text-[10px] font-black text-[#555555] uppercase">{timetableSource}</span>
+            <span className="text-[10px] font-black text-slate-500 uppercase">{timetableSource}</span>
           </div>
 
           <div className="space-y-3">
-            {visibleTimetable.map((period) => (
-              <div key={`${period.period}-${period.subject}`} className="bg-[#F8F8F8] border border-[#EAEAEA] rounded-2xl p-3 flex items-center gap-3">
-                <span className="w-10 h-10 rounded-2xl bg-[#1A1A1A] text-[#E1FA6C] font-black flex items-center justify-center">
-                  {period.period}
-                </span>
-                <div className="min-w-0">
-                  <p className="text-xs font-black truncate">{period.subject}</p>
-                  <p className="text-[10px] font-bold text-[#555555]">
-                    {[period.time, period.teacher, period.room].filter(Boolean).join(' | ') || 'Timing not set'}
-                  </p>
+            {timetableLoading ? (
+              <p className="text-xs font-bold text-slate-500 glass-soft rounded-2xl p-3">Loading today's periods…</p>
+            ) : liveTimetable.length ? (
+              liveTimetable.map((period) => (
+                <div key={`${period.period}-${period.subject}`} className="glass-soft rounded-2xl p-3 flex items-center gap-3">
+                  <span className="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white font-black flex items-center justify-center">
+                    {period.period}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-xs font-black truncate">{period.subject}</p>
+                    <p className="text-[10px] font-bold text-slate-500">
+                      {[period.time, period.teacher, period.room].filter(Boolean).join(' | ') || 'Timing not set'}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))
+            ) : (
+              <p className="text-xs font-bold text-slate-500 glass-soft rounded-2xl p-3">
+                No periods scheduled for this class today.
+              </p>
+            )}
           </div>
 
-          <div className="mt-5 border-t border-[#EAEAEA] pt-4">
+          <div className="mt-5 border-t border-slate-100/80 pt-4">
             <h3 className="text-sm font-black mb-3">Subject Coverage</h3>
-            <div className="space-y-3">
-              {(subjectLoad.length ? subjectLoad : []).map((subject) => (
-                <div key={subject.subject} className="space-y-1.5">
-                  <div className="flex items-center justify-between text-xs font-bold">
-                    <span>{subject.subject}</span>
-                    <span className="text-[#555555]">{subject.syllabusProgress}%</span>
-                  </div>
-                  <div className="h-2.5 rounded-full bg-[#EAEAEA] overflow-hidden">
-                    <div
-                      className="h-full bg-[#1A1A1A] rounded-full"
-                      style={{ width: `${subject.syllabusProgress}%` }}
-                    />
-                  </div>
+            <div className="space-y-2">
+              {subjects.map((subject) => (
+                <div key={subject.subject} className="flex items-center justify-between text-xs font-bold glass-soft rounded-2xl p-3">
+                  <span>{subject.subject}</span>
+                  <span className="text-slate-500">{subject.teacher || '—'}</span>
                 </div>
               ))}
-              {!subjectLoad.length && (
-                <p className="text-xs font-bold text-[#555555] bg-[#F8F8F8] border border-[#EAEAEA] rounded-2xl p-3">
+              {!subjects.length && (
+                <p className="text-xs font-bold text-slate-500 glass-soft rounded-2xl p-3">
                   No dedicated subject load is mapped for this class yet.
                 </p>
               )}
@@ -142,84 +183,93 @@ const MyClass = ({ session }) => {
           </div>
         </div>
 
-        <div className="xl:col-span-7 bg-white border border-[#C8C8C8] rounded-3xl p-5">
-          <div className="flex items-center justify-between border-b border-[#EAEAEA] pb-3 mb-4">
+        <div className="xl:col-span-7 glass-card rounded-3xl p-5">
+          <div className="flex items-center justify-between border-b border-slate-100/80 pb-3 mb-4">
             <h3 className="text-sm font-black flex items-center gap-2">
               <Users className="w-4 h-4" /> Class Roster
             </h3>
-            <span className="text-[10px] font-black text-[#555555]">{roster.length} students</span>
+            <span className="text-[10px] font-black text-slate-500">{roster.length} students</span>
           </div>
 
-          <div className="overflow-x-auto rounded-2xl border border-[#EAEAEA]">
-            <table className="w-full min-w-[780px] text-left text-xs font-bold">
-              <thead className="bg-[#EAEAEA] text-[#555555] uppercase text-[10px]">
-                <tr>
-                  <th className="px-3 py-2">Roll</th>
-                  <th className="px-3 py-2">Student</th>
-                  <th className="px-3 py-2">Admission No.</th>
-                  <th className="px-3 py-2">Guardian</th>
-                  <th className="px-3 py-2">Notebook</th>
-                  <th className="px-3 py-2">Last Score</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#EAEAEA]">
-                {roster.map((student) => (
-                  <tr key={student.id} className="hover:bg-[#F8F8F8]">
-                    <td className="px-3 py-3 font-mono">{student.rollNo}</td>
-                    <td className="px-3 py-3">
-                      <div className="flex items-center gap-2">
-                        <span className="w-8 h-8 rounded-2xl bg-[#EAEAEA] flex items-center justify-center shrink-0">
-                          <UserRound className="w-4 h-4 text-[#555555]" />
-                        </span>
-                        <span className="font-black">{student.displayName}</span>
-                      </div>
-                    </td>
-                    <td className="px-3 py-3 font-mono text-[#555555]">{student.admissionNumber}</td>
-                    <td className="px-3 py-3 text-[#555555]">
-                      <Phone className="w-3.5 h-3.5 inline mr-1" /> {student.guardianPhone}
-                    </td>
-                    <td className="px-3 py-3">
-                      <span className={`text-[9px] font-black px-2 py-1 rounded-md ${
-                        student.notebookStatus === 'Checked'
-                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                          : 'bg-amber-50 text-amber-700 border border-amber-100'
-                      }`}>
-                        {student.notebookStatus}
-                      </span>
-                    </td>
-                    <td className="px-3 py-3 font-mono">{student.lastScore}/100</td>
+          {classInfoLoading ? (
+            <p className="text-xs font-bold text-slate-500 glass-soft rounded-2xl p-4">Loading class roster…</p>
+          ) : classInfoError ? (
+            <p className="text-xs font-bold text-red-500 glass-soft rounded-2xl p-4">{classInfoError}</p>
+          ) : roster.length ? (
+            <div className="overflow-x-auto rounded-2xl border border-slate-100/80">
+              <table className="w-full min-w-[620px] text-left text-xs font-bold">
+                <thead className="bg-indigo-50/60 text-slate-500 uppercase text-[10px]">
+                  <tr>
+                    <th className="px-3 py-2">Roll</th>
+                    <th className="px-3 py-2">Student</th>
+                    <th className="px-3 py-2">Admission No.</th>
+                    <th className="px-3 py-2">Guardian</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-slate-100/80">
+                  {roster.map((student) => (
+                    <tr key={student.admissionNumber || student.rollNo} className="hover:bg-white/60">
+                      <td className="px-3 py-3 font-mono">{student.rollNo}</td>
+                      <td className="px-3 py-3">
+                        <div className="flex items-center gap-2">
+                          <span className="w-8 h-8 rounded-2xl bg-white/50 flex items-center justify-center shrink-0">
+                            <UserRound className="w-4 h-4 text-slate-500" />
+                          </span>
+                          <span className="font-black">{student.displayName}</span>
+                        </div>
+                      </td>
+                      <td className="px-3 py-3 font-mono text-slate-500">{student.admissionNumber || '—'}</td>
+                      <td className="px-3 py-3 text-slate-500">
+                        {student.guardianPhone ? (
+                          <>
+                            <Phone className="w-3.5 h-3.5 inline mr-1" /> {student.guardianPhone}
+                          </>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="text-xs font-bold text-slate-500 glass-soft rounded-2xl p-4">
+              No students found for this class yet.
+            </p>
+          )}
         </div>
       </section>
 
-      <section className="bg-white border border-[#C8C8C8] rounded-3xl p-5">
+      <section className="glass-card rounded-3xl p-5">
         <h3 className="text-sm font-black flex items-center gap-2 mb-4">
-          <CheckCircle2 className="w-4 h-4" /> Assigned Class Sections
+          <CheckCircle2 className="w-4 h-4" /> Assigned Classes
         </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-          {sections.map((section) => (
-            <div key={section.id} className="bg-[#F8F8F8] border border-[#EAEAEA] rounded-2xl p-4">
-              <p className="text-xs font-black">{section.label}</p>
-              <p className="text-[10px] font-bold text-[#555555] mt-1">{section.room} | {section.students} students</p>
-              <p className="text-[10px] font-bold text-[#555555] mt-1">
-                {section.subjects.join(', ')}
-              </p>
-            </div>
-          ))}
-        </div>
+        {allottedClasses.length ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+            {allottedClasses.map((className) => (
+              <div key={className} className="glass-soft rounded-2xl p-4">
+                <p className="text-xs font-black">{className}</p>
+                {profile.classTeacherFor?.startsWith(className) && (
+                  <p className="text-[10px] font-bold text-slate-500 mt-1">Class teacher charge</p>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs font-bold text-slate-500 glass-soft rounded-2xl p-4">
+            No classes are allotted to your account yet.
+          </p>
+        )}
       </section>
     </div>
   );
 };
 
 const ClassStat = ({ label, value, icon }) => (
-  <div className="bg-[#F8F8F8] border border-[#EAEAEA] rounded-2xl p-3">
+  <div className="glass-soft rounded-2xl p-3">
     {React.createElement(icon, { className: 'w-4 h-4 mb-2' })}
-    <p className="text-[10px] font-black uppercase text-[#555555]">{label}</p>
+    <p className="text-[10px] font-black uppercase text-slate-500">{label}</p>
     <p className="text-sm font-black mt-0.5 truncate">{value}</p>
   </div>
 );

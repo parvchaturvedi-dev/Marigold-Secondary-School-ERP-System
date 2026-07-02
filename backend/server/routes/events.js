@@ -3,6 +3,9 @@ import multer from 'multer';
 import Event from '../models/Event.js';
 import { isMongoConnected } from '../db.js';
 import { emitRealtimeEvent } from '../realtime.js';
+import { requireRole } from '../middleware/auth.js';
+import { resolveDisplayName } from '../utils/nameLookup.js';
+import { createNotification } from '../utils/notify.js';
 
 const router = express.Router();
 const upload = multer({
@@ -25,7 +28,10 @@ const ensureMongo = (_request, response, next) => {
 
 const toBoolean = (value) => value === true || value === 'true';
 
-const toEventPayload = (event) => ({
+const toEventPayload = async (event) => {
+  const createdByName = await resolveDisplayName(event.createdByUsername);
+
+  return {
   id: event._id.toString(),
   title: event.title,
   description: event.description,
@@ -44,9 +50,12 @@ const toEventPayload = (event) => ({
   participants: event.participants || [],
   createdByRole: event.createdByRole,
   createdByUsername: event.createdByUsername,
+  createdByName,
+  authorName: createdByName,
   createdAt: event.createdAt?.toISOString(),
   updatedAt: event.updatedAt?.toISOString(),
-});
+  };
+};
 
 const buildEventFields = (body) => ({
   title: body.title,
@@ -71,10 +80,10 @@ const applyImageFields = (event, file) => {
 
 router.get('/', ensureMongo, async (_request, response) => {
   const events = await Event.find().sort({ createdAt: -1 });
-  response.json(events.map(toEventPayload));
+  response.json(await Promise.all(events.map(toEventPayload)));
 });
 
-router.post('/', ensureMongo, upload.single('image'), async (request, response) => {
+router.post('/', ensureMongo, requireRole('admin', 'clerk'), upload.single('image'), async (request, response) => {
   const event = new Event({
     ...buildEventFields(request.body),
     participants: [],
@@ -84,10 +93,25 @@ router.post('/', ensureMongo, upload.single('image'), async (request, response) 
   await event.save();
 
   emitRealtimeEvent('mgps-erp-events-updated');
-  response.status(201).json(toEventPayload(event));
+
+  // Broadcast the new event to all students (empty className = all classes).
+  try {
+    await createNotification({
+      title: 'New Event',
+      description: event.title,
+      type: 'event',
+      linkPage: 'Events',
+      recipientRole: 'student',
+      recipientClassName: '',
+    });
+  } catch (error) {
+    console.error('[events] notify failed:', error?.message || error);
+  }
+
+  response.status(201).json(await toEventPayload(event));
 });
 
-router.patch('/:id', ensureMongo, upload.single('image'), async (request, response) => {
+router.patch('/:id', ensureMongo, requireRole('admin', 'clerk'), upload.single('image'), async (request, response) => {
   const event = await Event.findById(request.params.id);
 
   if (!event) {
@@ -108,10 +132,10 @@ router.patch('/:id', ensureMongo, upload.single('image'), async (request, respon
   await event.save();
 
   emitRealtimeEvent('mgps-erp-events-updated');
-  response.json(toEventPayload(event));
+  response.json(await toEventPayload(event));
 });
 
-router.delete('/:id', ensureMongo, async (request, response) => {
+router.delete('/:id', ensureMongo, requireRole('admin', 'clerk'), async (request, response) => {
   await Event.findByIdAndDelete(request.params.id);
   emitRealtimeEvent('mgps-erp-events-updated');
   response.json({ message: 'Event removed.' });
@@ -144,7 +168,7 @@ router.patch('/:id/participate', ensureMongo, async (request, response) => {
   await event.save();
 
   emitRealtimeEvent('mgps-erp-events-updated');
-  response.json(toEventPayload(event));
+  response.json(await toEventPayload(event));
 });
 
 export default router;

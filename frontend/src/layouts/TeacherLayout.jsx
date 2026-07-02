@@ -1,20 +1,21 @@
+import React from 'react';
 import Header from '../components/common/Header';
 import Sidebar from '../components/common/Sidebar';
+import AuroraBackground from '../components/common/AuroraBackground';
 
 const TeacherLayout = ({ children, session, onLogout, onPageChange, onStudentChange, currentActive }) => {
   return (
-    <div className="flex h-screen w-full max-w-full overflow-hidden bg-[#D9D9D9] font-sans">
+    <div className="flex h-screen w-full max-w-full overflow-hidden font-sans relative">
+      <AuroraBackground />
       <Sidebar currentActive={currentActive} onPageChange={onPageChange} role="teacher" />
-
-      <div className="min-w-0 flex-1 flex flex-col h-full overflow-hidden bg-[#D9D9D9]">
+      <div className="min-w-0 flex-1 flex flex-col h-full overflow-hidden">
         <Header
           session={session}
           onLogout={onLogout}
           onPageChange={onPageChange}
           onStudentChange={onStudentChange}
         />
-
-        <main className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-6 bg-[#D9D9D9]">
+        <main key={currentActive} className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 animate-fadeInUp">
           {children}
         </main>
       </div>

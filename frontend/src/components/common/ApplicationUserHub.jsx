@@ -220,13 +220,13 @@ const ApplicationUserHub = ({ session, role }) => {
 
   return (
     <div className="space-y-6 pb-8 select-none font-sans">
-      <div className="bg-white p-5 rounded-3xl border border-[#EAEAEA] shadow-sm">
+      <div className="glass-card p-5 rounded-3xl">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h3 className="text-base font-bold text-[#1A1A1A] flex items-center gap-2">
+            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
               <FileText className="w-5 h-5 text-[#8b5cf6]" /> Application Desk
             </h3>
-            <p className="text-xs text-[#666666] mt-0.5">
+            <p className="text-xs text-slate-400 mt-0.5">
               Send complaints, safety concerns, infrastructure issues, or approval requests to Admin.
             </p>
           </div>
@@ -240,11 +240,11 @@ const ApplicationUserHub = ({ session, role }) => {
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
         <form
           onSubmit={handleSubmit}
-          className="xl:col-span-2 bg-white p-5 rounded-3xl border border-[#EAEAEA] shadow-sm space-y-4"
+          className="xl:col-span-2 glass-card p-5 rounded-3xl space-y-4"
         >
           <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
             <Send className="w-4 h-4 text-[#8b5cf6]" />
-            <h4 className="text-sm font-black text-[#1A1A1A]">New Application</h4>
+            <h4 className="text-sm font-black text-slate-900">New Application</h4>
           </div>
 
           {identityConfig.isSiblingAccount && (
@@ -253,7 +253,7 @@ const ApplicationUserHub = ({ session, role }) => {
               <select
                 value={selectedIdentityId}
                 onChange={(event) => setSelectedIdentityId(event.target.value)}
-                className="w-full bg-[#F8F8F8] border border-gray-200 rounded-2xl px-3 py-2.5 text-xs font-bold outline-none focus:border-[#8b5cf6]"
+                className="w-full bg-white/60 border border-white/80 rounded-2xl px-3 py-2.5 text-xs font-bold outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all"
               >
                 {identityConfig.members.map((member) => (
                   <option key={member.id} value={member.id}>
@@ -265,8 +265,8 @@ const ApplicationUserHub = ({ session, role }) => {
           )}
 
           {!identityConfig.isSiblingAccount && (
-            <div className="bg-[#F8F8F8] border border-gray-200 rounded-2xl px-3 py-2.5 text-xs font-bold flex items-center justify-between">
-              <span className="flex items-center gap-2 text-[#1A1A1A]">
+            <div className="bg-white/60 border border-white/80 rounded-2xl px-3 py-2.5 text-xs font-bold flex items-center justify-between">
+              <span className="flex items-center gap-2 text-slate-900">
                 <UserRound className="w-4 h-4 text-gray-500" /> {selectedIdentity?.name}
               </span>
               <span className="text-gray-400">{selectedIdentity?.className}</span>
@@ -279,7 +279,7 @@ const ApplicationUserHub = ({ session, role }) => {
               <select
                 value={formState.kind}
                 onChange={(event) => updateField('kind', event.target.value)}
-                className="w-full bg-[#F8F8F8] border border-gray-200 rounded-2xl px-3 py-2.5 text-xs font-bold outline-none focus:border-[#8b5cf6]"
+                className="w-full bg-white/60 border border-white/80 rounded-2xl px-3 py-2.5 text-xs font-bold outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all"
               >
                 {kindOptions.map((option) => (
                   <option key={option.id} value={option.id}>
@@ -294,7 +294,7 @@ const ApplicationUserHub = ({ session, role }) => {
               <select
                 value={formState.category}
                 onChange={(event) => updateField('category', event.target.value)}
-                className="w-full bg-[#F8F8F8] border border-gray-200 rounded-2xl px-3 py-2.5 text-xs font-bold outline-none focus:border-[#8b5cf6]"
+                className="w-full bg-white/60 border border-white/80 rounded-2xl px-3 py-2.5 text-xs font-bold outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all"
               >
                 {APPLICATION_CATEGORIES.map((category) => (
                   <option key={category} value={category}>
@@ -358,7 +358,7 @@ const ApplicationUserHub = ({ session, role }) => {
               value={formState.title}
               onChange={(event) => updateField('title', event.target.value)}
               placeholder="Example: Class 9th farewell request for Class 10th"
-              className="w-full bg-[#F8F8F8] border border-gray-200 rounded-2xl px-3 py-2.5 text-xs font-bold outline-none focus:border-[#8b5cf6]"
+              className="w-full bg-white/60 border border-white/80 rounded-2xl px-3 py-2.5 text-xs font-bold outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all"
             />
           </div>
 
@@ -369,22 +369,22 @@ const ApplicationUserHub = ({ session, role }) => {
               onChange={(event) => updateField('message', event.target.value)}
               rows={7}
               placeholder="Type the full application here..."
-              className="w-full bg-[#F8F8F8] border border-gray-200 rounded-2xl px-3 py-3 text-xs font-medium outline-none focus:border-[#8b5cf6] resize-none leading-relaxed"
+              className="w-full bg-white/60 border border-white/80 rounded-2xl px-3 py-3 text-xs font-medium outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all resize-none leading-relaxed"
             />
           </div>
 
           <button
             type="submit"
-            className="w-full flex items-center justify-center gap-2 py-3 bg-[#E1FA6C] text-[#1A1A1A] rounded-2xl text-xs font-black shadow-sm hover:bg-[#d2eb5b] transition-colors"
+            className="w-full flex items-center justify-center gap-2 py-3 btn-primary rounded-2xl text-xs font-black shadow-sm transition-colors"
           >
             <Send className="w-4 h-4" /> Send Application
           </button>
         </form>
 
         <div className="xl:col-span-3 space-y-4">
-          <div className="bg-white p-5 rounded-3xl border border-[#EAEAEA] shadow-sm">
+          <div className="glass-card p-5 rounded-3xl">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-3">
-              <h4 className="text-sm font-black text-[#1A1A1A] flex items-center gap-2">
+              <h4 className="text-sm font-black text-slate-900 flex items-center gap-2">
                 <ClipboardCheck className="w-4 h-4 text-[#8b5cf6]" /> Application Timeline
               </h4>
               <span className="text-[10px] font-bold text-gray-400">
@@ -396,7 +396,7 @@ const ApplicationUserHub = ({ session, role }) => {
               {visibleApplications.length === 0 && (
                 <div className="p-8 text-center text-gray-400">
                   <FileText className="w-10 h-10 mx-auto mb-2 stroke-[1.4]" />
-                  <p className="text-xs font-black text-[#1A1A1A]">No applications yet</p>
+                  <p className="text-xs font-black text-slate-900">No applications yet</p>
                   <p className="text-[11px] mt-1">There are no submitted applications or class consent requests for this account.</p>
                 </div>
               )}
@@ -413,21 +413,21 @@ const ApplicationUserHub = ({ session, role }) => {
                   application.targetClassName === selectedIdentity?.className;
 
                 return (
-                  <div key={application.id} className="bg-[#F8F8F8] border border-gray-200 rounded-3xl p-4 space-y-4">
+                  <div key={application.id} className="glass-soft rounded-3xl p-4 space-y-4">
                     <div className="flex flex-col md:flex-row md:items-start justify-between gap-3">
                       <div>
                         <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                          <span className="text-[9px] px-2 py-0.5 rounded-md bg-white border border-gray-200 text-gray-500 font-black uppercase">
+                          <span className="text-[9px] px-2 py-0.5 rounded-md bg-white/60 border border-white/80 text-slate-500 font-black uppercase">
                             {application.category}
                           </span>
-                          <span className="text-[9px] px-2 py-0.5 rounded-md bg-white border border-gray-200 text-gray-500 font-black uppercase">
+                          <span className="text-[9px] px-2 py-0.5 rounded-md bg-white/60 border border-white/80 text-slate-500 font-black uppercase">
                             {application.kind === 'request' ? 'Request' : 'Simple'}
                           </span>
                           <span className={`text-[9px] px-2 py-0.5 rounded-md border font-black uppercase ${statusTone[application.status]}`}>
                             {STATUS_LABELS[application.status]}
                           </span>
                         </div>
-                        <h5 className="text-sm font-black text-[#1A1A1A]">{application.title}</h5>
+                        <h5 className="text-sm font-black text-slate-900">{application.title}</h5>
                         <p className="text-[11px] text-gray-500 mt-1">
                           By {application.senderIdentity || application.senderName} - {application.className || application.senderRole}
                         </p>
@@ -437,14 +437,14 @@ const ApplicationUserHub = ({ session, role }) => {
                       </span>
                     </div>
 
-                    <p className="text-xs leading-relaxed text-gray-700 bg-white border border-gray-100 rounded-2xl p-3">
+                    <p className="text-xs leading-relaxed text-slate-700 bg-white/60 border border-white/80 rounded-2xl p-3">
                       {application.message}
                     </p>
 
                     {application.audienceMode === 'all-class' && (
-                      <div className="bg-white border border-purple-100 rounded-2xl p-3 space-y-3">
+                      <div className="bg-white/60 border border-purple-100 rounded-2xl p-3 space-y-3">
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
-                          <p className="text-xs font-black text-[#1A1A1A] flex items-center gap-2">
+                          <p className="text-xs font-black text-slate-900 flex items-center gap-2">
                             <Users className="w-4 h-4 text-purple-500" />
                             {application.targetClassName} class consent
                           </p>
@@ -453,7 +453,7 @@ const ApplicationUserHub = ({ session, role }) => {
                           </span>
                         </div>
 
-                        <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden flex">
+                        <div className="w-full h-2.5 bg-white/60 rounded-full overflow-hidden flex">
                           <div className="h-full bg-emerald-500" style={{ width: `${metrics.consensusPercent}%` }} />
                         </div>
 

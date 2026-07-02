@@ -321,10 +321,10 @@ const DocumentVault = ({ title = 'Documents Vault', subtitle = 'Private encrypte
     const Icon = item.kind === 'image' ? FileImage : item.kind === 'pdf' ? FileText : StickyNote;
 
     return (
-      <div key={item.id} className="rounded-lg border border-[#C8C8C8] bg-white p-4">
+      <div key={item.id} className="glass-card rounded-lg p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex items-start gap-3">
-            <div className="rounded-lg border border-[#EAEAEA] bg-[#F8F8F8] p-2">
+            <div className="glass-soft rounded-lg p-2">
               <Icon className="h-4 w-4 text-[#1A1A1A]" />
             </div>
             <div className="min-w-0">
@@ -348,7 +348,7 @@ const DocumentVault = ({ title = 'Documents Vault', subtitle = 'Private encrypte
           <button
             type="button"
             onClick={() => openItem(item)}
-            className="flex-1 rounded-lg bg-[#1A1A1A] px-3 py-2 text-xs font-black text-white disabled:opacity-60"
+            className="flex-1 rounded-lg btn-primary px-3 py-2 text-xs font-black disabled:opacity-60"
             disabled={!isUnlocked}
           >
             Open
@@ -357,7 +357,7 @@ const DocumentVault = ({ title = 'Documents Vault', subtitle = 'Private encrypte
             <button
               type="button"
               onClick={() => downloadItem(item)}
-              className="rounded-lg border border-[#C8C8C8] bg-white px-3 py-2 text-[#1A1A1A] disabled:opacity-60"
+              className="rounded-lg btn-ghost px-3 py-2 disabled:opacity-60"
               disabled={!isUnlocked}
               title="Download"
             >
@@ -383,19 +383,19 @@ const DocumentVault = ({ title = 'Documents Vault', subtitle = 'Private encrypte
           type="button"
           onClick={loadVault}
           disabled={isLoading}
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#1A1A1A] px-4 py-2 text-xs font-black text-white disabled:opacity-60"
+          className="inline-flex items-center justify-center gap-2 rounded-lg btn-primary px-4 py-2 text-xs font-black disabled:opacity-60"
         >
           <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
           Refresh
         </button>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-        <div className="rounded-lg border border-[#C8C8C8] bg-white p-4">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-4 stagger">
+        <div className="glass-card rounded-lg p-4">
           <p className="text-[10px] font-black uppercase text-[#555555]">Storage</p>
           <p className="mt-1 text-2xl font-black text-[#1A1A1A]">{usedPercent}%</p>
-          <div className="mt-3 h-2 rounded-full bg-[#EAEAEA]">
-            <div className="h-2 rounded-full bg-[#E1FA6C]" style={{ width: `${usedPercent}%` }} />
+          <div className="mt-3 h-2 rounded-full bg-white/50">
+            <div className="h-2 rounded-full bg-gradient-to-r from-indigo-500 to-violet-500" style={{ width: `${usedPercent}%` }} />
           </div>
           <p className="mt-2 text-[10px] font-bold text-[#555555]">
             {formatBytes(usage?.totalBytes || 0)} of {formatBytes(usage?.storageLimitBytes || 0)}
@@ -422,7 +422,7 @@ const DocumentVault = ({ title = 'Documents Vault', subtitle = 'Private encrypte
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <div className="space-y-4">
-          <form onSubmit={unlockVault} className="rounded-lg border border-[#C8C8C8] bg-white p-5">
+          <form onSubmit={unlockVault} className="glass-card rounded-lg p-5">
             <h2 className="flex items-center gap-2 text-sm font-black text-[#1A1A1A]">
               <Lock className="h-4 w-4" />
               Unlock Vault
@@ -435,17 +435,17 @@ const DocumentVault = ({ title = 'Documents Vault', subtitle = 'Private encrypte
               value={passphrase}
               onChange={(event) => setPassphrase(event.target.value)}
               placeholder="Minimum 8 characters"
-              className="mt-4 w-full rounded-lg border border-[#C8C8C8] bg-[#F8F8F8] px-3 py-2 text-sm font-semibold outline-none focus:border-[#1A1A1A]"
+              className="mt-4 w-full rounded-lg bg-white/60 border border-white/80 px-3 py-2 text-sm font-semibold outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all"
             />
             <button
               type="submit"
-              className="mt-3 w-full rounded-lg bg-[#E1FA6C] px-4 py-2 text-xs font-black text-[#1A1A1A] hover:bg-[#d4ee59]"
+              className="mt-3 w-full rounded-lg btn-primary px-4 py-2 text-xs font-black"
             >
               {isUnlocked ? 'Unlocked' : 'Unlock'}
             </button>
           </form>
 
-          <form onSubmit={createNote} className="rounded-lg border border-[#C8C8C8] bg-white p-5">
+          <form onSubmit={createNote} className="glass-card rounded-lg p-5">
             <h2 className="flex items-center gap-2 text-sm font-black text-[#1A1A1A]">
               <Plus className="h-4 w-4" />
               Create Note
@@ -454,7 +454,7 @@ const DocumentVault = ({ title = 'Documents Vault', subtitle = 'Private encrypte
               value={noteTitle}
               onChange={(event) => setNoteTitle(event.target.value)}
               placeholder="Note title"
-              className="mt-4 w-full rounded-lg border border-[#C8C8C8] bg-[#F8F8F8] px-3 py-2 text-sm font-semibold outline-none focus:border-[#1A1A1A]"
+              className="mt-4 w-full rounded-lg bg-white/60 border border-white/80 px-3 py-2 text-sm font-semibold outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all"
               disabled={!isUnlocked}
             />
             <textarea
@@ -462,19 +462,19 @@ const DocumentVault = ({ title = 'Documents Vault', subtitle = 'Private encrypte
               onChange={(event) => setNoteBody(event.target.value)}
               placeholder="Private note"
               rows={5}
-              className="mt-3 w-full resize-none rounded-lg border border-[#C8C8C8] bg-[#F8F8F8] px-3 py-2 text-sm font-semibold outline-none focus:border-[#1A1A1A]"
+              className="mt-3 w-full resize-none rounded-lg bg-white/60 border border-white/80 px-3 py-2 text-sm font-semibold outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all"
               disabled={!isUnlocked}
             />
             <button
               type="submit"
               disabled={!isUnlocked || isSaving}
-              className="mt-3 w-full rounded-lg bg-[#1A1A1A] px-4 py-2 text-xs font-black text-white disabled:opacity-60"
+              className="mt-3 w-full rounded-lg btn-primary px-4 py-2 text-xs font-black disabled:opacity-60"
             >
               Save Encrypted Note
             </button>
           </form>
 
-          <div className="rounded-lg border border-[#C8C8C8] bg-white p-5">
+          <div className="glass-card rounded-lg p-5">
             <h2 className="flex items-center gap-2 text-sm font-black text-[#1A1A1A]">
               <Upload className="h-4 w-4" />
               Upload File
@@ -482,7 +482,7 @@ const DocumentVault = ({ title = 'Documents Vault', subtitle = 'Private encrypte
             <p className="mt-1 text-[11px] font-semibold text-[#555555]">
               Max 5 PDFs, 5 images, and 2 MB per file.
             </p>
-            <label className={`mt-4 flex cursor-pointer items-center justify-center rounded-lg border border-dashed border-[#C8C8C8] bg-[#F8F8F8] px-4 py-6 text-xs font-black text-[#555555] ${!isUnlocked ? 'opacity-60' : ''}`}>
+            <label className={`mt-4 flex cursor-pointer items-center justify-center rounded-lg border border-dashed border-indigo-200 bg-white/50 px-4 py-6 text-xs font-black text-slate-500 ${!isUnlocked ? 'opacity-60' : ''}`}>
               Select PDF or Image
               <input
                 type="file"
@@ -497,14 +497,14 @@ const DocumentVault = ({ title = 'Documents Vault', subtitle = 'Private encrypte
 
         <div className="space-y-4 xl:col-span-2">
           {activeItem && activePayload && (
-            <div className="rounded-lg border border-[#1A1A1A] bg-white p-5">
+            <div className="glass-card rounded-lg p-5 ring-1 ring-indigo-200">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <h2 className="text-sm font-black text-[#1A1A1A]">{activeItem.title}</h2>
                 {activeItem.kind !== 'note' && (
                   <button
                     type="button"
                     onClick={() => downloadItem(activeItem)}
-                    className="inline-flex items-center gap-2 rounded-lg bg-[#1A1A1A] px-3 py-2 text-xs font-black text-white"
+                    className="inline-flex items-center gap-2 rounded-lg btn-primary px-3 py-2 text-xs font-black"
                   >
                     <Download className="h-4 w-4" />
                     Download
@@ -512,17 +512,17 @@ const DocumentVault = ({ title = 'Documents Vault', subtitle = 'Private encrypte
                 )}
               </div>
               {activePayload.type === 'note' ? (
-                <p className="whitespace-pre-wrap rounded-lg bg-[#F8F8F8] p-4 text-sm font-semibold leading-6 text-[#1A1A1A]">
+                <p className="whitespace-pre-wrap glass-soft rounded-lg p-4 text-sm font-semibold leading-6 text-slate-900">
                   {activePayload.body}
                 </p>
               ) : activeItem.kind === 'image' ? (
                 <img
                   src={activePayload.dataUrl}
                   alt={activeItem.title}
-                  className="max-h-[460px] w-full rounded-lg border border-[#EAEAEA] object-contain"
+                  className="max-h-[460px] w-full rounded-lg border border-slate-100/80 object-contain"
                 />
               ) : (
-                <div className="rounded-lg border border-[#EAEAEA] bg-[#F8F8F8] p-5 text-xs font-bold text-[#555555]">
+                <div className="glass-soft rounded-lg p-5 text-xs font-bold text-slate-500">
                   PDF decrypted. Use Download to open it.
                 </div>
               )}
@@ -539,7 +539,7 @@ const DocumentVault = ({ title = 'Documents Vault', subtitle = 'Private encrypte
 };
 
 const LimitTile = ({ label, value, limit }) => (
-  <div className="rounded-lg border border-[#C8C8C8] bg-white p-4">
+  <div className="glass-card rounded-lg p-4">
     <p className="text-[10px] font-black uppercase text-[#555555]">{label}</p>
     <p className="mt-1 text-2xl font-black text-[#1A1A1A]">
       {value}
@@ -550,20 +550,20 @@ const LimitTile = ({ label, value, limit }) => (
 
 const VaultSection = ({ title, items, empty, renderItem, isLoading }) => (
   <section className="space-y-3">
-    <div className="flex items-center justify-between border-b border-[#C8C8C8] pb-2">
+    <div className="flex items-center justify-between border-b border-white/70 pb-2">
       <h2 className="text-sm font-black text-[#1A1A1A]">{title}</h2>
-      <span className="rounded-md bg-[#EAEAEA] px-2 py-1 text-[10px] font-black text-[#555555]">
+      <span className="rounded-md bg-white/50 px-2 py-1 text-[10px] font-black text-slate-500">
         {items.length}
       </span>
     </div>
     {isLoading ? (
-      <div className="rounded-lg border border-[#C8C8C8] bg-white p-8 text-center text-xs font-bold text-[#555555]">
+      <div className="glass-card rounded-lg p-8 text-center text-xs font-bold text-slate-500">
         Loading vault...
       </div>
     ) : items.length ? (
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">{items.map(renderItem)}</div>
     ) : (
-      <div className="rounded-lg border border-[#C8C8C8] bg-white p-8 text-center text-xs font-bold text-[#555555]">
+      <div className="glass-card rounded-lg p-8 text-center text-xs font-bold text-slate-500">
         {empty}
       </div>
     )}

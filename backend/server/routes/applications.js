@@ -2,6 +2,7 @@ import express from 'express';
 import Application from '../models/Application.js';
 import { isMongoConnected } from '../db.js';
 import { emitRealtimeEvent, isUserActiveOnErp } from '../realtime.js';
+import { resolveDisplayName } from '../utils/nameLookup.js';
 
 const router = express.Router();
 const CLASS_APPROVAL_THRESHOLD = 80;
@@ -24,7 +25,16 @@ const getConsensusPercent = (application) => {
   return Math.round((accepted / application.totalClassMembers) * 100);
 };
 
-const normalizeApplication = (application) => ({
+const normalizeApplication = async (application) => {
+  // Resolve the sender to a human name server-side; prefer a stored real name,
+  // otherwise look the username up so the UI never shows a raw role-id.
+  const storedName = (application.senderName || '').trim();
+  const authorName =
+    storedName && storedName !== application.senderUsername
+      ? storedName
+      : await resolveDisplayName(application.senderUsername);
+
+  return {
   id: application._id.toString(),
   title: application.title,
   category: application.category,
@@ -32,6 +42,7 @@ const normalizeApplication = (application) => ({
   message: application.message,
   senderRole: application.senderRole,
   senderName: application.senderName,
+  authorName,
   senderUsername: application.senderUsername,
   senderIdentity: application.senderIdentity,
   senderIdentityId: application.senderIdentityId || '',
@@ -54,7 +65,8 @@ const normalizeApplication = (application) => ({
   createdAt: application.createdAt?.toISOString(),
   updatedAt: application.updatedAt?.toISOString(),
   consensusPercent: getConsensusPercent(application),
-});
+  };
+};
 
 const updateConsensusStatus = (application) => {
   if (application.audienceMode !== 'all-class' || application.status !== 'collecting_consensus') {
@@ -123,7 +135,7 @@ router.get('/', ensureMongo, async (request, response) => {
     applications = await Application.find(query).sort({ updatedAt: -1 });
   }
 
-  response.json(applications.map(normalizeApplication));
+  response.json(await Promise.all(applications.map(normalizeApplication)));
 });
 
 router.post('/', ensureMongo, async (request, response) => {
@@ -162,7 +174,7 @@ router.post('/', ensureMongo, async (request, response) => {
   });
 
   emitRealtimeEvent('mgps-erp-applications-updated');
-  response.status(201).json(normalizeApplication(application));
+  response.status(201).json(await normalizeApplication(application));
 });
 
 router.patch('/:id/vote', ensureMongo, async (request, response) => {
@@ -185,7 +197,7 @@ router.patch('/:id/vote', ensureMongo, async (request, response) => {
   await application.save();
 
   emitRealtimeEvent('mgps-erp-applications-updated');
-  response.json(normalizeApplication(application));
+  response.json(await normalizeApplication(application));
 });
 
 router.patch('/:id/admin-action', ensureMongo, async (request, response) => {
@@ -235,7 +247,7 @@ router.patch('/:id/admin-action', ensureMongo, async (request, response) => {
   await application.save();
 
   emitRealtimeEvent('mgps-erp-applications-updated');
-  response.json(normalizeApplication(application));
+  response.json(await normalizeApplication(application));
 });
 
 router.patch('/:id/reply-read', ensureMongo, async (request, response) => {
@@ -269,7 +281,7 @@ router.patch('/:id/reply-read', ensureMongo, async (request, response) => {
     applicationId: application._id.toString(),
     eventType: 'reply-read',
   });
-  response.json(normalizeApplication(application));
+  response.json(await normalizeApplication(application));
 });
 
 export default router;

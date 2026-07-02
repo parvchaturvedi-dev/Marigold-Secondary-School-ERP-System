@@ -1,12 +1,13 @@
+// MGHUB glass palette (same keys kept for compatibility)
 export const colors = {
-  primary: "#4F46E5",
-  primaryDark: "#3730A3",
-  background: "#F8FAFF",
-  card: "#FFFFFF",
-  text: "#0F172A",
-  muted: "#64748B",
-  border: "#E2E8F0",
-  success: "#22C55E",
-  warning: "#F97316",
-  danger: "#EF4444"
+  primary: "#6366f1", // indigo-500
+  primaryDark: "#4f46e5", // indigo-600
+  background: "#eef2ff",
+  card: "rgba(255,255,255,0.62)",
+  text: "#0f172a",
+  muted: "#64748b",
+  border: "rgba(255,255,255,0.75)",
+  success: "#10b981",
+  warning: "#f59e0b",
+  danger: "#f43f5e"
 };

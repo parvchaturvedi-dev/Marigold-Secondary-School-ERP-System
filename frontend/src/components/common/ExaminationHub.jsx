@@ -349,13 +349,13 @@ const ExaminationHub = ({ role = 'admin', session, activePage = 'Examinations', 
   }
 
   return (
-    <div className="space-y-6 pb-8 select-none font-sans text-[#1A1A1A]">
+    <div className="space-y-6 pb-8 select-none font-sans text-slate-900">
       <style>{`
         .input-shell {
           width: 100%;
           border-radius: 1rem;
-          border: 1px solid #C8C8C8;
-          background: #F8F8F8;
+          border: 1px solid rgba(255,255,255,0.8);
+          background: rgba(255,255,255,0.6);
           padding: 0.75rem;
           outline: none;
         }
@@ -369,13 +369,13 @@ const ExaminationHub = ({ role = 'admin', session, activePage = 'Examinations', 
           outline-offset: 4px;
         }
       `}</style>
-      <section className="bg-white border border-[#C8C8C8] rounded-3xl p-5 shadow-sm">
+      <section className="glass-card rounded-3xl p-5 shadow-sm">
         <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
           <div>
             <h2 className="text-xl font-black flex items-center gap-2">
               <GraduationCap className="w-5 h-5 text-[#8b5cf6]" /> Examination Desk
             </h2>
-            <p className="text-xs font-bold text-[#666666] mt-1">
+            <p className="text-xs font-bold text-slate-400 mt-1">
               Paper workflow, approvals, admit cards, marks entry, and report cards.
             </p>
           </div>
@@ -401,8 +401,8 @@ const ExaminationHub = ({ role = 'admin', session, activePage = 'Examinations', 
                 className={classNames(
                   'shrink-0 flex items-center gap-2 px-4 py-2 rounded-full border text-xs font-black transition-all',
                   activeSection === section
-                    ? 'bg-[#1A1A1A] text-white border-[#1A1A1A] shadow-sm'
-                    : 'bg-[#F8F8F8] text-[#555555] border-[#EAEAEA] hover:bg-[#EAEAEA]'
+                    ? 'btn-primary border-transparent shadow-sm'
+                    : 'bg-white/50 text-slate-500 border-slate-100/80 hover:bg-white/70'
                 )}
               >
                 <Icon className="w-4 h-4" />
@@ -454,11 +454,11 @@ const ExaminationHub = ({ role = 'admin', session, activePage = 'Examinations', 
 };
 
 const SummaryStat = ({ label, value, icon: Icon, tone }) => (
-  <div className="bg-[#F8F8F8] border border-[#EAEAEA] rounded-2xl p-3">
+  <div className="glass-soft rounded-2xl p-3">
     <div className={classNames('w-8 h-8 rounded-xl flex items-center justify-center mb-2', tone)}>
       {React.createElement(Icon, { className: 'w-4 h-4' })}
     </div>
-    <p className="text-[10px] font-black uppercase text-[#666666]">{label}</p>
+    <p className="text-[10px] font-black uppercase text-slate-400">{label}</p>
     <p className="text-lg font-black leading-tight">{value}</p>
   </div>
 );
@@ -488,52 +488,52 @@ const ExamCreationSection = ({ state, actor, role, onRefresh }) => {
 
   return (
     <section className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-      <div className="xl:col-span-1 bg-white border border-[#EAEAEA] rounded-3xl p-5 shadow-sm h-fit">
+      <div className="xl:col-span-1 glass-card rounded-3xl p-5 shadow-sm h-fit">
         <h3 className="text-sm font-black flex items-center gap-2">
           <Plus className="w-4 h-4 text-[#8b5cf6]" /> Add Examination
         </h3>
-        <p className="text-xs font-semibold text-[#666666] mt-1">
+        <p className="text-xs font-semibold text-slate-400 mt-1">
           Admin or clerk can create exam cycles like SA-1, SA-2, Half Yearly.
         </p>
 
         {canManage ? (
           <form onSubmit={handleSubmit} className="mt-5 space-y-4 text-xs font-bold">
             <div className="space-y-1">
-              <label className="text-[#555555]">Name</label>
+              <label className="text-slate-500">Name</label>
               <input
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 placeholder="SA-1"
-                className="w-full rounded-2xl border border-[#C8C8C8] bg-[#F8F8F8] px-3 py-3 outline-none focus:border-[#8b5cf6]"
+                className="w-full rounded-2xl border border-white/70 bg-white/60 px-3 py-3 outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[#555555]">Academic Year</label>
+              <label className="text-slate-500">Academic Year</label>
               <input
                 value={academicYear}
                 onChange={(event) => setAcademicYear(event.target.value)}
-                className="w-full rounded-2xl border border-[#C8C8C8] bg-[#F8F8F8] px-3 py-3 outline-none focus:border-[#8b5cf6]"
+                className="w-full rounded-2xl border border-white/70 bg-white/60 px-3 py-3 outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all"
               />
             </div>
             <button
               type="submit"
-              className="w-full rounded-full bg-[#E1FA6C] px-4 py-3 text-xs font-black text-[#1A1A1A] hover:scale-[1.01] transition-all"
+              className="w-full rounded-full btn-primary px-4 py-3 text-xs font-black"
             >
               Add Examination
             </button>
           </form>
         ) : (
-          <div className="mt-5 rounded-2xl bg-[#F8F8F8] border border-[#EAEAEA] p-4 text-xs font-bold text-[#666666]">
+          <div className="mt-5 rounded-2xl glass-soft p-4 text-xs font-bold text-slate-400">
             Your role can view examination cycles but cannot create new ones.
           </div>
         )}
       </div>
 
-      <div className="xl:col-span-1 bg-white border border-[#EAEAEA] rounded-3xl p-5 shadow-sm h-fit">
+      <div className="xl:col-span-1 glass-card rounded-3xl p-5 shadow-sm h-fit">
         <h3 className="text-sm font-black flex items-center gap-2">
           <ShieldCheck className="w-4 h-4 text-emerald-600" /> Board Exam Classes
         </h3>
-        <p className="text-xs font-semibold text-[#666666] mt-1">
+        <p className="text-xs font-semibold text-slate-400 mt-1">
           For selected classes, final internal marks entry is replaced by PDF result upload.
         </p>
         <div className="mt-4 grid grid-cols-2 gap-2 max-h-72 overflow-y-auto pr-1">
@@ -549,11 +549,11 @@ const ExamCreationSection = ({ state, actor, role, onRefresh }) => {
                   'rounded-2xl border px-3 py-2 text-left text-xs font-black transition-all disabled:opacity-60',
                   checked
                     ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                    : 'bg-[#F8F8F8] text-[#555555] border-[#EAEAEA]'
+                    : 'bg-white/60 text-slate-500 border-slate-100/80'
                 )}
               >
                 <span className="flex items-center gap-2">
-                  <span className={classNames('h-3 w-3 rounded border', checked ? 'bg-emerald-500 border-emerald-500' : 'bg-white border-[#C8C8C8]')} />
+                  <span className={classNames('h-3 w-3 rounded border', checked ? 'bg-emerald-500 border-emerald-500' : 'bg-white border-white/70')} />
                   {classItem}
                 </span>
               </button>
@@ -568,12 +568,12 @@ const ExamCreationSection = ({ state, actor, role, onRefresh }) => {
           const selectedPapers = papers.filter((paper) => paper.status === 'selected');
 
           return (
-            <div key={exam.id} className="bg-white border border-[#EAEAEA] rounded-3xl p-5 shadow-sm">
+            <div key={exam.id} className="glass-card rounded-3xl p-5 shadow-sm">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-[10px] font-black uppercase text-[#666666]">{exam.academicYear}</p>
+                  <p className="text-[10px] font-black uppercase text-slate-400">{exam.academicYear}</p>
                   <h3 className="text-lg font-black mt-1">{getExamLabel(exam)}</h3>
-                  <p className="text-xs font-semibold text-[#666666] mt-1">
+                  <p className="text-xs font-semibold text-slate-400 mt-1">
                     Created by {exam.createdByName} on {formatExamDate(exam.createdAt)}
                   </p>
                 </div>
@@ -596,9 +596,9 @@ const ExamCreationSection = ({ state, actor, role, onRefresh }) => {
 };
 
 const MiniMetric = ({ label, value }) => (
-  <div className="rounded-2xl bg-[#F8F8F8] border border-[#EAEAEA] p-3">
+  <div className="rounded-2xl glass-soft p-3">
     <p className="text-base font-black">{value}</p>
-    <p className="text-[10px] font-black uppercase text-[#666666]">{label}</p>
+    <p className="text-[10px] font-black uppercase text-slate-400">{label}</p>
   </div>
 );
 
@@ -747,7 +747,7 @@ const PaperCreationSection = ({
 
   return (
     <section className="space-y-6">
-      <div className="bg-white border border-[#EAEAEA] rounded-3xl p-5 shadow-sm">
+      <div className="glass-card rounded-3xl p-5 shadow-sm">
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 text-xs font-bold">
           <Field label="Examination">
             <select value={examId} onChange={(event) => setExamId(event.target.value)} className="input-shell">
@@ -790,7 +790,7 @@ const PaperCreationSection = ({
               type="button"
               onClick={openFreshEditor}
               disabled={boardFinalSelected}
-              className="w-full rounded-full bg-[#1A1A1A] px-4 py-3 text-xs font-black text-white flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full rounded-full btn-primary px-4 py-3 text-xs font-black flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <FileText className="w-4 h-4" /> Create
             </button>
@@ -807,8 +807,8 @@ const PaperCreationSection = ({
         .input-shell {
           width: 100%;
           border-radius: 1rem;
-          border: 1px solid #C8C8C8;
-          background: #F8F8F8;
+          border: 1px solid rgba(255,255,255,0.8);
+          background: rgba(255,255,255,0.6);
           padding: 0.75rem;
           outline: none;
         }
@@ -825,12 +825,12 @@ const PaperCreationSection = ({
 
       {isEditorOpen && (
         <div className="grid grid-cols-1 2xl:grid-cols-[1fr_320px] gap-6">
-          <div className="bg-white border border-[#C8C8C8] rounded-3xl shadow-sm overflow-hidden">
-            <div className="border-b border-[#EAEAEA] bg-[#F8F8F8] p-3 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div className="glass-card rounded-3xl shadow-sm overflow-hidden">
+            <div className="border-b border-slate-100/80 bg-white/60 p-3 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
               <input
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
-                className="min-w-0 flex-1 rounded-2xl border border-[#EAEAEA] bg-white px-3 py-2 text-sm font-black outline-none"
+                className="min-w-0 flex-1 rounded-2xl border border-slate-100/80 bg-white px-3 py-2 text-sm font-black outline-none"
               />
 
               <div className="flex flex-wrap items-center gap-2">
@@ -845,39 +845,39 @@ const PaperCreationSection = ({
               </div>
             </div>
 
-            <div className="bg-[#D9D9D9] p-4 sm:p-8 overflow-x-auto">
+            <div className="bg-white/40 p-4 sm:p-8 overflow-x-auto">
               <div
                 ref={editorRef}
                 contentEditable
                 suppressContentEditableWarning
                 onInput={(event) => setEditorContent(event.currentTarget.innerHTML)}
-                className="exam-word-editor mx-auto min-h-[920px] w-full max-w-[794px] bg-white text-[#111] shadow-xl border border-[#C8C8C8] p-8 sm:p-12 text-sm leading-7"
+                className="exam-word-editor mx-auto min-h-[920px] w-full max-w-[794px] bg-white text-[#111] shadow-xl border border-white/70 p-8 sm:p-12 text-sm leading-7"
               />
             </div>
 
-            <div className="border-t border-[#EAEAEA] bg-white p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
-              <p className="text-xs font-bold text-[#666666]">
+            <div className="border-t border-slate-100/80 bg-white p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <p className="text-xs font-bold text-slate-400">
                 {notice || 'Use this Word-style page to compose paper text and insert images.'}
               </p>
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => setPreviewPaper({ title, content: editorContent })}
-                  className="rounded-full border border-[#C8C8C8] bg-white px-4 py-2 text-xs font-black flex items-center gap-2"
+                  className="rounded-full border border-white/70 bg-white px-4 py-2 text-xs font-black flex items-center gap-2"
                 >
                   <Eye className="w-4 h-4" /> Preview
                 </button>
                 <button
                   type="button"
                   onClick={() => persistPaper('draft')}
-                  className="rounded-full bg-[#F8F8F8] border border-[#C8C8C8] px-4 py-2 text-xs font-black flex items-center gap-2"
+                  className="rounded-full bg-white/60 border border-white/70 px-4 py-2 text-xs font-black flex items-center gap-2"
                 >
                   <Save className="w-4 h-4" /> Save Draft
                 </button>
                 <button
                   type="button"
                   onClick={() => persistPaper('teacher_review')}
-                  className="rounded-full bg-[#E1FA6C] px-4 py-2 text-xs font-black flex items-center gap-2"
+                  className="rounded-full btn-primary px-4 py-2 text-xs font-black flex items-center gap-2"
                 >
                   <Send className="w-4 h-4" /> Send To Teacher
                 </button>
@@ -885,9 +885,9 @@ const PaperCreationSection = ({
             </div>
           </div>
 
-          <div className="bg-white border border-[#EAEAEA] rounded-3xl p-5 shadow-sm h-fit">
+          <div className="glass-card rounded-3xl p-5 shadow-sm h-fit">
             <h3 className="text-sm font-black">Drafts and Rework Queue</h3>
-            <p className="text-xs font-semibold text-[#666666] mt-1">
+            <p className="text-xs font-semibold text-slate-400 mt-1">
               Rejected papers can be opened, corrected, and resent.
             </p>
             <div className="mt-4 space-y-3 max-h-[520px] overflow-y-auto pr-1">
@@ -895,7 +895,7 @@ const PaperCreationSection = ({
                 <PaperTinyCard key={paper.id} paper={paper} state={state} onClick={() => loadPaper(paper)} />
               ))}
               {!reworkPapers.length && (
-                <div className="rounded-2xl bg-[#F8F8F8] border border-[#EAEAEA] p-4 text-xs font-bold text-[#666666]">
+                <div className="rounded-2xl glass-soft p-4 text-xs font-bold text-slate-400">
                   No drafts or rejected papers currently.
                 </div>
               )}
@@ -911,7 +911,7 @@ const PaperCreationSection = ({
 
 const Field = ({ label, children }) => (
   <div className="space-y-1">
-    <label className="text-[#555555]">{label}</label>
+    <label className="text-slate-500">{label}</label>
     {children}
   </div>
 );
@@ -924,7 +924,7 @@ const EditorButton = ({ label, icon: Icon, onClick }) => (
       event.preventDefault();
       onClick();
     }}
-    className="w-9 h-9 rounded-xl border border-[#C8C8C8] bg-white hover:bg-[#EAEAEA] flex items-center justify-center"
+    className="w-9 h-9 rounded-xl border border-white/70 bg-white hover:bg-white/70 flex items-center justify-center"
   >
     {React.createElement(Icon, { className: 'w-4 h-4' })}
   </button>
@@ -938,7 +938,7 @@ const PaperTinyCard = ({ paper, state, onClick }) => {
     <button
       type="button"
       onClick={onClick}
-      className="w-full rounded-2xl border border-[#EAEAEA] bg-[#F8F8F8] p-3 text-left hover:border-[#8b5cf6] transition-all"
+      className="w-full rounded-2xl border border-slate-100/80 bg-white/60 p-3 text-left hover:border-[#8b5cf6] transition-all"
     >
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs font-black truncate">{paper.title}</p>
@@ -946,7 +946,7 @@ const PaperTinyCard = ({ paper, state, onClick }) => {
           {meta.label}
         </span>
       </div>
-      <p className="mt-1 text-[11px] font-bold text-[#666666]">
+      <p className="mt-1 text-[11px] font-bold text-slate-400">
         {getExamLabel(exam)} | {paper.className} | {paper.subject}
       </p>
     </button>
@@ -1001,19 +1001,19 @@ const PaperAnalysisSection = ({ state, actor, role, session, onRefresh, onRework
 
   return (
     <section className="space-y-5">
-      <div className="bg-white border border-[#EAEAEA] rounded-3xl p-5 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      <div className="glass-card rounded-3xl p-5 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <h3 className="text-sm font-black flex items-center gap-2">
             <Search className="w-4 h-4 text-[#8b5cf6]" /> Paper Analysis
           </h3>
-          <p className="text-xs font-semibold text-[#666666] mt-1">
+          <p className="text-xs font-semibold text-slate-400 mt-1">
             Approval cycle between clerk, subject teacher, and admin.
           </p>
         </div>
         <select
           value={statusFilter}
           onChange={(event) => setStatusFilter(event.target.value)}
-          className="rounded-2xl border border-[#C8C8C8] bg-[#F8F8F8] px-3 py-2 text-xs font-black outline-none"
+          className="rounded-2xl border border-white/70 bg-white/60 px-3 py-2 text-xs font-black outline-none"
         >
           <option value="all">All statuses</option>
           <option value="teacher_review">Pending teacher approval</option>
@@ -1032,21 +1032,21 @@ const PaperAnalysisSection = ({ state, actor, role, session, onRefresh, onRework
           const comment = commentDrafts[paper.id] || '';
 
           return (
-            <div key={paper.id} className="bg-white border border-[#EAEAEA] rounded-3xl p-5 shadow-sm">
+            <div key={paper.id} className="glass-card rounded-3xl p-5 shadow-sm">
               <div className="flex flex-col md:flex-row md:items-start justify-between gap-3">
                 <div className="min-w-0">
                   <span className={classNames('inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black', meta.tone)}>
                     {meta.label}
                   </span>
                   <h3 className="mt-3 text-base font-black truncate">{paper.title}</h3>
-                  <p className="text-xs font-bold text-[#666666] mt-1">
+                  <p className="text-xs font-bold text-slate-400 mt-1">
                     {getExamLabel(exam)} | {paper.className} | {paper.subject} | Revision {paper.revision || 1}
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setPreviewPaper(paper)}
-                  className="rounded-full border border-[#C8C8C8] px-3 py-2 text-xs font-black flex items-center gap-2 self-start"
+                  className="rounded-full border border-white/70 px-3 py-2 text-xs font-black flex items-center gap-2 self-start"
                 >
                   <Eye className="w-4 h-4" /> Preview
                 </button>
@@ -1059,20 +1059,20 @@ const PaperAnalysisSection = ({ state, actor, role, session, onRefresh, onRework
                 <InfoPill label="Status" value={meta.description} />
               </div>
 
-              <div className="mt-4 rounded-2xl bg-[#F8F8F8] border border-[#EAEAEA] p-3">
-                <p className="text-[10px] font-black uppercase text-[#666666] mb-2">Workflow Comments</p>
+              <div className="mt-4 rounded-2xl glass-soft p-3">
+                <p className="text-[10px] font-black uppercase text-slate-400 mb-2">Workflow Comments</p>
                 <div className="space-y-2 max-h-32 overflow-y-auto">
                   {(paper.comments || []).length ? (
                     paper.comments.map((item) => (
-                      <div key={item.id} className="bg-white border border-[#EAEAEA] rounded-xl p-2">
+                      <div key={item.id} className="bg-white border border-slate-100/80 rounded-xl p-2">
                         <p className="text-[11px] font-black">
                           {item.action} by {item.actorName}
                         </p>
-                        <p className="text-[11px] font-semibold text-[#666666]">{item.comment || 'No comment added.'}</p>
+                        <p className="text-[11px] font-semibold text-slate-400">{item.comment || 'No comment added.'}</p>
                       </div>
                     ))
                   ) : (
-                    <p className="text-[11px] font-bold text-[#666666]">No comments yet.</p>
+                    <p className="text-[11px] font-bold text-slate-400">No comments yet.</p>
                   )}
                 </div>
               </div>
@@ -1083,7 +1083,7 @@ const PaperAnalysisSection = ({ state, actor, role, session, onRefresh, onRework
                   onChange={(event) => updateComment(paper.id, event.target.value)}
                   placeholder="Write mistake/correction comment..."
                   rows={3}
-                  className="mt-4 w-full rounded-2xl border border-[#C8C8C8] bg-[#F8F8F8] p-3 text-xs font-bold outline-none focus:border-[#8b5cf6]"
+                  className="mt-4 w-full rounded-2xl border border-white/70 bg-white/60 p-3 text-xs font-bold outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all"
                 />
               )}
 
@@ -1114,9 +1114,9 @@ const PaperAnalysisSection = ({ state, actor, role, session, onRefresh, onRework
 };
 
 const InfoPill = ({ label, value }) => (
-  <div className="rounded-2xl bg-[#F8F8F8] border border-[#EAEAEA] p-3">
-    <p className="text-[9px] font-black uppercase text-[#666666]">{label}</p>
-    <p className="mt-1 text-[#1A1A1A]">{value}</p>
+  <div className="rounded-2xl glass-soft p-3">
+    <p className="text-[9px] font-black uppercase text-slate-400">{label}</p>
+    <p className="mt-1 text-slate-900">{value}</p>
   </div>
 );
 
@@ -1171,8 +1171,8 @@ const PaperActionBar = ({ paper, role, onDecision, onRework }) => {
   const canRework = ['admin', 'clerk'].includes(role) && ['draft', 'teacher_rejected'].includes(paper.status);
 
   return (
-    <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-[#EAEAEA] pt-4">
-      <div className="text-[10px] font-black uppercase text-[#666666]">
+    <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100/80 pt-4">
+      <div className="text-[10px] font-black uppercase text-slate-400">
         {paper.status === 'selected' ? 'Paper selected for printing' : 'Awaiting next workflow action'}
       </div>
       <div className="flex flex-wrap gap-2">
@@ -1180,7 +1180,7 @@ const PaperActionBar = ({ paper, role, onDecision, onRework }) => {
           <button
             type="button"
             onClick={onRework}
-            className="rounded-full border border-[#C8C8C8] bg-white px-3 py-2 text-xs font-black flex items-center gap-2"
+            className="rounded-full border border-white/70 bg-white px-3 py-2 text-xs font-black flex items-center gap-2"
           >
             <Edit3 className="w-4 h-4" /> Rework
           </button>
@@ -1234,7 +1234,7 @@ const PaperSelectedSection = ({ state }) => {
               onClick={() => setExamId(exam.id)}
               className={classNames(
                 'w-full rounded-3xl border p-5 text-left shadow-sm transition-all',
-                examId === exam.id ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]' : 'bg-white border-[#EAEAEA] hover:border-[#8b5cf6]'
+                examId === exam.id ? 'btn-primary border-transparent' : 'bg-white border-slate-100/80 hover:border-[#8b5cf6]'
               )}
             >
               <p className="text-[10px] font-black uppercase opacity-70">{exam.academicYear}</p>
@@ -1247,18 +1247,18 @@ const PaperSelectedSection = ({ state }) => {
         })}
       </div>
 
-      <div className="bg-white border border-[#EAEAEA] rounded-3xl p-5 shadow-sm">
+      <div className="glass-card rounded-3xl p-5 shadow-sm">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
             <h3 className="text-sm font-black flex items-center gap-2">
               <ClipboardCheck className="w-4 h-4 text-emerald-600" /> Selected Papers
             </h3>
-            <p className="text-xs font-bold text-[#666666] mt-1">{getExamLabel(selectedExam)}</p>
+            <p className="text-xs font-bold text-slate-400 mt-1">{getExamLabel(selectedExam)}</p>
           </div>
           <button
             type="button"
             onClick={printSelectedPapers}
-            className="rounded-full bg-[#E1FA6C] px-4 py-2 text-xs font-black flex items-center gap-2 self-start"
+            className="rounded-full btn-primary px-4 py-2 text-xs font-black flex items-center gap-2 self-start"
           >
             <Printer className="w-4 h-4" /> Print Papers
           </button>
@@ -1278,7 +1278,7 @@ const PaperSelectedSection = ({ state }) => {
                 onClick={() => setClassName(item)}
                 className={classNames(
                   'rounded-2xl border p-3 text-left transition-all',
-                  className === item ? 'bg-[#8b5cf6] border-[#8b5cf6] text-white' : 'bg-[#F8F8F8] border-[#EAEAEA]'
+                  className === item ? 'bg-[#8b5cf6] border-[#8b5cf6] text-white' : 'bg-white/60 border-slate-100/80'
                 )}
               >
                 <p className="text-xs font-black">{item}</p>
@@ -1290,9 +1290,9 @@ const PaperSelectedSection = ({ state }) => {
           })}
         </div>
 
-        <div className="mt-6 overflow-x-auto rounded-2xl border border-[#EAEAEA]">
+        <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-100/80">
           <table className="w-full min-w-[760px] text-left text-xs font-bold">
-            <thead className="bg-[#EAEAEA] text-[#555555] uppercase text-[10px]">
+            <thead className="bg-indigo-50/60 text-slate-500 uppercase text-[10px]">
               <tr>
                 <th className="px-3 py-2">Subject</th>
                 <th className="px-3 py-2">Teacher</th>
@@ -1300,7 +1300,7 @@ const PaperSelectedSection = ({ state }) => {
                 <th className="px-3 py-2">Paper</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#EAEAEA]">
+            <tbody className="divide-y divide-slate-100/80">
               {subjects.map((item) => {
                 const paper = state.papers.find(
                   (candidate) =>
@@ -1313,13 +1313,13 @@ const PaperSelectedSection = ({ state }) => {
                 return (
                   <tr key={item.subject}>
                     <td className="px-3 py-3 font-black">{item.subject}</td>
-                    <td className="px-3 py-3 text-[#666666]">{item.teacherName}</td>
+                    <td className="px-3 py-3 text-slate-400">{item.teacherName}</td>
                     <td className="px-3 py-3">
                       <span className={classNames('rounded-full border px-2 py-1 text-[10px] font-black', meta.tone)}>
                         {paper?.status === 'selected' ? 'Selected' : paper ? meta.label : 'Not Created'}
                       </span>
                     </td>
-                    <td className="px-3 py-3 text-[#666666]">{paper?.title || 'Awaiting paper'}</td>
+                    <td className="px-3 py-3 text-slate-400">{paper?.title || 'Awaiting paper'}</td>
                   </tr>
                 );
               })}
@@ -1422,7 +1422,7 @@ const ReportCardManagementSection = ({ state, role, actor, onRefresh }) => {
 
   return (
     <section className="grid grid-cols-1 xl:grid-cols-[300px_1fr] gap-6">
-      <div className="bg-white border border-[#EAEAEA] rounded-3xl p-5 shadow-sm h-fit">
+      <div className="glass-card rounded-3xl p-5 shadow-sm h-fit">
         <h3 className="text-sm font-black flex items-center gap-2">
           <Layers className="w-4 h-4 text-[#8b5cf6]" /> Classes
         </h3>
@@ -1434,7 +1434,7 @@ const ReportCardManagementSection = ({ state, role, actor, onRefresh }) => {
               onClick={() => setClassName(item)}
               className={classNames(
                 'rounded-2xl border px-3 py-3 text-left text-xs font-black',
-                className === item ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]' : 'bg-[#F8F8F8] border-[#EAEAEA]'
+                className === item ? 'btn-primary border-transparent' : 'bg-white/60 border-slate-100/80'
               )}
             >
               {item}
@@ -1444,20 +1444,20 @@ const ReportCardManagementSection = ({ state, role, actor, onRefresh }) => {
       </div>
 
       <div className="space-y-6">
-        <div className="bg-white border border-[#EAEAEA] rounded-3xl p-5 shadow-sm">
+        <div className="glass-card rounded-3xl p-5 shadow-sm">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             <div>
               <h3 className="text-sm font-black flex items-center gap-2">
                 <FileText className="w-4 h-4 text-blue-600" /> Admit Card Setup
               </h3>
-              <p className="text-xs font-bold text-[#666666] mt-1">
+              <p className="text-xs font-bold text-slate-400 mt-1">
                 Select exam, add subject date/time, then generate admit cards.
               </p>
             </div>
             <select
               value={examId}
               onChange={(event) => setExamId(event.target.value)}
-              className="rounded-2xl border border-[#C8C8C8] bg-[#F8F8F8] px-3 py-2 text-xs font-black outline-none"
+              className="rounded-2xl border border-white/70 bg-white/60 px-3 py-2 text-xs font-black outline-none"
             >
               {state.exams.map((exam) => (
                 <option key={exam.id} value={exam.id}>
@@ -1467,9 +1467,9 @@ const ReportCardManagementSection = ({ state, role, actor, onRefresh }) => {
             </select>
           </div>
 
-          <div className="mt-5 overflow-x-auto rounded-2xl border border-[#EAEAEA]">
+          <div className="mt-5 overflow-x-auto rounded-2xl border border-slate-100/80">
             <table className="w-full min-w-[760px] text-left text-xs font-bold">
-              <thead className="bg-[#EAEAEA] text-[#555555] uppercase text-[10px]">
+              <thead className="bg-indigo-50/60 text-slate-500 uppercase text-[10px]">
                 <tr>
                   <th className="px-3 py-2">Subject</th>
                   <th className="px-3 py-2">Date</th>
@@ -1477,7 +1477,7 @@ const ReportCardManagementSection = ({ state, role, actor, onRefresh }) => {
                   <th className="px-3 py-2">End</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#EAEAEA]">
+              <tbody className="divide-y divide-slate-100/80">
                 {scheduleRows.map((row) => (
                   <tr key={row.subject}>
                     <td className="px-3 py-2 font-black">{row.subject}</td>
@@ -1486,7 +1486,7 @@ const ReportCardManagementSection = ({ state, role, actor, onRefresh }) => {
                         type="date"
                         value={row.date}
                         onChange={(event) => updateSchedule(row.subject, 'date', event.target.value)}
-                        className="rounded-xl border border-[#C8C8C8] bg-[#F8F8F8] px-2 py-2 outline-none"
+                        className="rounded-xl border border-white/70 bg-white/60 px-2 py-2 outline-none"
                       />
                     </td>
                     <td className="px-3 py-2">
@@ -1494,7 +1494,7 @@ const ReportCardManagementSection = ({ state, role, actor, onRefresh }) => {
                         type="time"
                         value={row.startTime}
                         onChange={(event) => updateSchedule(row.subject, 'startTime', event.target.value)}
-                        className="rounded-xl border border-[#C8C8C8] bg-[#F8F8F8] px-2 py-2 outline-none"
+                        className="rounded-xl border border-white/70 bg-white/60 px-2 py-2 outline-none"
                       />
                     </td>
                     <td className="px-3 py-2">
@@ -1502,7 +1502,7 @@ const ReportCardManagementSection = ({ state, role, actor, onRefresh }) => {
                         type="time"
                         value={row.endTime}
                         onChange={(event) => updateSchedule(row.subject, 'endTime', event.target.value)}
-                        className="rounded-xl border border-[#C8C8C8] bg-[#F8F8F8] px-2 py-2 outline-none"
+                        className="rounded-xl border border-white/70 bg-white/60 px-2 py-2 outline-none"
                       />
                     </td>
                   </tr>
@@ -1515,28 +1515,28 @@ const ReportCardManagementSection = ({ state, role, actor, onRefresh }) => {
             <button
               type="button"
               onClick={saveSchedule}
-              className="rounded-full bg-[#1A1A1A] text-white px-4 py-2 text-xs font-black flex items-center gap-2"
+              className="rounded-full btn-primary px-4 py-2 text-xs font-black flex items-center gap-2"
             >
               <Save className="w-4 h-4" /> Save Schedule
             </button>
             <button
               type="button"
               onClick={() => setShowAdmitPreview(true)}
-              className="rounded-full border border-[#C8C8C8] bg-white px-4 py-2 text-xs font-black flex items-center gap-2"
+              className="rounded-full border border-white/70 bg-white px-4 py-2 text-xs font-black flex items-center gap-2"
             >
               <Eye className="w-4 h-4" /> Generate Admit Cards
             </button>
             <button
               type="button"
               onClick={printAdmitCards}
-              className="rounded-full bg-[#E1FA6C] px-4 py-2 text-xs font-black flex items-center gap-2"
+              className="rounded-full btn-primary px-4 py-2 text-xs font-black flex items-center gap-2"
             >
               <Printer className="w-4 h-4" /> Print All
             </button>
           </div>
         </div>
 
-        <div className="bg-white border border-[#EAEAEA] rounded-3xl p-5 shadow-sm">
+        <div className="glass-card rounded-3xl p-5 shadow-sm">
           <h3 className="text-sm font-black flex items-center gap-2">
             <Users className="w-4 h-4 text-emerald-600" /> Student List: {className}
           </h3>
@@ -1545,9 +1545,9 @@ const ReportCardManagementSection = ({ state, role, actor, onRefresh }) => {
               Final outcome for this board class is recorded by uploading each student's PDF result.
             </p>
           )}
-          <div className="mt-4 overflow-x-auto rounded-2xl border border-[#EAEAEA]">
+          <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-100/80">
             <table className="w-full min-w-[920px] text-left text-xs font-bold">
-              <thead className="bg-[#EAEAEA] text-[#555555] uppercase text-[10px]">
+              <thead className="bg-indigo-50/60 text-slate-500 uppercase text-[10px]">
                 <tr>
                   <th className="px-3 py-2">Photo</th>
                   <th className="px-3 py-2">Admission No.</th>
@@ -1560,7 +1560,7 @@ const ReportCardManagementSection = ({ state, role, actor, onRefresh }) => {
                   {boardFinalSelected && <th className="px-3 py-2">Board Result PDF</th>}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#EAEAEA]">
+              <tbody className="divide-y divide-slate-100/80">
                 {students.map((student) => {
                   const boardResult = getBoardResultForStudent(state, student, examId, className);
                   return (
@@ -1589,9 +1589,9 @@ const ReportCardManagementSection = ({ state, role, actor, onRefresh }) => {
                                 View PDF
                               </button>
                             ) : (
-                              <span className="text-[10px] text-[#666666]">Not uploaded</span>
+                              <span className="text-[10px] text-slate-400">Not uploaded</span>
                             )}
-                            <label className="rounded-full bg-[#E1FA6C] px-3 py-1.5 text-[10px] font-black cursor-pointer">
+                            <label className="btn-primary rounded-full px-3 py-1.5 text-[10px] font-black cursor-pointer">
                               Upload
                               <input
                                 type="file"
@@ -1807,7 +1807,7 @@ const MarksManagementSection = ({ state, actor, role, session, onRefresh }) => {
 
   return (
     <section className="space-y-6">
-      <div className="bg-white border border-[#EAEAEA] rounded-3xl p-5 shadow-sm">
+      <div className="glass-card rounded-3xl p-5 shadow-sm">
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 text-xs font-bold">
           <Field label="Examination">
             <select value={examId} onChange={(event) => setExamId(event.target.value)} className="input-shell">
@@ -1851,7 +1851,7 @@ const MarksManagementSection = ({ state, actor, role, session, onRefresh }) => {
               disabled={isLocked || boardFinalSelected}
               className={classNames(
                 'w-full rounded-full px-4 py-3 text-xs font-black flex items-center justify-center gap-2',
-                isLocked || boardFinalSelected ? 'bg-[#EAEAEA] text-[#666666] cursor-not-allowed' : 'bg-[#E1FA6C] text-[#1A1A1A]'
+                isLocked || boardFinalSelected ? 'bg-white/50 text-slate-400 cursor-not-allowed' : 'btn-primary'
               )}
             >
               <Save className="w-4 h-4" /> Save Marks
@@ -1859,13 +1859,13 @@ const MarksManagementSection = ({ state, actor, role, session, onRefresh }) => {
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-2 text-[11px] font-bold text-[#666666]">
+        <div className="mt-4 flex flex-wrap gap-2 text-[11px] font-bold text-slate-400">
           {selectedRecord ? (
             <span className="rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-3 py-1">
               Last saved by {selectedRecord.enteredByName} on {formatExamDateTime(selectedRecord.updatedAt || selectedRecord.submittedAt)}
             </span>
           ) : (
-            <span className="rounded-full bg-[#F8F8F8] border border-[#EAEAEA] px-3 py-1">No marks submitted yet</span>
+            <span className="rounded-full bg-white/60 border border-slate-100/80 px-3 py-1">No marks submitted yet</span>
           )}
           {isLocked && (
             <span className="rounded-full bg-rose-50 text-rose-700 border border-rose-200 px-3 py-1">
@@ -1885,13 +1885,13 @@ const MarksManagementSection = ({ state, actor, role, session, onRefresh }) => {
         </div>
       </div>
 
-      <div className="bg-white border border-[#EAEAEA] rounded-3xl p-5 shadow-sm">
+      <div className="glass-card rounded-3xl p-5 shadow-sm">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
             <h3 className="text-sm font-black flex items-center gap-2">
               <BarChart3 className="w-4 h-4 text-[#8b5cf6]" /> Marks Entry
             </h3>
-            <p className="text-xs font-bold text-[#666666] mt-1">
+            <p className="text-xs font-bold text-slate-400 mt-1">
               Teachers can edit for {MARKS_EDIT_LOCK_HOURS} hours after first save. Admin can reopen a locked marks list.
             </p>
           </div>
@@ -1909,7 +1909,7 @@ const MarksManagementSection = ({ state, actor, role, session, onRefresh }) => {
               <button
                 type="button"
                 onClick={printReports}
-                className="rounded-full border border-[#C8C8C8] bg-white px-4 py-2 text-xs font-black flex items-center gap-2"
+                className="rounded-full border border-white/70 bg-white px-4 py-2 text-xs font-black flex items-center gap-2"
               >
                 <Printer className="w-4 h-4" /> Print Report Cards
               </button>
@@ -1932,9 +1932,9 @@ const MarksManagementSection = ({ state, actor, role, session, onRefresh }) => {
           )}
         </div>
 
-        <div className="mt-5 overflow-x-auto rounded-2xl border border-[#EAEAEA]">
+        <div className="mt-5 overflow-x-auto rounded-2xl border border-slate-100/80">
           <table className="w-full min-w-[900px] text-left text-xs font-bold">
-            <thead className="bg-[#EAEAEA] text-[#555555] uppercase text-[10px]">
+            <thead className="bg-indigo-50/60 text-slate-500 uppercase text-[10px]">
               <tr>
                 <th className="px-3 py-2">Roll</th>
                 <th className="px-3 py-2">Admission No.</th>
@@ -1944,7 +1944,7 @@ const MarksManagementSection = ({ state, actor, role, session, onRefresh }) => {
                 <th className="px-3 py-2">Remark</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#EAEAEA]">
+            <tbody className="divide-y divide-slate-100/80">
               {rows.map((row) => (
                 <tr key={row.studentId}>
                   <td className="px-3 py-2">{row.rollNo}</td>
@@ -1958,11 +1958,11 @@ const MarksManagementSection = ({ state, actor, role, session, onRefresh }) => {
                       value={row.marks}
                       disabled={isLocked || boardFinalSelected}
                       onChange={(event) => updateRow(row.studentId, 'marks', event.target.value)}
-                      className="w-24 rounded-xl border border-[#C8C8C8] bg-[#F8F8F8] px-2 py-2 outline-none disabled:opacity-60"
+                      className="w-24 rounded-xl border border-white/70 bg-white/60 px-2 py-2 outline-none disabled:opacity-60"
                     />
                   </td>
                   <td className="px-3 py-2">
-                    <span className="rounded-full bg-[#E1FA6C] px-2 py-1 text-[10px] font-black">
+                    <span className="rounded-full bg-indigo-100 text-indigo-700 border border-indigo-200 px-2 py-1 text-[10px] font-black">
                       {row.marks === '' ? '-' : calculateGrade(row.marks, maxMarks)}
                     </span>
                   </td>
@@ -1972,7 +1972,7 @@ const MarksManagementSection = ({ state, actor, role, session, onRefresh }) => {
                       disabled={isLocked || boardFinalSelected}
                       onChange={(event) => updateRow(row.studentId, 'remark', event.target.value)}
                       placeholder={row.marks === '' ? 'Remark' : getFocusRemark(row.marks, maxMarks)}
-                      className="w-full rounded-xl border border-[#C8C8C8] bg-[#F8F8F8] px-2 py-2 outline-none disabled:opacity-60"
+                      className="w-full rounded-xl border border-white/70 bg-white/60 px-2 py-2 outline-none disabled:opacity-60"
                     />
                   </td>
                 </tr>
@@ -2061,14 +2061,14 @@ const StudentExamView = ({ state, session }) => {
   };
 
   return (
-    <div className="space-y-6 pb-8 select-none font-sans text-[#1A1A1A]">
-      <section className="bg-white border border-[#C8C8C8] rounded-3xl p-6 shadow-sm">
+    <div className="space-y-6 pb-8 select-none font-sans text-slate-900">
+      <section className="glass-card rounded-3xl p-6 shadow-sm">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
             <h2 className="text-xl font-black flex items-center gap-2">
               <GraduationCap className="w-5 h-5 text-[#8b5cf6]" /> Examinations
             </h2>
-            <p className="text-xs font-bold text-[#666666] mt-1">
+            <p className="text-xs font-bold text-slate-400 mt-1">
               {student.displayName} | Viewing {selectedOption.className}-{student.section || 'A'} | Roll {student.rollNo}
             </p>
           </div>
@@ -2076,7 +2076,7 @@ const StudentExamView = ({ state, session }) => {
             <select
               value={reportOptionKey}
               onChange={(event) => setReportOptionKey(event.target.value)}
-              className="rounded-2xl border border-[#C8C8C8] bg-[#F8F8F8] px-3 py-2 text-xs font-black outline-none"
+              className="rounded-2xl border border-white/70 bg-white/60 px-3 py-2 text-xs font-black outline-none"
             >
               {(reportOptions.length ? reportOptions : [fallbackOption]).map((option) => {
                 const exam = state.exams.find((item) => item.id === option.examId);
@@ -2095,7 +2095,7 @@ const StudentExamView = ({ state, session }) => {
             <button
               type="button"
               onClick={isBoardReport ? () => window.open(selectedBoardResult.dataUrl, '_blank') : printReport}
-              className="rounded-full bg-[#E1FA6C] px-4 py-2 text-xs font-black flex items-center gap-2"
+              className="rounded-full btn-primary px-4 py-2 text-xs font-black flex items-center gap-2"
             >
               <Printer className="w-4 h-4" /> {isBoardReport ? 'Open Board Result PDF' : 'Print Report Card'}
             </button>
@@ -2110,7 +2110,7 @@ const StudentExamView = ({ state, session }) => {
       </section>
 
       <section className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <div className="xl:col-span-2 bg-white border border-[#EAEAEA] rounded-3xl p-5 shadow-sm">
+        <div className="xl:col-span-2 glass-card rounded-3xl p-5 shadow-sm">
           <h3 className="text-sm font-black">Subjectwise Report Card</h3>
           {isBoardReport && (
             <div className="mt-4 rounded-2xl bg-emerald-50 border border-emerald-200 p-4 text-xs font-bold text-emerald-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -2124,9 +2124,9 @@ const StudentExamView = ({ state, session }) => {
               </button>
             </div>
           )}
-          <div className="mt-4 overflow-x-auto rounded-2xl border border-[#EAEAEA]">
+          <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-100/80">
             <table className="w-full min-w-[760px] text-left text-xs font-bold">
-              <thead className="bg-[#EAEAEA] text-[#555555] uppercase text-[10px]">
+              <thead className="bg-indigo-50/60 text-slate-500 uppercase text-[10px]">
                 <tr>
                   <th className="px-3 py-2">Subject</th>
                   <th className="px-3 py-2">Marks</th>
@@ -2135,7 +2135,7 @@ const StudentExamView = ({ state, session }) => {
                   <th className="px-3 py-2">Remark</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#EAEAEA]">
+              <tbody className="divide-y divide-slate-100/80">
                 {rows.map((row) => {
                   const percent = row.maxMarks ? Math.round((row.marks / row.maxMarks) * 100) : 0;
                   return (
@@ -2143,23 +2143,23 @@ const StudentExamView = ({ state, session }) => {
                       <td className="px-3 py-3 font-black">{row.subject}</td>
                       <td className="px-3 py-3 font-mono">{row.marks}/{row.maxMarks}</td>
                       <td className="px-3 py-3">
-                        <span className="bg-[#E1FA6C] px-2 py-1 rounded-md font-black">{row.grade}</span>
+                        <span className="bg-indigo-100 text-indigo-700 border border-indigo-200 px-2 py-1 rounded-md font-black">{row.grade}</span>
                       </td>
                       <td className="px-3 py-3">
                         <div className="flex items-center gap-2">
-                          <div className="w-32 h-2 rounded-full bg-[#EAEAEA] overflow-hidden">
-                            <div className="h-full bg-[#1A1A1A]" style={{ width: `${percent}%` }} />
+                          <div className="w-32 h-2 rounded-full bg-slate-100/80 overflow-hidden">
+                            <div className="h-full bg-gradient-to-r from-indigo-500 to-violet-500" style={{ width: `${percent}%` }} />
                           </div>
                           <span className="font-mono">{percent}%</span>
                         </div>
                       </td>
-                      <td className="px-3 py-3 text-[#666666]">{row.remark}</td>
+                      <td className="px-3 py-3 text-slate-400">{row.remark}</td>
                     </tr>
                   );
                 })}
                 {!rows.length && (
                   <tr>
-                    <td className="px-3 py-8 text-center text-[#666666]" colSpan={5}>
+                    <td className="px-3 py-8 text-center text-slate-400" colSpan={5}>
                       Marks are not published for this exam yet.
                     </td>
                   </tr>
@@ -2169,19 +2169,19 @@ const StudentExamView = ({ state, session }) => {
           </div>
         </div>
 
-        <div className="bg-white border border-[#EAEAEA] rounded-3xl p-5 shadow-sm">
+        <div className="glass-card rounded-3xl p-5 shadow-sm">
           <h3 className="text-sm font-black flex items-center gap-2">
             <UserCheck className="w-4 h-4 text-[#8b5cf6]" /> Performance Trace
           </h3>
           <div className="mt-4 space-y-3">
             {focusRows.map((row) => (
-              <div key={row.subject} className="rounded-2xl bg-[#F8F8F8] border border-[#EAEAEA] p-3">
+              <div key={row.subject} className="rounded-2xl glass-soft p-3">
                 <p className="text-xs font-black">{row.subject}</p>
-                <p className="text-[11px] font-bold text-[#666666] mt-1">{row.remark}</p>
+                <p className="text-[11px] font-bold text-slate-400 mt-1">{row.remark}</p>
               </div>
             ))}
             {!focusRows.length && (
-              <div className="rounded-2xl bg-[#F8F8F8] border border-[#EAEAEA] p-3 text-xs font-bold text-[#666666]">
+              <div className="rounded-2xl glass-soft p-3 text-xs font-bold text-slate-400">
                 Performance trace will appear after marks are uploaded.
               </div>
             )}
@@ -2193,27 +2193,27 @@ const StudentExamView = ({ state, session }) => {
 };
 
 const EmptyAccess = ({ icon: Icon, title, message }) => (
-  <div className="bg-white border border-[#EAEAEA] rounded-3xl p-10 shadow-sm text-center">
+  <div className="glass-card rounded-3xl p-10 shadow-sm text-center">
     <div className="mx-auto w-14 h-14 rounded-2xl bg-[#F5F3FF] text-[#8b5cf6] flex items-center justify-center">
       {React.createElement(Icon, { className: 'w-7 h-7' })}
     </div>
     <h3 className="mt-4 text-base font-black">{title}</h3>
-    <p className="mt-2 text-xs font-bold text-[#666666] max-w-md mx-auto">{message}</p>
+    <p className="mt-2 text-xs font-bold text-slate-400 max-w-md mx-auto">{message}</p>
   </div>
 );
 
 const PaperPreviewModal = ({ paper, onClose }) => (
-  <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-    <div className="bg-white rounded-3xl w-full max-w-5xl max-h-[92vh] overflow-hidden shadow-2xl border border-[#EAEAEA]">
-      <div className="p-4 border-b border-[#EAEAEA] flex items-center justify-between gap-3">
+  <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div className="glass-strong animate-scaleUp rounded-3xl w-full max-w-5xl max-h-[92vh] overflow-hidden shadow-2xl">
+      <div className="p-4 border-b border-slate-100/80 flex items-center justify-between gap-3">
         <h3 className="text-sm font-black truncate">{paper.title}</h3>
-        <button type="button" onClick={onClose} className="p-2 rounded-full hover:bg-[#EAEAEA]">
+        <button type="button" onClick={onClose} className="p-2 rounded-full hover:bg-white/70">
           <X className="w-4 h-4" />
         </button>
       </div>
-      <div className="bg-[#D9D9D9] p-4 overflow-y-auto max-h-[80vh]">
+      <div className="bg-white/40 p-4 overflow-y-auto max-h-[80vh]">
         <div
-          className="mx-auto max-w-[794px] min-h-[900px] bg-white border border-[#C8C8C8] p-8 sm:p-12 text-sm leading-7 shadow-xl"
+          className="mx-auto max-w-[794px] min-h-[900px] bg-white border border-white/70 p-8 sm:p-12 text-sm leading-7 shadow-xl"
           dangerouslySetInnerHTML={{ __html: paper.content }}
         />
       </div>
@@ -2222,34 +2222,34 @@ const PaperPreviewModal = ({ paper, onClose }) => (
 );
 
 const AdmitCardPreviewModal = ({ exam, className, students, scheduleRows, onClose, onPrint }) => (
-  <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-    <div className="bg-white rounded-3xl w-full max-w-6xl max-h-[92vh] overflow-hidden shadow-2xl border border-[#EAEAEA]">
-      <div className="p-4 border-b border-[#EAEAEA] flex items-center justify-between gap-3">
+  <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div className="glass-strong animate-scaleUp rounded-3xl w-full max-w-6xl max-h-[92vh] overflow-hidden shadow-2xl">
+      <div className="p-4 border-b border-slate-100/80 flex items-center justify-between gap-3">
         <div>
           <h3 className="text-sm font-black">{getExamLabel(exam)} Admit Cards</h3>
-          <p className="text-xs font-bold text-[#666666]">{className} | {students.length} students</p>
+          <p className="text-xs font-bold text-slate-400">{className} | {students.length} students</p>
         </div>
         <div className="flex gap-2">
           <button
             type="button"
             onClick={onPrint}
-            className="rounded-full bg-[#E1FA6C] px-4 py-2 text-xs font-black flex items-center gap-2"
+            className="rounded-full btn-primary px-4 py-2 text-xs font-black flex items-center gap-2"
           >
             <Printer className="w-4 h-4" /> Print
           </button>
-          <button type="button" onClick={onClose} className="p-2 rounded-full hover:bg-[#EAEAEA]">
+          <button type="button" onClick={onClose} className="p-2 rounded-full hover:bg-white/70">
             <X className="w-4 h-4" />
           </button>
         </div>
       </div>
-      <div className="bg-[#D9D9D9] p-4 overflow-y-auto max-h-[80vh] grid grid-cols-1 xl:grid-cols-2 gap-4">
+      <div className="bg-white/40 p-4 overflow-y-auto max-h-[80vh] grid grid-cols-1 xl:grid-cols-2 gap-4">
         {students.slice(0, 4).map((student) => (
-          <div key={student.id} className="bg-white border border-[#C8C8C8] rounded-2xl p-5">
-            <div className="flex justify-between gap-4 border-b border-[#EAEAEA] pb-4">
+          <div key={student.id} className="bg-white border border-white/70 rounded-2xl p-5">
+            <div className="flex justify-between gap-4 border-b border-slate-100/80 pb-4">
               <div>
-                <p className="text-[10px] font-black uppercase text-[#666666]">{getExamLabel(exam)}</p>
+                <p className="text-[10px] font-black uppercase text-slate-400">{getExamLabel(exam)}</p>
                 <h3 className="text-base font-black mt-1">{student.displayName}</h3>
-                <p className="text-xs font-bold text-[#666666]">{student.className}-{student.section} | Roll {student.rollNo}</p>
+                <p className="text-xs font-bold text-slate-400">{student.className}-{student.section} | Roll {student.rollNo}</p>
               </div>
               <div className="w-16 h-20 rounded-xl bg-[#F5F3FF] text-[#8b5cf6] flex items-center justify-center font-black">
                 {getInitials(student.displayName)}
@@ -2263,9 +2263,9 @@ const AdmitCardPreviewModal = ({ exam, className, students, scheduleRows, onClos
             </div>
             <div className="mt-4 space-y-1 text-[11px] font-bold">
               {scheduleRows.map((row) => (
-                <div key={row.subject} className="flex items-center justify-between gap-2 rounded-xl bg-[#F8F8F8] px-3 py-2">
+                <div key={row.subject} className="flex items-center justify-between gap-2 rounded-xl bg-white/60 px-3 py-2">
                   <span>{row.subject}</span>
-                  <span className="text-[#666666]">{formatExamDate(row.date)} | {row.startTime}-{row.endTime}</span>
+                  <span className="text-slate-400">{formatExamDate(row.date)} | {row.startTime}-{row.endTime}</span>
                 </div>
               ))}
             </div>

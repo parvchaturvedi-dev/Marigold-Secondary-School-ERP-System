@@ -24,7 +24,8 @@ const AcademicCalender = ({ session }) => {
   const [calendarPdf, setCalendarPdf] = useState(() => readAcademicCalendar());
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const fileInputRef = useRef(null);
-  const uploadedBy = session?.username ? `Admin (${session.username})` : 'Admin';
+  const uploaderName = session?.displayName || session?.accountDisplayName || session?.username || '';
+  const uploadedBy = uploaderName ? `Admin (${uploaderName})` : 'Admin';
 
   useEffect(() => {
     let isActive = true;
@@ -77,13 +78,13 @@ const AcademicCalender = ({ session }) => {
 
   return (
     <div className="space-y-6 pb-8 select-none font-sans">
-      <div className="bg-white p-6 rounded-3xl border border-[#EAEAEA] shadow-sm">
+      <div className="glass-card rounded-3xl p-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h3 className="text-base font-bold text-[#1A1A1A] flex items-center gap-2">
+            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
               <CalendarDays className="w-5 h-5 text-[#8b5cf6]" /> Academic Calendar Management
             </h3>
-            <p className="text-xs text-[#666666] mt-0.5">
+            <p className="text-xs text-slate-400 mt-0.5">
               Upload the yearly schedule PDF. It will be instantly visible to Clerks, Teachers, and Students.
             </p>
           </div>
@@ -101,7 +102,7 @@ const AcademicCalender = ({ session }) => {
               <button
                 type="button"
                 onClick={triggerFileInput}
-                className="flex items-center gap-2 px-5 py-2.5 bg-[#E1FA6C] text-[#1A1A1A] rounded-full text-xs font-bold shadow-sm hover:scale-[1.02] transition-transform duration-150"
+                className="flex items-center gap-2 px-5 py-2.5 btn-primary rounded-full text-xs font-bold shadow-sm "
               >
                 <FilePlus className="w-4 h-4" /> Add Calendar
               </button>
@@ -144,8 +145,8 @@ const AcademicCalender = ({ session }) => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-1 bg-[#EAEAEA] p-4 rounded-3xl flex flex-col gap-4 shadow-sm">
-          <h4 className="text-xs font-bold text-[#1A1A1A] px-2">Document Status</h4>
+        <div className="lg:col-span-1 bg-indigo-50/60 p-4 rounded-3xl flex flex-col gap-4 shadow-sm">
+          <h4 className="text-xs font-bold text-slate-900 px-2">Document Status</h4>
 
           {calendarPdf ? (
             <div className="bg-white p-4 rounded-2xl border border-emerald-100 flex items-start gap-3.5">
@@ -153,7 +154,7 @@ const AcademicCalender = ({ session }) => {
                 <FileText className="w-6 h-6" />
               </div>
               <div className="overflow-hidden">
-                <p className="text-xs font-bold text-[#1A1A1A] truncate">{calendarPdf.name}</p>
+                <p className="text-xs font-bold text-slate-900 truncate">{calendarPdf.name}</p>
                 <p className="text-[10px] text-gray-400 font-medium mt-0.5">
                   {formatFileSize(calendarPdf.size)} - PDF Document
                 </p>
@@ -174,7 +175,7 @@ const AcademicCalender = ({ session }) => {
               className="bg-white p-6 rounded-2xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center text-center cursor-pointer hover:border-[#8b5cf6] transition-colors h-44"
             >
               <UploadCloud className="w-10 h-10 text-gray-400 mb-2" />
-              <p className="text-xs font-bold text-[#1A1A1A]">No Active Calendar PDF</p>
+              <p className="text-xs font-bold text-slate-900">No Active Calendar PDF</p>
               <p className="text-[10px] text-gray-400 mt-1 max-w-[180px]">
                 Click Add Calendar or drop a PDF here to publish.
               </p>
@@ -182,9 +183,9 @@ const AcademicCalender = ({ session }) => {
           )}
         </div>
 
-        <div className="lg:col-span-2 bg-white p-5 rounded-3xl border border-[#EAEAEA] shadow-sm flex flex-col justify-between">
+        <div className="lg:col-span-2 glass-card rounded-3xl p-5 flex flex-col justify-between">
           <div>
-            <h4 className="text-xs font-bold text-[#1A1A1A] mb-1">Portal Synchronization</h4>
+            <h4 className="text-xs font-bold text-slate-900 mb-1">Portal Synchronization</h4>
             <p className="text-[10px] text-gray-400 font-medium">Whom this file is currently shared with</p>
           </div>
 
@@ -200,7 +201,7 @@ const AcademicCalender = ({ session }) => {
                   }`}
                 />
                 <div>
-                  <p className="text-xs font-bold text-[#1A1A1A]">{portalName}</p>
+                  <p className="text-xs font-bold text-slate-900">{portalName}</p>
                   <p className="text-[9px] text-gray-400 font-semibold">
                     {calendarPdf ? 'Live Sync Active' : 'Waiting for file'}
                   </p>
@@ -212,15 +213,15 @@ const AcademicCalender = ({ session }) => {
       </div>
 
       {isPreviewOpen && calendarPdf && (
-        <div className="bg-white p-5 rounded-3xl border border-[#EAEAEA] shadow-sm animate-fadeIn">
+        <div className="glass-card rounded-3xl p-5 animate-fadeIn">
           <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-4">
-            <h4 className="text-xs font-bold text-[#1A1A1A]">Live Document Preview (PDF)</h4>
+            <h4 className="text-xs font-bold text-slate-900">Live Document Preview (PDF)</h4>
             <span className="text-[10px] bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded font-bold">
               Secure Connection
             </span>
           </div>
 
-          <div className="w-full bg-[#EAEAEA] rounded-2xl border border-gray-300 h-[500px] overflow-hidden">
+          <div className="w-full bg-indigo-50/60 rounded-2xl border border-gray-300 h-[500px] overflow-hidden">
             <iframe
               title="Academic Calendar PDF Preview"
               src={`${calendarPdf.dataUrl}#toolbar=0&navpanes=0&scrollbar=1`}

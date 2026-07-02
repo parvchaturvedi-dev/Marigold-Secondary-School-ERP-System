@@ -2,6 +2,7 @@ import express from 'express';
 import LeaveRequest from '../models/LeaveRequest.js';
 import { isMongoConnected } from '../db.js';
 import { emitRealtimeEvent } from '../realtime.js';
+import { createNotification } from '../utils/notify.js';
 
 const router = express.Router();
 
@@ -24,6 +25,31 @@ const ensureMongo = (_request, response, next) => {
   }
 
   next();
+};
+
+// Human-readable label for a raw leave status, for use in push/notification text.
+const STATUS_LABELS = {
+  [LEAVE_STATUS.pendingAdmin]: 'pending admin review',
+  [LEAVE_STATUS.pendingClassTeacher]: 'pending class teacher review',
+  [LEAVE_STATUS.forwardedAdmin]: 'forwarded to admin',
+  [LEAVE_STATUS.approvedByAdmin]: 'approved',
+  [LEAVE_STATUS.rejectedByAdmin]: 'rejected',
+  [LEAVE_STATUS.approvedByTeacher]: 'approved',
+  [LEAVE_STATUS.rejectedByTeacher]: 'rejected',
+};
+
+// Notify the applicant that their leave request status changed.
+const notifyLeaveRequester = async (leaveRequest) => {
+  if (!leaveRequest.applicantUsername) return;
+  const label = STATUS_LABELS[leaveRequest.status] || leaveRequest.status;
+  await createNotification({
+    title: 'Leave Request Update',
+    description: `Your leave request was ${label}`,
+    type: 'leave',
+    linkPage: 'Leave Requests',
+    recipientRole: leaveRequest.applicantRole || '',
+    recipientUsername: leaveRequest.applicantUsername,
+  });
 };
 
 const toLeavePayload = (request) => ({
@@ -124,6 +150,14 @@ router.patch('/:id/admin-action', ensureMongo, async (request, response) => {
   await leaveRequest.save();
 
   emitRealtimeEvent('mgps-erp-leave-requests-updated');
+
+  // Notify the requester that their leave request status changed (best-effort).
+  try {
+    await notifyLeaveRequester(leaveRequest);
+  } catch (error) {
+    console.error('[leaveRequests] admin-action notify failed:', error?.message || error);
+  }
+
   response.json(toLeavePayload(leaveRequest));
 });
 
@@ -147,6 +181,14 @@ router.patch('/:id/teacher-action', ensureMongo, async (request, response) => {
   await leaveRequest.save();
 
   emitRealtimeEvent('mgps-erp-leave-requests-updated');
+
+  // Notify the requester that their leave request status changed (best-effort).
+  try {
+    await notifyLeaveRequester(leaveRequest);
+  } catch (error) {
+    console.error('[leaveRequests] teacher-action notify failed:', error?.message || error);
+  }
+
   response.json(toLeavePayload(leaveRequest));
 });
 

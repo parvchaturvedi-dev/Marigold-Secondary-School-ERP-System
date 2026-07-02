@@ -415,13 +415,13 @@ const EventHub = ({ role, session }) => {
     );
 
   return (
-    <div className="flex-1 min-h-screen bg-[#D9D9D9] p-6 font-sans select-none text-[#1A1A1A]">
-      <div className="bg-[#ffffff] p-6 rounded-3xl border border-[#C8C8C8] mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="flex-1 min-h-screen p-6 font-sans select-none text-slate-900">
+      <div className="glass-card p-6 rounded-3xl mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h3 className="text-xl font-bold flex items-center gap-2">
-            <CalendarDays className="w-5 h-5 text-[#1A1A1A]" /> Campus Events & Participation Hub
+            <CalendarDays className="w-5 h-5 text-slate-900" /> Campus Events & Participation Hub
           </h3>
-          <p className="text-xs text-[#555555] mt-1">
+          <p className="text-xs text-slate-500 mt-1">
             {canManage
               ? 'Create events, update schedules, attach optional images, and audit student participation rosters.'
               : 'View campus events, dates, details, and student participation openings.'}
@@ -432,7 +432,7 @@ const EventHub = ({ role, session }) => {
           <button
             type="button"
             onClick={openCreateModal}
-            className="flex items-center justify-center gap-1.5 text-xs font-black bg-[#E1FA6C] text-[#1A1A1A] border border-[#1A1A1A]/10 px-5 py-3 rounded-full hover:bg-[#d4ee59] transition-all shadow-sm"
+            className="flex items-center justify-center gap-1.5 text-xs font-black btn-primary px-5 py-3 rounded-full transition-all shadow-sm"
           >
             <Plus className="w-4 h-4" /> Schedule New Event
           </button>
@@ -441,8 +441,8 @@ const EventHub = ({ role, session }) => {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         <div className="lg:col-span-7 space-y-4">
-          <h4 className="text-xs font-black text-[#1A1A1A] uppercase tracking-wider flex items-center gap-1.5">
-            <span className="w-1.5 h-3 bg-[#1A1A1A] inline-block rounded-xs"></span>
+          <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+            <span className="w-1.5 h-3 bg-indigo-500 inline-block rounded-xs"></span>
             Live Institutional Bulletin Tracks ({events.length})
           </h4>
 
@@ -452,14 +452,14 @@ const EventHub = ({ role, session }) => {
                 type="button"
                 key={event.id}
                 onClick={() => setSelectedEventId(event.id)}
-                className={`bg-[#ffffff] border p-5 rounded-3xl transition-all cursor-pointer flex flex-col justify-between gap-4 group text-left w-full ${
+                className={`glass-card glass-hover p-5 rounded-3xl transition-all cursor-pointer flex flex-col justify-between gap-4 group text-left w-full ${
                   selectedEventId === event.id
-                    ? 'border-2 border-[#1A1A1A] ring-4 ring-[#1A1A1A]/5 shadow-sm'
-                    : 'border-[#C8C8C8] hover:border-black'
+                    ? 'ring-4 ring-indigo-200 shadow-sm'
+                    : ''
                 }`}
               >
                 {event.imageDataUrl && (
-                  <div className="w-full h-44 rounded-2xl overflow-hidden border border-[#EAEAEA] bg-[#EAEAEA]">
+                  <div className="w-full h-44 rounded-2xl overflow-hidden border border-slate-100/80 bg-white/50">
                     <img
                       src={event.imageDataUrl}
                       alt={event.title}
@@ -470,7 +470,7 @@ const EventHub = ({ role, session }) => {
 
                 <div className="space-y-2">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="font-mono text-[10px] font-bold text-[#555555] tracking-tight bg-[#EAEAEA] px-2 py-0.5 rounded-md">
+                    <span className="font-mono text-[10px] font-bold text-slate-500 tracking-tight bg-white/50 px-2 py-0.5 rounded-md">
                       ID: {event.id}
                     </span>
 
@@ -479,34 +479,34 @@ const EventHub = ({ role, session }) => {
                         <Trophy className="w-3 h-3" /> Participation Open
                       </span>
                     ) : (
-                      <span className="text-[10px] bg-[#EAEAEA]/80 text-[#555555] font-bold px-2.5 py-0.5 rounded-md">
+                      <span className="text-[10px] bg-white/60 text-slate-500 font-bold px-2.5 py-0.5 rounded-md">
                         Notice Only
                       </span>
                     )}
                   </div>
 
-                  <h3 className="text-md font-black text-[#1A1A1A] group-hover:text-black transition-colors pt-1">
+                  <h3 className="text-md font-black text-slate-900 group-hover:text-indigo-700 transition-colors pt-1">
                     {event.title}
                   </h3>
-                  <p className="text-xs text-[#555555] font-medium leading-relaxed line-clamp-2">
+                  <p className="text-xs text-slate-500 font-medium leading-relaxed line-clamp-2">
                     {event.description}
                   </p>
                 </div>
 
-                <div className="pt-3 border-t border-[#EAEAEA] flex flex-wrap items-center justify-between gap-2 text-[11px] font-bold text-[#555555]">
+                <div className="pt-3 border-t border-slate-100/80 flex flex-wrap items-center justify-between gap-2 text-[11px] font-bold text-slate-500">
                   <div className="flex items-center gap-3">
                     <span className="flex items-center gap-1">
-                      <Clock className="w-3.5 h-3.5 text-[#1A1A1A]" /> {formatEventDate(event)}
+                      <Clock className="w-3.5 h-3.5 text-slate-900" /> {formatEventDate(event)}
                     </span>
                     {event.imageName && (
-                      <span className="flex items-center gap-1 text-[10px] font-mono text-[#555555]/80 max-w-[150px] truncate">
-                        <Image className="w-3 h-3 text-[#1A1A1A]" /> {event.imageName}
+                      <span className="flex items-center gap-1 text-[10px] font-mono text-slate-400 max-w-[150px] truncate">
+                        <Image className="w-3 h-3 text-slate-900" /> {event.imageName}
                       </span>
                     )}
                   </div>
 
                   {event.participationEnabled && canManage && (
-                    <span className="text-[10px] bg-[#1A1A1A] text-[#E1FA6C] font-mono font-black px-2 py-0.5 rounded-md flex items-center gap-1">
+                    <span className="text-[10px] bg-indigo-100 text-indigo-700 border border-indigo-200 font-mono font-black px-2 py-0.5 rounded-md flex items-center gap-1">
                       <Users className="w-3 h-3" /> {event.participants?.length || 0} Joined
                     </span>
                   )}
@@ -516,10 +516,10 @@ const EventHub = ({ role, session }) => {
           </div>
         </div>
 
-        <div className="lg:col-span-5 bg-[#ffffff] border border-[#C8C8C8] p-6 rounded-3xl min-h-[420px] shadow-xs">
+        <div className="lg:col-span-5 glass-card p-6 rounded-3xl min-h-[420px] shadow-xs">
           {!selectedEvent ? (
-            <div className="h-full flex flex-col items-center justify-center text-center p-6 text-[#555555] text-xs font-semibold py-24 space-y-2">
-              <Users className="w-10 h-10 text-[#C8C8C8]" />
+            <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-500 text-xs font-semibold py-24 space-y-2">
+              <Users className="w-10 h-10 text-slate-300" />
               <p>
                 Click any event card on the left panel to inspect details
                 {canManage ? ' and participation logs' : ''}.
@@ -527,9 +527,9 @@ const EventHub = ({ role, session }) => {
             </div>
           ) : (
             <div className="space-y-5 animate-fadeIn text-xs">
-              <div className="border-b border-[#EAEAEA] pb-3 space-y-2">
+              <div className="border-b border-slate-100/80 pb-3 space-y-2">
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-[9px] bg-[#1A1A1A] text-white font-mono px-2 py-0.5 rounded uppercase font-bold">
+                  <span className="text-[9px] bg-slate-900 text-white font-mono px-2 py-0.5 rounded uppercase font-bold">
                     Event Workspace
                   </span>
                   {canManage && (
@@ -537,7 +537,7 @@ const EventHub = ({ role, session }) => {
                       <button
                         type="button"
                         onClick={() => openEditModal(selectedEvent)}
-                        className="p-2 rounded-xl bg-[#EAEAEA] hover:bg-[#D9D9D9] border border-[#C8C8C8] text-[#1A1A1A]"
+                        className="p-2 rounded-xl hover:bg-white/70 border border-slate-200/70 text-slate-900"
                         title="Edit Event"
                       >
                         <Edit2 className="w-4 h-4" />
@@ -553,16 +553,16 @@ const EventHub = ({ role, session }) => {
                     </div>
                   )}
                 </div>
-                <h2 className="text-md font-black text-[#1A1A1A] leading-tight pt-1">
+                <h2 className="text-md font-black text-slate-900 leading-tight pt-1">
                   {selectedEvent.title}
                 </h2>
-                <p className="text-[11px] font-bold text-[#555555] flex items-center gap-1">
+                <p className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
                   <Clock className="w-3.5 h-3.5" /> {formatEventDate(selectedEvent)}
                 </p>
               </div>
 
               {selectedEvent.imageDataUrl && (
-                <div className="w-full h-48 rounded-2xl overflow-hidden border border-[#EAEAEA] bg-[#EAEAEA]">
+                <div className="w-full h-48 rounded-2xl overflow-hidden border border-slate-100/80 bg-white/50">
                   <img
                     src={selectedEvent.imageDataUrl}
                     alt={selectedEvent.title}
@@ -571,14 +571,14 @@ const EventHub = ({ role, session }) => {
                 </div>
               )}
 
-              <div className="bg-[#EAEAEA]/40 border border-[#C8C8C8]/60 p-4 rounded-2xl text-[#333333] font-medium leading-relaxed">
+              <div className="glass-soft p-4 rounded-2xl text-slate-700 font-medium leading-relaxed">
                 {selectedEvent.description}
               </div>
 
               {!selectedEvent.participationEnabled ? (
-                <div className="bg-[#EAEAEA]/40 border border-[#C8C8C8]/60 p-5 rounded-2xl text-center font-bold text-[#555555] space-y-2">
-                  <CheckCircle2 className="w-6 h-6 text-[#555555] mx-auto" />
-                  <p className="text-xs text-[#1A1A1A] font-black">Informational Event</p>
+                <div className="glass-soft p-5 rounded-2xl text-center font-bold text-slate-500 space-y-2">
+                  <CheckCircle2 className="w-6 h-6 text-slate-500 mx-auto" />
+                  <p className="text-xs text-slate-900 font-black">Informational Event</p>
                   <p className="text-[11px] font-medium leading-relaxed">
                     Participation is not enabled for this event.
                   </p>
@@ -588,8 +588,8 @@ const EventHub = ({ role, session }) => {
                   {canParticipate && (
                     <div className="bg-amber-50 border border-amber-100 rounded-2xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div>
-                        <p className="text-xs font-black text-[#1A1A1A]">{studentProfile.name}</p>
-                        <p className="text-[10px] font-bold text-[#555555]">
+                        <p className="text-xs font-black text-slate-900">{studentProfile.name}</p>
+                        <p className="text-[10px] font-bold text-slate-500">
                           {studentProfile.admissionNumber} - {studentProfile.className}
                         </p>
                       </div>
@@ -601,7 +601,7 @@ const EventHub = ({ role, session }) => {
                         <button
                           type="button"
                           onClick={() => setConfirmParticipationEvent(selectedEvent)}
-                          className="px-4 py-2 rounded-full bg-[#E1FA6C] text-[#1A1A1A] border border-[#1A1A1A]/10 text-xs font-black hover:bg-[#d4ee59]"
+                          className="px-4 py-2 rounded-full btn-primary text-xs font-black"
                         >
                           Participate
                         </button>
@@ -611,19 +611,19 @@ const EventHub = ({ role, session }) => {
 
                   {canManage ? (
                     <div className="space-y-3">
-                      <div className="flex items-center justify-between font-bold text-[#1A1A1A] text-[11px] uppercase mb-2">
+                      <div className="flex items-center justify-between font-bold text-slate-900 text-[11px] uppercase mb-2">
                         <span>Registered Student Roster</span>
-                        <span className="font-mono bg-[#E1FA6C] border border-[#1A1A1A]/10 px-2 py-0.5 rounded text-[#1A1A1A] font-black">
+                        <span className="font-mono bg-indigo-100 border border-indigo-200 px-2 py-0.5 rounded text-indigo-700 font-black">
                           COUNT: {selectedEvent.participants?.length || 0}
                         </span>
                       </div>
 
                       {(selectedEvent.participants?.length || 0) > 0 && (
-                        <div className="bg-[#EAEAEA]/35 border border-[#C8C8C8]/70 rounded-2xl p-3 space-y-2">
+                        <div className="glass-soft rounded-2xl p-3 space-y-2">
                           <button
                             type="button"
                             onClick={() => handleExportParticipantsPdf()}
-                            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#1A1A1A] text-[#E1FA6C] text-xs font-black hover:bg-black"
+                            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl btn-primary text-xs font-black"
                           >
                             <Download className="w-4 h-4" />
                             Export All Classes PDF
@@ -633,7 +633,7 @@ const EventHub = ({ role, session }) => {
                             <select
                               value={resolvedExportClass}
                               onChange={(event) => setSelectedExportClass(event.target.value)}
-                              className="min-w-0 bg-white border border-[#C8C8C8] rounded-xl px-3 py-2.5 text-xs font-bold text-[#1A1A1A] outline-none focus:border-black"
+                              className="min-w-0 bg-white/60 border border-white/80 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-900 outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all"
                             >
                               {participantClassGroups.map((group) => (
                                 <option key={group.className} value={group.className}>
@@ -646,7 +646,7 @@ const EventHub = ({ role, session }) => {
                               type="button"
                               onClick={() => handleExportParticipantsPdf(resolvedExportClass)}
                               disabled={!resolvedExportClass}
-                              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#E1FA6C] text-[#1A1A1A] border border-[#1A1A1A]/10 text-xs font-black hover:bg-[#d4ee59] disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl btn-primary text-xs font-black disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               <FileText className="w-4 h-4" />
                               Export Class
@@ -656,13 +656,13 @@ const EventHub = ({ role, session }) => {
                       )}
 
                       {(selectedEvent.participants?.length || 0) === 0 ? (
-                        <div className="text-center py-12 bg-[#EAEAEA]/20 rounded-2xl border border-dashed border-[#C8C8C8] text-[#555555] font-semibold">
+                        <div className="text-center py-12 bg-white/50 rounded-2xl border border-dashed border-slate-200/70 text-slate-500 font-semibold">
                           Roster is currently blank.
                         </div>
                       ) : (
-                        <div className="max-h-[340px] overflow-y-auto rounded-2xl border border-[#EAEAEA]">
+                        <div className="max-h-[340px] overflow-y-auto rounded-2xl border border-slate-100/80">
                           <table className="w-full text-left text-[10px] font-bold min-w-[620px]">
-                            <thead className="bg-[#EAEAEA] text-[#555555] uppercase">
+                            <thead className="bg-indigo-50/60 text-slate-500 uppercase">
                               <tr>
                                 <th className="px-3 py-2">Adm. No.</th>
                                 <th className="px-3 py-2">Name</th>
@@ -670,11 +670,11 @@ const EventHub = ({ role, session }) => {
                                 <th className="px-3 py-2">Class</th>
                               </tr>
                             </thead>
-                            <tbody className="divide-y divide-[#EAEAEA] bg-white text-[#1A1A1A]">
+                            <tbody className="divide-y divide-slate-100/80 bg-white text-slate-900">
                               {participantClassGroups.map((group) =>
                                 group.participants.map((participant) => (
                                   <tr key={participant.admissionNumber}>
-                                    <td className="px-3 py-2 font-mono text-[#555555]">
+                                    <td className="px-3 py-2 font-mono text-slate-500">
                                       {participant.admissionNumber}
                                     </td>
                                     <td className="px-3 py-2">{participant.name}</td>
@@ -689,9 +689,9 @@ const EventHub = ({ role, session }) => {
                       )}
                     </div>
                   ) : (
-                    <div className="bg-[#EAEAEA]/40 border border-[#C8C8C8]/60 p-5 rounded-2xl text-center font-bold text-[#555555] space-y-2">
-                      <Trophy className="w-6 h-6 text-[#555555] mx-auto" />
-                      <p className="text-xs text-[#1A1A1A] font-black">Participation Open</p>
+                    <div className="glass-soft p-5 rounded-2xl text-center font-bold text-slate-500 space-y-2">
+                      <Trophy className="w-6 h-6 text-slate-500 mx-auto" />
+                      <p className="text-xs text-slate-900 font-black">Participation Open</p>
                       <p className="text-[11px] font-medium leading-relaxed">
                         Students can register for this event from their portal.
                       </p>
@@ -716,14 +716,14 @@ const EventHub = ({ role, session }) => {
       )}
 
       {confirmParticipationEvent && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white border border-[#1A1A1A] rounded-3xl shadow-xl w-full max-w-sm p-6 text-center space-y-4">
-            <div className="w-12 h-12 mx-auto rounded-2xl bg-[#E1FA6C] flex items-center justify-center">
-              <Trophy className="w-6 h-6 text-[#1A1A1A]" />
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="glass-strong rounded-3xl shadow-xl w-full max-w-sm p-6 text-center space-y-4 animate-scaleUp">
+            <div className="w-12 h-12 mx-auto rounded-2xl bg-indigo-100 flex items-center justify-center">
+              <Trophy className="w-6 h-6 text-indigo-700" />
             </div>
             <div>
-              <h3 className="text-sm font-black text-[#1A1A1A]">Confirm Participation</h3>
-              <p className="text-xs text-[#555555] font-medium mt-1">
+              <h3 className="text-sm font-black text-slate-900">Confirm Participation</h3>
+              <p className="text-xs text-slate-500 font-medium mt-1">
                 Add {studentProfile.name} to "{confirmParticipationEvent.title}" participant list?
               </p>
             </div>
@@ -731,14 +731,14 @@ const EventHub = ({ role, session }) => {
               <button
                 type="button"
                 onClick={() => setConfirmParticipationEvent(null)}
-                className="py-2.5 bg-[#EAEAEA] border border-[#C8C8C8] rounded-full text-xs font-black"
+                className="py-2.5 btn-ghost rounded-full text-xs font-black"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleConfirmParticipation}
-                className="py-2.5 bg-[#E1FA6C] border border-[#1A1A1A]/10 rounded-full text-xs font-black"
+                className="py-2.5 btn-primary rounded-full text-xs font-black"
               >
                 Confirm
               </button>
@@ -758,48 +758,48 @@ const EventFormModal = ({
   onFieldChange,
   onImageAttach,
 }) => (
-  <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-    <div className="bg-[#ffffff] border-2 border-black w-full max-w-lg rounded-3xl p-6 relative animate-scaleUp text-xs font-bold text-[#1A1A1A] space-y-4 shadow-xl max-h-[92vh] overflow-y-auto">
-      <div className="flex items-center justify-between border-b border-[#EAEAEA] pb-3">
-        <h3 className="text-md font-black text-[#1A1A1A] flex items-center gap-2">
+  <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div className="glass-strong w-full max-w-lg rounded-3xl p-6 relative animate-scaleUp text-xs font-bold text-slate-900 space-y-4 shadow-xl max-h-[92vh] overflow-y-auto">
+      <div className="flex items-center justify-between border-b border-slate-100/80 pb-3">
+        <h3 className="text-md font-black text-slate-900 flex items-center gap-2">
           <CalendarDays className="w-4 h-4" /> {editingEventId ? 'Update Event' : 'Configure Campus Event'}
         </h3>
-        <button type="button" onClick={onClose} className="p-1 hover:bg-[#EAEAEA] rounded-full transition-colors">
+        <button type="button" onClick={onClose} className="p-1 hover:bg-white/70 rounded-full transition-colors">
           <X className="w-4 h-4" />
         </button>
       </div>
 
       <form onSubmit={onSubmit} className="space-y-4">
         <div className="flex flex-col gap-1.5">
-          <label className="text-[#555555]">Event Title</label>
+          <label className="text-slate-500">Event Title</label>
           <input
             type="text"
             required
             value={eventForm.title}
             onChange={(event) => onFieldChange('title', event.target.value)}
             placeholder="e.g. Inter-School Cricket Tournament"
-            className="w-full p-3 bg-[#EAEAEA] border border-[#C8C8C8] rounded-xl outline-none focus:border-black font-semibold"
+            className="w-full p-3 bg-white/60 border border-white/80 rounded-xl outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all font-semibold"
           />
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <label className="text-[#555555]">Description</label>
+          <label className="text-slate-500">Description</label>
           <textarea
             required
             rows="3"
             value={eventForm.description}
             onChange={(event) => onFieldChange('description', event.target.value)}
             placeholder="Write event details, eligibility, schedule, or instructions..."
-            className="w-full p-3 bg-[#EAEAEA] border border-[#C8C8C8] rounded-xl outline-none focus:border-black resize-none font-semibold"
+            className="w-full p-3 bg-white/60 border border-white/80 rounded-xl outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all resize-none font-semibold"
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-2 bg-[#EAEAEA]/60 border border-[#C8C8C8] p-1 rounded-2xl">
+        <div className="grid grid-cols-2 gap-2 bg-white/50 border border-white/70 p-1 rounded-2xl">
           <button
             type="button"
             onClick={() => onFieldChange('durationType', 'single')}
             className={`py-2 rounded-xl text-xs font-black ${
-              eventForm.durationType === 'single' ? 'bg-white text-[#1A1A1A] shadow-sm' : 'text-[#555555]'
+              eventForm.durationType === 'single' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'
             }`}
           >
             Single Day
@@ -808,7 +808,7 @@ const EventFormModal = ({
             type="button"
             onClick={() => onFieldChange('durationType', 'multiple')}
             className={`py-2 rounded-xl text-xs font-black ${
-              eventForm.durationType === 'multiple' ? 'bg-white text-[#1A1A1A] shadow-sm' : 'text-[#555555]'
+              eventForm.durationType === 'multiple' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'
             }`}
           >
             Multiple Days
@@ -817,39 +817,39 @@ const EventFormModal = ({
 
         {eventForm.durationType === 'single' ? (
           <div className="flex flex-col gap-1.5">
-            <label className="text-[#555555]">Event Date</label>
+            <label className="text-slate-500">Event Date</label>
             <input
               type="date"
               value={eventForm.date}
               onChange={(event) => onFieldChange('date', event.target.value)}
-              className="w-full p-3 bg-[#EAEAEA] border border-[#C8C8C8] rounded-xl outline-none focus:border-black font-bold font-mono text-[#1A1A1A]"
+              className="w-full p-3 bg-white/60 border border-white/80 rounded-xl outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all font-bold font-mono text-slate-900"
             />
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
-              <label className="text-[#555555]">From</label>
+              <label className="text-slate-500">From</label>
               <input
                 type="date"
                 value={eventForm.fromDate}
                 onChange={(event) => onFieldChange('fromDate', event.target.value)}
-                className="w-full p-3 bg-[#EAEAEA] border border-[#C8C8C8] rounded-xl outline-none focus:border-black font-bold font-mono text-[#1A1A1A]"
+                className="w-full p-3 bg-white/60 border border-white/80 rounded-xl outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all font-bold font-mono text-slate-900"
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-[#555555]">To</label>
+              <label className="text-slate-500">To</label>
               <input
                 type="date"
                 value={eventForm.toDate}
                 onChange={(event) => onFieldChange('toDate', event.target.value)}
-                className="w-full p-3 bg-[#EAEAEA] border border-[#C8C8C8] rounded-xl outline-none focus:border-black font-bold font-mono text-[#1A1A1A]"
+                className="w-full p-3 bg-white/60 border border-white/80 rounded-xl outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all font-bold font-mono text-slate-900"
               />
             </div>
           </div>
         )}
 
         <div className="flex flex-col gap-1.5">
-          <label className="text-[#555555]">Optional Image</label>
+          <label className="text-slate-500">Optional Image</label>
           <div className="relative">
             <input
               type="file"
@@ -857,9 +857,9 @@ const EventFormModal = ({
               onChange={onImageAttach}
               className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10"
             />
-            <div className="w-full p-3 bg-[#EAEAEA]/50 border border-[#C8C8C8] border-dashed rounded-xl flex items-center justify-center gap-2 hover:border-black transition-all">
-              <UploadCloud className="w-4 h-4 text-[#555555]" />
-              <span className="text-[#555555] font-medium truncate max-w-[280px]">
+            <div className="w-full p-3 bg-white/50 border border-white/70 border-dashed rounded-xl flex items-center justify-center gap-2 hover:border-indigo-400 transition-all">
+              <UploadCloud className="w-4 h-4 text-slate-500" />
+              <span className="text-slate-500 font-medium truncate max-w-[280px]">
                 {eventForm.imageName || 'Attach event image'}
               </span>
             </div>
@@ -879,10 +879,10 @@ const EventFormModal = ({
           )}
         </div>
 
-        <div className="p-3 bg-[#E1FA6C]/10 border border-[#1A1A1A]/10 rounded-2xl flex items-center justify-between gap-4">
+        <div className="p-3 bg-indigo-50/60 border border-indigo-100 rounded-2xl flex items-center justify-between gap-4">
           <div>
-            <label className="text-[#1A1A1A] font-black block">Enable Student Participation?</label>
-            <span className="text-[10px] text-[#555555] font-semibold block mt-0.5">
+            <label className="text-slate-900 font-black block">Enable Student Participation?</label>
+            <span className="text-[10px] text-slate-500 font-semibold block mt-0.5">
               Students will see a participation button with this event.
             </span>
           </div>
@@ -893,21 +893,21 @@ const EventFormModal = ({
               onChange={(event) => onFieldChange('participationEnabled', event.target.checked)}
               className="sr-only peer"
             />
-            <div className="w-10 h-6 bg-[#C8C8C8] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-[#C8C8C8] after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#1A1A1A]"></div>
+            <div className="w-10 h-6 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-slate-200 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-500"></div>
           </label>
         </div>
 
-        <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#EAEAEA]">
+        <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100/80">
           <button
             type="button"
             onClick={onClose}
-            className="px-5 py-2 bg-[#EAEAEA] border border-[#C8C8C8] rounded-full hover:text-black transition-colors"
+            className="px-5 py-2 btn-ghost rounded-full transition-colors"
           >
             Cancel
           </button>
           <button
             type="submit"
-            className="px-6 py-2 bg-[#E1FA6C] border border-[#1A1A1A]/10 rounded-full font-black hover:bg-[#d4ee59] transition-all shadow-xs"
+            className="px-6 py-2 btn-primary rounded-full font-black transition-all shadow-xs"
           >
             {editingEventId ? 'Update Event' : 'Publish Event'}
           </button>

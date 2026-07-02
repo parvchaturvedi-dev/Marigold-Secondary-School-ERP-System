@@ -178,18 +178,18 @@ const AdminApplicationInbox = ({ session }) => {
 
   return (
     <div className="space-y-6 pb-8 select-none font-sans">
-      <div className="bg-white p-5 rounded-3xl border border-[#EAEAEA] shadow-sm">
+      <div className="glass-card p-5 rounded-3xl">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h3 className="text-base font-bold text-[#1A1A1A] flex items-center gap-2">
+            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
               <FileText className="w-5 h-5 text-[#8b5cf6]" /> Admin Application Inbox
             </h3>
-            <p className="text-xs text-[#666666] mt-0.5">
+            <p className="text-xs text-slate-400 mt-0.5">
               Review problems, safety concerns, infrastructure complaints, and approval requests. Leave requests are not shown here.
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center justify-end gap-1 bg-[#EAEAEA] p-1 rounded-2xl border border-gray-300 max-w-full overflow-hidden">
+          <div className="flex flex-wrap items-center justify-end gap-1 bg-white/50 p-1 rounded-2xl border border-white/70 max-w-full overflow-hidden">
             {inboxTabs.map((tab) => {
               const Icon = tab.icon;
               return (
@@ -202,8 +202,8 @@ const AdminApplicationInbox = ({ session }) => {
                   }}
                   className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-normal text-center ${
                     activeTab === tab.id
-                      ? 'bg-[#E1FA6C] text-[#1A1A1A] shadow-sm'
-                      : 'text-gray-600 hover:text-[#1A1A1A]'
+                      ? 'btn-primary shadow-sm'
+                      : 'text-slate-500 hover:text-slate-900'
                   }`}
                 >
                   <Icon className="w-3.5 h-3.5" /> {tab.label}
@@ -215,18 +215,18 @@ const AdminApplicationInbox = ({ session }) => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-1 bg-[#EAEAEA] p-4 rounded-3xl flex flex-col gap-3 shadow-sm h-[680px] overflow-y-auto">
+        <div className="lg:col-span-1 bg-white/50 p-4 rounded-3xl flex flex-col gap-3 shadow-sm h-[680px] overflow-y-auto">
           <div className="flex items-center justify-between px-1">
-            <h4 className="text-xs font-bold text-[#1A1A1A] capitalize">{activeTab} Inbox</h4>
+            <h4 className="text-xs font-bold text-slate-900 capitalize">{activeTab} Inbox</h4>
             <span className="text-[10px] font-bold text-gray-400">
               {isLoading ? 'Syncing...' : `${filteredApplications.length} items`}
             </span>
           </div>
 
           {filteredApplications.length === 0 && (
-            <div className="bg-white rounded-2xl border border-gray-200 p-6 text-center text-gray-400">
+            <div className="glass-soft rounded-2xl p-6 text-center text-slate-400">
               <FileText className="w-9 h-9 mx-auto mb-2 stroke-[1.4]" />
-              <p className="text-xs font-black text-[#1A1A1A]">No applications</p>
+              <p className="text-xs font-black text-slate-900">No applications</p>
             </div>
           )}
 
@@ -235,10 +235,10 @@ const AdminApplicationInbox = ({ session }) => {
               type="button"
               key={application.id}
               onClick={() => setSelectedApplicationId(application.id)}
-              className={`p-4 rounded-2xl border cursor-pointer transition-all bg-white hover:scale-[1.01] text-left ${
+              className={`p-4 rounded-2xl border cursor-pointer transition-all bg-white/60 hover:scale-[1.01] text-left ${
                 selectedApplication?.id === application.id
-                  ? 'border-[#8b5cf6] ring-2 ring-purple-100'
-                  : 'border-gray-200'
+                  ? 'border-indigo-400 ring-2 ring-indigo-100'
+                  : 'border-white/80'
               }`}
             >
               <div className="flex items-center justify-between mb-1.5">
@@ -250,7 +250,7 @@ const AdminApplicationInbox = ({ session }) => {
                 </span>
               </div>
 
-              <h5 className="text-xs font-bold text-[#1A1A1A] line-clamp-2">{application.title}</h5>
+              <h5 className="text-xs font-bold text-slate-900 line-clamp-2">{application.title}</h5>
               <p className="text-[11px] text-gray-400 mt-1">
                 By: {application.senderIdentity || application.senderName} ({application.className || application.senderRole})
               </p>
@@ -261,7 +261,7 @@ const AdminApplicationInbox = ({ session }) => {
           ))}
         </div>
 
-        <div className="lg:col-span-2 bg-white p-5 rounded-3xl border border-[#EAEAEA] shadow-sm min-h-[680px]">
+        <div className="lg:col-span-2 glass-card p-5 rounded-3xl min-h-[680px]">
           {selectedApplication ? (
             <div className="space-y-5">
               <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 border-b border-gray-100 pb-4">
@@ -276,7 +276,7 @@ const AdminApplicationInbox = ({ session }) => {
                       </span>
                     )}
                   </div>
-                  <h4 className="text-base font-black text-[#1A1A1A]">{selectedApplication.title}</h4>
+                  <h4 className="text-base font-black text-slate-900">{selectedApplication.title}</h4>
                   <p className="text-xs font-medium text-gray-500 mt-1">
                     Applicant: <b>{selectedApplication.senderIdentity || selectedApplication.senderName}</b> | Role:{' '}
                     <b>{selectedApplication.senderRole}</b> | Scope:{' '}
@@ -288,7 +288,7 @@ const AdminApplicationInbox = ({ session }) => {
                 </span>
               </div>
 
-              <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 text-xs text-[#333333] leading-relaxed font-medium">
+              <div className="p-4 glass-soft rounded-2xl text-xs text-slate-700 leading-relaxed font-medium">
                 {selectedApplication.message}
               </div>
 
@@ -306,7 +306,7 @@ const AdminApplicationInbox = ({ session }) => {
               <div className="border-t border-gray-100 pt-4 space-y-3">
                 <div className="flex items-center gap-2">
                   <MessageSquareReply className="w-4 h-4 text-[#8b5cf6]" />
-                  <h5 className="text-xs font-black text-[#1A1A1A]">Admin Reply</h5>
+                  <h5 className="text-xs font-black text-slate-900">Admin Reply</h5>
                 </div>
                 <textarea
                   value={reply}
@@ -319,7 +319,7 @@ const AdminApplicationInbox = ({ session }) => {
                   }
                   rows={5}
                   placeholder="Type Admin response here..."
-                  className="w-full bg-[#F8F8F8] border border-gray-200 rounded-2xl px-3 py-3 text-xs font-medium outline-none focus:border-[#8b5cf6] resize-none leading-relaxed disabled:text-gray-500 disabled:cursor-not-allowed"
+                  className="w-full bg-white/60 border border-white/80 rounded-2xl px-3 py-3 text-xs font-medium outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all resize-none leading-relaxed disabled:text-gray-500 disabled:cursor-not-allowed"
                 />
 
                 {hasSentReply && (
@@ -363,7 +363,7 @@ const AdminApplicationInbox = ({ session }) => {
                         type="button"
                         onClick={() => runAdminAction('approved')}
                         disabled={isReplyLocked}
-                        className="flex items-center gap-2 px-6 py-2.5 bg-[#E1FA6C] hover:bg-[#d2eb5b] text-[#1A1A1A] rounded-full text-xs font-bold transition-all shadow-sm"
+                        className="flex items-center gap-2 px-6 py-2.5 btn-primary rounded-full text-xs font-bold transition-all shadow-sm"
                       >
                         <CheckCircle2 className="w-4 h-4" /> Approve Request
                       </button>
@@ -373,7 +373,7 @@ const AdminApplicationInbox = ({ session }) => {
                       type="button"
                       onClick={() => runAdminAction('replied')}
                       disabled={isReplyLocked}
-                      className="flex items-center gap-2 px-6 py-2.5 bg-[#E1FA6C] hover:bg-[#d2eb5b] text-[#1A1A1A] rounded-full text-xs font-bold transition-all shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+                      className="flex items-center gap-2 px-6 py-2.5 btn-primary rounded-full text-xs font-bold transition-all shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <MessageSquareReply className="w-4 h-4" /> {hasSentReply ? 'Update Reply' : 'Send Reply'}
                     </button>
@@ -384,7 +384,7 @@ const AdminApplicationInbox = ({ session }) => {
           ) : (
             <div className="h-full min-h-[620px] flex flex-col items-center justify-center text-center text-gray-400">
               <FileText className="w-12 h-12 stroke-[1.2] mb-2" />
-              <p className="text-xs font-bold text-[#1A1A1A]">No Application Selected</p>
+              <p className="text-xs font-bold text-slate-900">No Application Selected</p>
               <p className="text-[10px] text-gray-400 mt-0.5 max-w-xs">
                 Select an entry from the inbox to review details, reply, approve, or reject.
               </p>
@@ -404,7 +404,7 @@ const ClassConsensusBlock = ({ application }) => {
   return (
     <div className="space-y-4 bg-purple-50/50 border border-purple-100 rounded-2xl p-4">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
-        <h5 className="text-xs font-bold text-[#1A1A1A] flex items-center gap-1.5">
+        <h5 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
           <Users className="w-4 h-4 text-purple-500" />
           {application.targetClassName} Engagement Breakdown
         </h5>
@@ -413,7 +413,7 @@ const ClassConsensusBlock = ({ application }) => {
         </span>
       </div>
 
-      <div className="w-full bg-gray-100 h-3 rounded-full overflow-hidden flex">
+      <div className="w-full bg-white/60 h-3 rounded-full overflow-hidden flex">
         <div style={{ width: `${metrics.consensusPercent}%` }} className="bg-emerald-500 h-full" />
       </div>
 

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Lock, User, Eye, EyeOff, ShieldAlert, ArrowRight, RefreshCw, GraduationCap, Award, ClipboardList, ShieldCheck } from 'lucide-react';
 import { authenticateUser, detectRoleFromUsername } from '../../components/common/auth';
 import { apiFetch } from '../../components/common/api';
+import AuroraBackground from '../../components/common/AuroraBackground';
 import Logo from "../../assets/logo.png";
 
 const Login = ({ onLoginSuccess }) => {
@@ -90,117 +91,102 @@ const Login = ({ onLoginSuccess }) => {
     }
   };
 
+  // THE 4 CORE MODULES metadata (visual only)
+  const coreModules = [
+    {
+      icon: GraduationCap,
+      tint: 'text-indigo-600 bg-indigo-500/10 border-indigo-500/20',
+      title: 'Student Portal',
+      body: 'Track your daily progress, access report cards, and manage live assignments instantly.',
+    },
+    {
+      icon: Award,
+      tint: 'text-violet-600 bg-violet-500/10 border-violet-500/20',
+      title: 'Teacher Suite',
+      body: 'Simplify grading, capture instant attendance, and manage student analytics seamlessly.',
+    },
+    {
+      icon: ClipboardList,
+      tint: 'text-sky-600 bg-sky-500/10 border-sky-500/20',
+      title: 'Clerk Office',
+      body: 'Manage structured fees, process accounts, admissions, and fast documentation.',
+    },
+    {
+      icon: ShieldCheck,
+      tint: 'text-fuchsia-600 bg-fuchsia-500/10 border-fuchsia-500/20',
+      title: 'Admin Control',
+      body: 'Total campus operational control, configuration setups, and overall high-level security.',
+    },
+  ];
+
   return (
-    <div className="w-full min-h-screen bg-slate-50 flex flex-col lg:flex-row relative overflow-hidden font-sans select-none">
+    <div className="w-full min-h-screen flex flex-col lg:flex-row relative overflow-hidden font-sans select-none">
+      <AuroraBackground />
 
-      {/* BACKGROUND INTERACTIVE ANIMATION (Professional Fluid Blob) */}
-      <style>{`
-        @keyframes floatEffect {
-          0%, 100% { transform: translate(0px, 0px) scale(1); }
-          50% { transform: translate(30px, -40px) scale(1.1); }
-        }
-        .animate-blob { animation: floatEffect 14s infinite ease-in-out; }
-      `}</style>
-
-      {/* LEFT SECTION: Premium Decorative Brand Panel 
-        RESPONSIVE BREAKPOINT: Hidden below 940px/1024px custom viewport (`hidden lg:flex`).
-        Gives a gorgeous presentation of MGHUB and its 4 core modules.
-      */}
-      <div className="hidden lg:flex w-full lg:w-[48%] bg-gradient-to-br from-slate-950 via-blue-950 to-indigo-950 p-12 flex-col justify-between relative overflow-hidden shadow-2xl min-h-screen">
-
-        {/* Animated Orbs for visual depth */}
-        <div className="absolute -top-10 -left-10 w-96 h-96 bg-blue-600/20 rounded-full blur-[120px] animate-blob pointer-events-none" />
-        <div className="absolute bottom-10 right-[-10%] w-[450px] h-[450px] bg-indigo-600/15 rounded-full blur-[140px] animate-blob pointer-events-none" style={{ animationDelay: '4s' }} />
+      {/* LEFT SECTION: Premium Glass Brand Panel */}
+      <div className="hidden lg:flex w-full lg:w-[48%] p-12 flex-col justify-between relative overflow-hidden min-h-screen">
 
         {/* Minimalist Top Tag */}
-        <div className="relative z-10 flex items-center gap-2">
-          <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span className="text-xs font-mono font-bold tracking-widest text-slate-400 uppercase">
+        <div className="relative z-10 flex items-center gap-2 animate-fadeIn">
+          <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+          <span className="text-xs font-mono font-bold tracking-widest text-slate-500 uppercase">
             Marigold Digital Ecosystem
           </span>
         </div>
 
         {/* MGHUB BRAND & MODULE EXP-PANEL */}
         <div className="relative z-10 my-auto space-y-8 max-w-xl">
-          <div className="space-y-3">
-            <div className="inline-flex items-center justify-center bg-blue-500/10 backdrop-blur-md rounded-xl px-4 py-1.5 border border-blue-500/20 text-xs font-bold text-blue-400 tracking-wide uppercase">
+          <div className="space-y-3 animate-fadeInUp">
+            <div className="inline-flex items-center justify-center bg-white/60 backdrop-blur-md rounded-xl px-4 py-1.5 border border-white/80 text-xs font-bold text-indigo-600 tracking-wide uppercase shadow-sm">
               🚀 Welcome to the Future
             </div>
-            <h2 className="text-4xl lg:text-5xl font-black text-white tracking-tight leading-tight">
+            <h2 className="text-4xl lg:text-5xl font-black text-slate-900 tracking-tight leading-tight">
               MGHUB <br />
-              <span className="bg-gradient-to-r from-blue-400 via-indigo-300 to-sky-400 bg-clip-text text-transparent font-extrabold text-3xl lg:text-4xl">
+              <span className="text-gradient font-extrabold text-3xl lg:text-4xl">
                 Smart Way Of Education
               </span>
             </h2>
-            <p className="text-sm text-slate-400 max-w-md font-medium leading-relaxed">
+            <p className="text-sm text-slate-500 max-w-md font-medium leading-relaxed">
               An all-in-one unified intelligence hub to track progress, streamline operations, and boost collaborative academic growth.
             </p>
           </div>
 
           {/* THE 4 CORE MODULES */}
-          <div className="grid grid-cols-2 gap-4 pt-4">
-
-            {/* Student Module */}
-            <div className="bg-white/[0.03] backdrop-blur-sm border border-white/[0.06] rounded-2xl p-4 space-y-2 transition-all hover:bg-white/[0.06]">
-              <div className="w-8 h-8 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 border border-blue-500/20">
-                <GraduationCap className="w-4 h-4" />
+          <div className="grid grid-cols-2 gap-4 pt-4 stagger">
+            {coreModules.map(({ icon: ModuleIcon, tint, title, body }) => (
+              <div key={title} className="glass-card glass-hover rounded-2xl p-4 space-y-2">
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center border ${tint}`}>
+                  <ModuleIcon className="w-4.5 h-4.5" />
+                </div>
+                <h3 className="text-sm font-bold text-slate-800">{title}</h3>
+                <p className="text-xs text-slate-500 leading-normal">{body}</p>
               </div>
-              <h3 className="text-sm font-bold text-slate-200">Student Portal</h3>
-              <p className="text-xs text-slate-400 leading-normal">Track your daily progress, access report cards, and manage live assignments instantly.</p>
-            </div>
-
-            {/* Teacher Module */}
-            <div className="bg-white/[0.03] backdrop-blur-sm border border-white/[0.06] rounded-2xl p-4 space-y-2 transition-all hover:bg-white/[0.06]">
-              <div className="w-8 h-8 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 border border-indigo-500/20">
-                <Award className="w-4 h-4" />
-              </div>
-              <h3 className="text-sm font-bold text-slate-200">Teacher Suite</h3>
-              <p className="text-xs text-slate-400 leading-normal">Simplify grading, capture instant attendance, and manage student analytics seamlessly.</p>
-            </div>
-
-            {/* Clerk Module */}
-            <div className="bg-white/[0.03] backdrop-blur-sm border border-white/[0.06] rounded-2xl p-4 space-y-2 transition-all hover:bg-white/[0.06]">
-              <div className="w-8 h-8 rounded-xl bg-sky-500/10 flex items-center justify-center text-sky-400 border border-sky-500/20">
-                <ClipboardList className="w-4 h-4" />
-              </div>
-              <h3 className="text-sm font-bold text-slate-200">Clerk Office</h3>
-              <p className="text-xs text-slate-400 leading-normal">Manage structured fees, process accounts, admissions, and fast documentation.</p>
-            </div>
-
-            {/* Admin Module */}
-            <div className="bg-white/[0.03] backdrop-blur-sm border border-white/[0.06] rounded-2xl p-4 space-y-2 transition-all hover:bg-white/[0.06]">
-              <div className="w-8 h-8 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-400 border border-purple-500/20">
-                <ShieldCheck className="w-4 h-4" />
-              </div>
-              <h3 className="text-sm font-bold text-slate-200">Admin Control</h3>
-              <p className="text-xs text-slate-400 leading-normal">Total campus operational control, configuration setups, and overall high-level security.</p>
-            </div>
-
+            ))}
           </div>
         </div>
 
         {/* Side Panel Footer */}
-        <div className="relative z-10 text-[11px] font-mono font-medium text-slate-500 uppercase tracking-wider">
+        <div className="relative z-10 text-[11px] font-mono font-medium text-slate-400 uppercase tracking-wider">
           &copy; {new Date().getFullYear()} Marigold School Behror. Powered by MGHUB.
         </div>
       </div>
 
-      {/* RIGHT SECTION: Ultra-Clean Professional Interactive Login Form */}
-      <div className="w-full lg:w-[52%] flex items-center justify-center p-6 sm:p-12 md:p-16 bg-white relative z-10">
-        <div className="w-full max-w-[420px] space-y-8 animate-fadeIn">
+      {/* RIGHT SECTION: Glass Login Form */}
+      <div className="w-full lg:w-[52%] flex items-center justify-center p-6 sm:p-12 md:p-16 relative z-10">
+        <div className="w-full max-w-[440px] glass-card rounded-[2rem] p-8 sm:p-10 space-y-7 animate-fadeInUp">
 
           {/* SCHOOL LOGO AREA */}
           <div className="flex flex-col items-center lg:items-start text-center lg:text-left space-y-4">
 
             {/* SCHOOL LOGO BOX */}
-            <div className="w-20 h-20 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-center shadow-md transition-transform duration-300 hover:scale-105 p-2">
+            <div className="w-20 h-20 bg-white/70 border border-white/80 rounded-2xl flex items-center justify-center shadow-md transition-transform duration-300 hover:scale-105 hover:rotate-2 p-2">
               <img
                 src={Logo}
                 alt="Marigold School Logo"
                 className="w-full h-full object-contain"
                 onError={(e) => {
                   e.target.style.display = 'none';
-                  e.target.parentNode.innerHTML = '<div class="text-blue-950 font-black text-2xl font-serif tracking-tighter">M</div>';
+                  e.target.parentNode.innerHTML = '<div class="text-indigo-600 font-black text-2xl font-serif tracking-tighter">M</div>';
                 }}
               />
             </div>
@@ -218,14 +204,14 @@ const Login = ({ onLoginSuccess }) => {
 
           {/* DYNAMIC ROLE RECOGNITION BADGE */}
           {username.trim() && (
-            <div className={`border text-xs font-mono font-bold uppercase px-4 py-3 rounded-xl transition-all duration-300 text-center tracking-wider shadow-inner ${detectedRole.color}`}>
+            <div className={`border text-xs font-mono font-bold uppercase px-4 py-3 rounded-xl transition-all duration-300 text-center tracking-wider shadow-inner animate-scaleUp ${detectedRole.color}`}>
               Role Identified: {detectedRole.label}
             </div>
           )}
 
           {/* DYNAMIC ERROR PROTOCOL BOX */}
           {errorMessage && (
-            <div className="bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold px-4 py-3.5 rounded-xl flex items-start gap-2.5 shadow-sm animate-shake">
+            <div className="bg-rose-50/80 backdrop-blur-sm border border-rose-200 text-rose-800 text-xs font-semibold px-4 py-3.5 rounded-xl flex items-start gap-2.5 shadow-sm animate-shake">
               <ShieldAlert className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
               <div>
                 <span className="font-bold block text-rose-900 mb-0.5">Authentication Failure</span>
@@ -242,8 +228,8 @@ const Login = ({ onLoginSuccess }) => {
               <label className="text-xs font-bold text-slate-700 tracking-wide block ml-0.5">
                 User Access ID
               </label>
-              <div className="relative bg-slate-50 border border-slate-200 rounded-xl focus-within:border-blue-600 focus-within:bg-white focus-within:ring-4 focus-within:ring-blue-50 transition-all flex items-center px-4 py-3.5 group">
-                <User className="w-5 h-5 text-slate-400 mr-3 group-focus-within:text-blue-600 transition-colors" />
+              <div className="relative bg-white/60 border border-white/80 rounded-xl focus-within:border-indigo-400 focus-within:bg-white/90 focus-within:ring-4 focus-within:ring-indigo-100 transition-all flex items-center px-4 py-3.5 group">
+                <User className="w-5 h-5 text-slate-400 mr-3 group-focus-within:text-indigo-500 transition-colors" />
                 <input
                   type="text"
                   value={username}
@@ -263,13 +249,13 @@ const Login = ({ onLoginSuccess }) => {
                 <button
                   type="button"
                   onClick={() => alert("Please contact the computer department or system admin desk to manage encryption resets.")}
-                  className="text-xs font-semibold text-blue-600 hover:text-blue-800 hover:underline transition-all"
+                  className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 hover:underline transition-all"
                 >
                   Forgot Password?
                 </button>
               </div>
-              <div className="relative bg-slate-50 border border-slate-200 rounded-xl focus-within:border-blue-600 focus-within:bg-white focus-within:ring-4 focus-within:ring-blue-50 transition-all flex items-center px-4 py-3.5 group">
-                <Lock className="w-5 h-5 text-slate-400 mr-3 group-focus-within:text-blue-600 transition-colors" />
+              <div className="relative bg-white/60 border border-white/80 rounded-xl focus-within:border-indigo-400 focus-within:bg-white/90 focus-within:ring-4 focus-within:ring-indigo-100 transition-all flex items-center px-4 py-3.5 group">
+                <Lock className="w-5 h-5 text-slate-400 mr-3 group-focus-within:text-indigo-500 transition-colors" />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={password}
@@ -290,7 +276,7 @@ const Login = ({ onLoginSuccess }) => {
             {/* REMEMBER DEVICE SESSION TOGGLE */}
             <div className="flex items-center ml-0.5 pt-1">
               <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-500 hover:text-slate-700 select-none">
-                <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
                 Keep me authenticated on this device
               </label>
             </div>
@@ -299,7 +285,7 @@ const Login = ({ onLoginSuccess }) => {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full mt-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-sm font-bold uppercase tracking-wider py-4 px-4 rounded-xl shadow-lg shadow-blue-600/10 flex items-center justify-center gap-2 transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full mt-3 btn-primary text-sm font-bold uppercase tracking-wider py-4 px-4 rounded-xl flex items-center justify-center gap-2 group"
             >
               {isSubmitting ? (
                 <>
@@ -317,9 +303,9 @@ const Login = ({ onLoginSuccess }) => {
           {/* POLICY TERMS FOOTER */}
           <p className="text-[11px] text-slate-400 text-center lg:text-left leading-relaxed font-medium">
             By accessing this hub, you agree to our{' '}
-            <a href="#terms" className="text-slate-600 hover:text-blue-600 font-semibold underline">Terms of Use</a>{' '}
+            <a href="#terms" className="text-slate-600 hover:text-indigo-600 font-semibold underline">Terms of Use</a>{' '}
             &{' '}
-            <a href="#privacy" className="text-slate-600 hover:text-blue-600 font-semibold underline">Privacy Standards</a>.
+            <a href="#privacy" className="text-slate-600 hover:text-indigo-600 font-semibold underline">Privacy Standards</a>.
           </p>
         </div>
       </div>
@@ -328,8 +314,8 @@ const Login = ({ onLoginSuccess }) => {
           FORCED PASSWORD RESET POPUP COMPONENT (COMPROMISE FLOW OVERLAY)
           ==================================================================== */}
       {forcedResetModal.isOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fadeIn">
-          <div className="bg-white border border-slate-200 p-6 md:p-8 rounded-3xl shadow-2xl w-full max-w-md text-left space-y-5 border-t-[6px] border-t-amber-500 transform scale-100 transition-all">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fadeIn">
+          <div className="glass-strong p-6 md:p-8 rounded-3xl w-full max-w-md text-left space-y-5 border-t-[6px] border-t-amber-400 animate-scaleUp">
 
             <div className="flex items-start gap-3.5 text-amber-900">
               <div className="bg-amber-50 p-2.5 rounded-xl border border-amber-200 flex-shrink-0">
@@ -351,7 +337,7 @@ const Login = ({ onLoginSuccess }) => {
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
                   placeholder="Enter temporary password token"
-                  className="w-full text-sm font-mono font-bold p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-600 focus:bg-white transition-all"
+                  className="w-full text-sm font-mono font-bold p-3 bg-white/60 border border-white/80 rounded-xl outline-none focus:border-indigo-400 focus:bg-white/90 focus:ring-4 focus:ring-indigo-100 transition-all"
                 />
               </div>
 
@@ -364,7 +350,7 @@ const Login = ({ onLoginSuccess }) => {
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   placeholder="Minimum 6 alpha-numeric characters"
-                  className="w-full text-sm font-mono font-bold p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-600 focus:bg-white transition-all"
+                  className="w-full text-sm font-mono font-bold p-3 bg-white/60 border border-white/80 rounded-xl outline-none focus:border-indigo-400 focus:bg-white/90 focus:ring-4 focus:ring-indigo-100 transition-all"
                 />
               </div>
 
@@ -377,14 +363,14 @@ const Login = ({ onLoginSuccess }) => {
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Re-type new password"
-                  className="w-full text-sm font-mono font-bold p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-600 focus:bg-white transition-all"
+                  className="w-full text-sm font-mono font-bold p-3 bg-white/60 border border-white/80 rounded-xl outline-none focus:border-indigo-400 focus:bg-white/90 focus:ring-4 focus:ring-indigo-100 transition-all"
                 />
               </div>
 
               {/* ACTION TRIGGER BUTTON */}
               <button
                 type="submit"
-                className="w-full mt-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold uppercase tracking-wider py-3.5 px-4 rounded-xl shadow-lg transition-all"
+                className="w-full mt-2 btn-primary text-xs font-bold uppercase tracking-wider py-3.5 px-4 rounded-xl"
               >
                 Apply Custom Configuration
               </button>

@@ -272,11 +272,11 @@ const UsersManagement = ({ session }) => {
     <div className="space-y-6">
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 text-[#1A1A1A]">
+          <div className="flex items-center gap-2 text-slate-900">
             <Lock className="w-5 h-5" />
             <h1 className="text-xl font-black">Users Management</h1>
           </div>
-          <p className="text-xs font-semibold text-[#555555] mt-1">
+          <p className="text-xs font-semibold text-slate-500 mt-1">
             Login identities for admin, clerk, teacher, and student portals.
           </p>
         </div>
@@ -286,7 +286,7 @@ const UsersManagement = ({ session }) => {
             type="button"
             onClick={sendCredentialsToAll}
             disabled={isSendingAllCredentials || isLoading || !users.length}
-            className="inline-flex items-center justify-center gap-2 border border-[#1A1A1A] bg-white px-4 py-2 rounded-lg text-xs font-black text-[#1A1A1A] hover:bg-[#EAEAEA] disabled:opacity-60"
+            className="btn-ghost inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-black disabled:opacity-60"
           >
             <Send className="w-4 h-4" />
             {isSendingAllCredentials ? 'Sending...' : 'Send Credentials to All'}
@@ -295,7 +295,7 @@ const UsersManagement = ({ session }) => {
             type="button"
             onClick={loadUsers}
             disabled={isLoading}
-            className="inline-flex items-center justify-center gap-2 bg-[#1A1A1A] text-white px-4 py-2 rounded-lg text-xs font-black disabled:opacity-60"
+            className="btn-primary inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-black disabled:opacity-60"
           >
             <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
             Refresh
@@ -309,10 +309,10 @@ const UsersManagement = ({ session }) => {
             type="button"
             key={role}
             onClick={() => setActiveRole(role)}
-            className={`border px-4 py-3 rounded-lg text-left transition ${
+            className={`px-4 py-3 rounded-lg text-left transition ${
               activeRole === role
-                ? 'bg-[#E1FA6C] border-[#1A1A1A] text-[#1A1A1A]'
-                : 'bg-white border-[#C8C8C8] text-[#555555] hover:border-[#1A1A1A]'
+                ? 'btn-primary'
+                : 'glass-soft glass-hover text-slate-500 hover:text-slate-900'
             }`}
           >
             <p className="text-[10px] font-black uppercase">
@@ -325,19 +325,19 @@ const UsersManagement = ({ session }) => {
         ))}
       </div>
 
-      <div className="bg-white border border-[#C8C8C8] rounded-lg overflow-hidden">
-        <div className="p-4 border-b border-[#EAEAEA] flex flex-col md:flex-row md:items-center gap-3">
+      <div className="glass-card rounded-3xl overflow-hidden">
+        <div className="p-4 border-b border-slate-100/80 flex flex-col md:flex-row md:items-center gap-3">
           <div className="relative flex-1">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#555555]" />
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search username, name, role, or email"
-              className="w-full bg-[#F8F8F8] border border-[#D9D9D9] rounded-lg pl-9 pr-3 py-2 text-sm font-semibold outline-none focus:border-[#1A1A1A]"
+              className="w-full bg-white/60 border border-white/80 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none transition-all rounded-lg pl-9 pr-3 py-2 text-sm font-semibold"
             />
           </div>
 
-          <div className="flex items-center gap-2 text-xs font-bold text-[#555555]">
+          <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
             <Users className="w-4 h-4" />
             {filteredUsers.length} visible
           </div>
@@ -359,7 +359,7 @@ const UsersManagement = ({ session }) => {
 
         <div className="overflow-x-auto">
           <table className="w-full text-left">
-            <thead className="bg-[#F8F8F8] text-[10px] uppercase text-[#555555]">
+            <thead className="bg-indigo-50/60 text-[10px] uppercase text-slate-500">
               <tr>
                 <th className="px-4 py-3">User</th>
                 <th className="px-4 py-3">Role</th>
@@ -369,10 +369,10 @@ const UsersManagement = ({ session }) => {
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#EAEAEA]">
+            <tbody className="divide-y divide-slate-100/80">
               {isLoading ? (
                 <tr>
-                  <td colSpan="6" className="px-4 py-10 text-center text-sm font-bold text-[#555555]">
+                  <td colSpan="6" className="px-4 py-10 text-center text-sm font-bold text-slate-500">
                     Loading users...
                   </td>
                 </tr>
@@ -382,29 +382,29 @@ const UsersManagement = ({ session }) => {
                   const isPasswordVisible = visiblePasswords[user.username];
 
                   return (
-                    <tr key={user.username} className="hover:bg-[#F8F8F8]">
+                    <tr key={user.username} className="hover:bg-white/70">
                       <td className="px-4 py-3">
-                        <p className="text-sm font-black text-[#1A1A1A]">{user.username}</p>
-                        <p className="text-xs font-semibold text-[#555555]">
+                        <p className="text-sm font-black text-slate-900">{user.username}</p>
+                        <p className="text-xs font-semibold text-slate-500">
                           {user.displayName || 'Unnamed user'}
                         </p>
                       </td>
                       <td className="px-4 py-3">
-                        <span className="inline-flex items-center rounded-md bg-[#EAEAEA] px-2 py-1 text-[10px] font-black uppercase">
+                        <span className="inline-flex items-center rounded-md bg-indigo-100 text-indigo-700 border border-indigo-200 px-2 py-1 text-[10px] font-black uppercase">
                           {roleLabels[user.role] || user.role}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-xs font-semibold text-[#555555]">
+                      <td className="px-4 py-3 text-xs font-semibold text-slate-500">
                         {email || 'Not linked'}
                       </td>
                       <td className="px-4 py-3">
-                        <div className="inline-flex items-center gap-2 text-xs font-mono font-bold text-[#1A1A1A]">
+                        <div className="inline-flex items-center gap-2 text-xs font-mono font-bold text-slate-900">
                           <KeyRound className="w-3.5 h-3.5" />
                           {isPasswordVisible ? (revealedPasswords[user.username] || getInitialPassword(user)) : '********'}
                           <button
                             type="button"
                             onClick={() => (isPasswordVisible ? setVisiblePasswords((current) => ({ ...current, [user.username]: false })) : requestPasswordOtp(user))}
-                            className="text-[#555555] hover:text-[#1A1A1A]"
+                            className="text-slate-500 hover:text-slate-900"
                             aria-label="Toggle password visibility"
                           >
                             {isPasswordVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -421,9 +421,9 @@ const UsersManagement = ({ session }) => {
                             <input
                               name="otp"
                               placeholder="Enter OTP"
-                              className="w-24 rounded-lg border border-[#C8C8C8] px-2 py-1 text-xs font-bold outline-none"
+                              className="w-24 bg-white/60 border border-white/80 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none transition-all rounded-lg px-2 py-1 text-xs font-bold"
                             />
-                            <button type="submit" className="rounded-lg bg-[#1A1A1A] px-2 py-1 text-[10px] font-black text-white">
+                            <button type="submit" className="btn-primary rounded-lg px-2 py-1 text-[10px] font-black">
                               Reveal
                             </button>
                           </form>
@@ -432,7 +432,7 @@ const UsersManagement = ({ session }) => {
                           type="button"
                           onClick={() => sendCredentials(user)}
                           disabled={isSendingCredentials[user.username]}
-                          className="mt-2 rounded-lg border border-[#C8C8C8] bg-white px-2 py-1 text-[10px] font-black text-[#1A1A1A] hover:bg-[#EAEAEA] disabled:opacity-60"
+                          className="mt-2 btn-ghost rounded-lg px-2 py-1 text-[10px] font-black disabled:opacity-60"
                         >
                           {isSendingCredentials[user.username] ? 'Sending...' : 'Send Credentials via Email'}
                         </button>
@@ -453,7 +453,7 @@ const UsersManagement = ({ session }) => {
                           <button
                             type="button"
                             onClick={() => startEditUser(user)}
-                            className="rounded-lg border border-[#C8C8C8] bg-white p-2 text-[#1A1A1A] hover:bg-[#EAEAEA]"
+                            className="rounded-lg bg-white/60 border border-white/80 p-2 text-slate-900 hover:bg-white/70"
                             title={user.profile?.managedByIdentitySync && user.role !== 'admin' ? 'Only activation and password can be changed here' : 'Edit user'}
                           >
                             <Edit2 className="w-4 h-4" />
@@ -475,7 +475,7 @@ const UsersManagement = ({ session }) => {
                 })
               ) : (
                 <tr>
-                  <td colSpan="6" className="px-4 py-10 text-center text-sm font-bold text-[#555555]">
+                  <td colSpan="6" className="px-4 py-10 text-center text-sm font-bold text-slate-500">
                     No users found. Add students, teachers, or clerks to sync identities.
                   </td>
                 </tr>
@@ -521,13 +521,13 @@ const UserFormModal = ({
   lockProfileFields = false,
   onRequestPasswordOtp,
 }) => (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
-    <form onSubmit={onSubmit} className="w-full max-w-xl rounded-2xl border border-[#C8C8C8] bg-white p-5 text-xs font-bold text-[#1A1A1A] shadow-xl">
-      <div className="mb-4 flex items-center justify-between border-b border-[#EAEAEA] pb-3">
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-md p-4">
+    <form onSubmit={onSubmit} className="glass-strong animate-scaleUp w-full max-w-xl rounded-2xl p-5 text-xs font-bold text-slate-900 shadow-xl">
+      <div className="mb-4 flex items-center justify-between border-b border-slate-100/80 pb-3">
         <h3 className="text-sm font-black flex items-center gap-2">
           <Lock className="w-4 h-4" /> {title}
         </h3>
-        <button type="button" onClick={onClose} className="rounded-lg p-1 hover:bg-[#EAEAEA]">
+        <button type="button" onClick={onClose} className="rounded-lg p-1 hover:bg-white/70">
           <X className="w-4 h-4" />
         </button>
       </div>
@@ -547,7 +547,7 @@ const UserFormModal = ({
             onChange={onChange}
             disabled={isEdit}
             placeholder="ADM-002"
-            className="w-full rounded-xl border border-[#C8C8C8] bg-[#F8F8F8] px-3 py-2 font-mono outline-none disabled:opacity-60"
+            className="w-full rounded-xl bg-white/60 border border-white/80 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none transition-all px-3 py-2 font-mono disabled:opacity-60"
             required
           />
         </label>
@@ -558,7 +558,7 @@ const UserFormModal = ({
             value={values.displayName}
             onChange={onChange}
             disabled={lockProfileFields}
-            className="w-full rounded-xl border border-[#C8C8C8] bg-[#F8F8F8] px-3 py-2 outline-none disabled:opacity-60"
+            className="w-full rounded-xl bg-white/60 border border-white/80 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none transition-all px-3 py-2 disabled:opacity-60"
             required={!lockProfileFields}
           />
         </label>
@@ -570,7 +570,7 @@ const UserFormModal = ({
             value={values.email}
             onChange={onChange}
             disabled={lockProfileFields}
-            className="w-full rounded-xl border border-[#C8C8C8] bg-[#F8F8F8] px-3 py-2 outline-none disabled:opacity-60"
+            className="w-full rounded-xl bg-white/60 border border-white/80 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none transition-all px-3 py-2 disabled:opacity-60"
           />
         </label>
         <label className="space-y-1">
@@ -580,7 +580,7 @@ const UserFormModal = ({
             value={values.mobile}
             onChange={onChange}
             disabled={lockProfileFields}
-            className="w-full rounded-xl border border-[#C8C8C8] bg-[#F8F8F8] px-3 py-2 font-mono outline-none disabled:opacity-60"
+            className="w-full rounded-xl bg-white/60 border border-white/80 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none transition-all px-3 py-2 font-mono disabled:opacity-60"
           />
         </label>
         <label className="space-y-1">
@@ -590,7 +590,7 @@ const UserFormModal = ({
             value={values.designation}
             onChange={onChange}
             disabled={lockProfileFields}
-            className="w-full rounded-xl border border-[#C8C8C8] bg-[#F8F8F8] px-3 py-2 outline-none disabled:opacity-60"
+            className="w-full rounded-xl bg-white/60 border border-white/80 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none transition-all px-3 py-2 disabled:opacity-60"
           />
         </label>
         <label className="space-y-1">
@@ -600,7 +600,7 @@ const UserFormModal = ({
             value={values.password}
             onChange={onChange}
             placeholder={isEdit ? 'Leave blank to keep existing' : 'Minimum 6 characters'}
-            className="w-full rounded-xl border border-[#C8C8C8] bg-[#F8F8F8] px-3 py-2 font-mono outline-none"
+            className="w-full rounded-xl bg-white/60 border border-white/80 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none transition-all px-3 py-2 font-mono"
             required={!isEdit}
           />
         </label>
@@ -614,33 +614,33 @@ const UserFormModal = ({
                 onChange={onChange}
                 placeholder="E6HJK82D"
                 maxLength={8}
-                className="min-w-0 flex-1 rounded-xl border border-[#C8C8C8] bg-[#F8F8F8] px-3 py-2 font-mono uppercase outline-none"
+                className="min-w-0 flex-1 rounded-xl bg-white/60 border border-white/80 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none transition-all px-3 py-2 font-mono uppercase"
               />
               <button
                 type="button"
                 onClick={onRequestPasswordOtp}
-                className="shrink-0 rounded-xl border border-[#1A1A1A] bg-white px-3 py-2 text-[10px] font-black text-[#1A1A1A] hover:bg-[#EAEAEA]"
+                className="btn-ghost shrink-0 rounded-xl px-3 py-2 text-[10px] font-black"
               >
                 Send OTP
               </button>
             </div>
-            <p className="text-[10px] font-semibold text-[#555555]">
+            <p className="text-[10px] font-semibold text-slate-500">
               Password updates send OTP to the user and force password change at next login.
             </p>
           </div>
         )}
       </div>
 
-      <label className="mt-4 flex items-center gap-2 rounded-xl border border-[#EAEAEA] bg-[#F8F8F8] px-3 py-2">
+      <label className="mt-4 flex items-center gap-2 rounded-xl glass-soft px-3 py-2">
         <input name="isActive" type="checkbox" checked={Boolean(values.isActive)} onChange={onChange} />
         Active account
       </label>
 
-      <div className="mt-5 flex justify-end gap-2 border-t border-[#EAEAEA] pt-4">
-        <button type="button" onClick={onClose} className="rounded-lg border border-[#C8C8C8] px-4 py-2 font-black text-[#555555]">
+      <div className="mt-5 flex justify-end gap-2 border-t border-slate-100/80 pt-4">
+        <button type="button" onClick={onClose} className="rounded-lg bg-white/50 border border-white/80 px-4 py-2 font-black text-slate-500 hover:text-slate-900 hover:bg-white/70">
           Cancel
         </button>
-        <button type="submit" className="inline-flex items-center gap-2 rounded-lg bg-[#1A1A1A] px-4 py-2 font-black text-white">
+        <button type="submit" className="btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 font-black">
           <Save className="w-4 h-4" /> {submitLabel}
         </button>
       </div>

@@ -146,37 +146,37 @@ const LeaveRequests = ({ session }) => {
   };
 
   return (
-    <div className="flex-1 min-h-screen bg-[#D9D9D9] p-6 font-sans select-none text-[#1A1A1A]">
-      <div className="bg-white p-6 rounded-3xl border border-[#C8C8C8] mb-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+    <div className="flex-1 min-h-screen p-6 font-sans select-none text-slate-900">
+      <div className="glass-card rounded-3xl p-6 mb-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <h3 className="text-xl font-bold flex items-center gap-2">
-            <CalendarClock className="w-5 h-5 text-[#1A1A1A]" /> Leave Approval Desk
+            <CalendarClock className="w-5 h-5 text-slate-900" /> Leave Approval Desk
           </h3>
-          <p className="text-xs text-[#555555] mt-1">
+          <p className="text-xs text-slate-500 mt-1">
             Review staff requests, student class-teacher routing, and forwarded admin approvals.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-2 bg-[#EAEAEA] px-3.5 py-2 rounded-xl border border-[#C8C8C8]/60 text-xs">
-            <Search className="w-4 h-4 text-[#555555]" />
+          <div className="flex items-center gap-2 bg-white/50 px-3.5 py-2 rounded-xl border border-slate-200/70 text-xs">
+            <Search className="w-4 h-4 text-slate-500" />
             <input
               type="text"
               placeholder="Search applicant, title, or ID..."
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
-              className="bg-transparent border-none outline-none w-44 md:w-56 font-bold text-[#1A1A1A]"
+              className="bg-transparent border-none outline-none w-44 md:w-56 font-bold text-slate-900"
             />
           </div>
 
-          <div className="bg-[#EAEAEA] p-1 rounded-xl border border-[#C8C8C8]/60 flex gap-0.5 text-[11px] font-black">
+          <div className="bg-white/50 p-1 rounded-xl border border-slate-200/70 flex gap-0.5 text-[11px] font-black">
             {tabs.map((tab) => (
               <button
                 key={tab}
                 type="button"
                 onClick={() => setActiveTab(tab)}
                 className={`px-3 py-1.5 rounded-lg transition-all ${
-                  activeTab === tab ? 'bg-white text-black shadow-xs' : 'text-[#555555] hover:text-black'
+                  activeTab === tab ? 'bg-white text-black shadow-xs' : 'text-slate-500 hover:text-black'
                 }`}
               >
                 {tab === 'All' ? 'All' : `${tab}s`}
@@ -187,7 +187,7 @@ const LeaveRequests = ({ session }) => {
       </div>
 
       {filteredRequests.length === 0 ? (
-        <div className="bg-white rounded-3xl p-12 text-center text-xs text-[#555555] font-semibold border border-[#C8C8C8]">
+        <div className="glass-card rounded-3xl p-12 text-center text-xs text-slate-500 font-semibold">
           No leave requests match your filters.
         </div>
       ) : (
@@ -199,18 +199,18 @@ const LeaveRequests = ({ session }) => {
             return (
               <div
                 key={request.id}
-                className={`bg-white border rounded-3xl p-5 flex flex-col justify-between min-h-[250px] transition-all relative ${
+                className={`glass-card glass-hover border rounded-3xl p-5 flex flex-col justify-between min-h-[250px] transition-all relative ${
                   request.status.includes('approved')
                     ? 'border-emerald-500/30'
                     : request.status.includes('rejected')
                       ? 'border-red-500/30'
-                      : 'border-[#C8C8C8] hover:border-black'
+                      : 'border-transparent'
                 }`}
               >
                 <div className="space-y-3">
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <div className="flex items-center gap-1.5">
-                      <span className="font-mono text-[9px] bg-[#EAEAEA] border border-[#C8C8C8]/60 text-[#1A1A1A] px-2 py-0.5 rounded font-black uppercase">
+                      <span className="font-mono text-[9px] bg-white/50 border border-slate-200/70 text-slate-900 px-2 py-0.5 rounded font-black uppercase">
                         {request.id}
                       </span>
                       <span
@@ -229,35 +229,35 @@ const LeaveRequests = ({ session }) => {
                   </div>
 
                   <div>
-                    <h4 className="text-sm font-black text-[#1A1A1A] leading-tight">{request.title}</h4>
-                    <p className="text-[11px] text-[#555555] font-bold mt-1">
+                    <h4 className="text-sm font-black text-slate-900 leading-tight">{request.title}</h4>
+                    <p className="text-[11px] text-slate-500 font-bold mt-1">
                       {request.applicantName} - {request.metaInfo || request.className}
                     </p>
                     {request.applicantRole === 'student' && (
-                      <p className="text-[10px] text-[#777777] font-bold mt-1">
+                      <p className="text-[10px] text-slate-400 font-bold mt-1">
                         Class Teacher: {request.classTeacherName || 'Assigned Teacher'}
                       </p>
                     )}
                   </div>
 
-                  <hr className="border-[#EAEAEA]" />
+                  <hr className="border-slate-100/80" />
 
                   <div className="space-y-1.5">
-                    <p className="text-xs font-semibold text-[#1A1A1A] bg-[#EAEAEA]/30 p-2.5 rounded-xl border border-[#EAEAEA]/60 leading-relaxed">
+                    <p className="text-xs font-semibold text-slate-900 bg-white/50 p-2.5 rounded-xl border border-slate-100/80 leading-relaxed">
                       {request.description}
                     </p>
-                    <p className="text-[10px] text-[#555555] font-bold font-mono flex flex-wrap items-center gap-1">
+                    <p className="text-[10px] text-slate-500 font-bold font-mono flex flex-wrap items-center gap-1">
                       <span>Leave Dates:</span>
-                      <span className="text-[#1A1A1A] font-black">{getLeaveDurationLabel(request)}</span>
+                      <span className="text-slate-900 font-black">{getLeaveDurationLabel(request)}</span>
                     </p>
-                    <p className="text-[10px] text-[#777777] font-bold">
+                    <p className="text-[10px] text-slate-400 font-bold">
                       Submitted: {formatLeaveDate(request.createdAt?.slice(0, 10))}
                     </p>
                   </div>
                 </div>
 
-                <div className="pt-4 mt-4 border-t border-[#EAEAEA] flex items-center justify-between gap-4 flex-wrap">
-                  <div className="text-[10px] text-[#555555] font-bold max-w-[62%]">
+                <div className="pt-4 mt-4 border-t border-slate-100/80 flex items-center justify-between gap-4 flex-wrap">
+                  <div className="text-[10px] text-slate-500 font-bold max-w-[62%]">
                     {getPipelineNote(request)}
                   </div>
 
@@ -274,13 +274,13 @@ const LeaveRequests = ({ session }) => {
                       <button
                         type="button"
                         onClick={() => handleAdminAction(request.id, 'approve')}
-                        className="bg-[#E1FA6C] text-[#1A1A1A] border border-[#1A1A1A]/10 px-3 py-1.5 rounded-xl font-black text-[10px] flex items-center gap-1 hover:bg-[#d4ee59] transition-all shadow-xs uppercase tracking-tight"
+                        className="btn-primary px-3 py-1.5 rounded-xl font-black text-[10px] flex items-center gap-1 "
                       >
                         <Check className="w-3.5 h-3.5 stroke-[3]" /> Approve
                       </button>
                     </div>
                   ) : (
-                    <span className="text-[10px] font-mono font-bold text-[#555555]/50 uppercase select-none">
+                    <span className="text-[10px] font-mono font-bold text-slate-500/50 uppercase select-none">
                       Closed
                     </span>
                   )}

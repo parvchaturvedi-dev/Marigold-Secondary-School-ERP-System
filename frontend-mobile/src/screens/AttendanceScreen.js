@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 
 import PageHeader from "../components/cards/PageHeader";
 import { useAuth } from "../auth/AuthContext";
@@ -23,6 +24,10 @@ import {
   saveAttendanceSettings,
   saveStudentAttendanceBatch,
 } from "../api/attendanceApi";
+import { colors } from "../shared/theme/colors";
+import { gradients, glassColors, glassStyles } from "../shared/theme/glass";
+import AuroraBackground from "../shared/components/AuroraBackground";
+import GlassCard from "../shared/components/GlassCard";
 
 const todayKey = () => new Date().toISOString().slice(0, 10);
 const addDays = (dateKey, days) => {
@@ -322,17 +327,19 @@ export default function AttendanceScreen({ role, onBack }) {
 
   if (loading && !overview && !isStudent) {
     return (
-      <View style={{ flex: 1, backgroundColor: "#F8FAFF" }}>
+      <View style={{ flex: 1 }}>
+        <AuroraBackground />
         <AttendanceHeader onBack={onBack} />
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-          <ActivityIndicator color="#4F46E5" size="large" />
+          <ActivityIndicator color={colors.primaryDark} size="large" />
         </View>
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#F8FAFF" }}>
+    <View style={{ flex: 1 }}>
+      <AuroraBackground />
       <AttendanceHeader onBack={onBack} />
       <ScrollView
         refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}
@@ -405,18 +412,18 @@ function AttendanceHeader({ onBack }) {
         paddingTop: 46,
         paddingHorizontal: 18,
         paddingBottom: 14,
-        backgroundColor: "#F8FAFF",
+        backgroundColor: "transparent",
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
       }}
     >
       <TouchableOpacity onPress={onBack} style={styles.headerButton}>
-        <Ionicons name="arrow-back" size={22} color="#4F46E5" />
+        <Ionicons name="arrow-back" size={22} color={colors.primary} />
       </TouchableOpacity>
       <Text style={{ fontSize: 18, fontWeight: "900", color: "#0F172A" }}>Attendance</Text>
       <TouchableOpacity onPress={onBack} style={styles.headerButton}>
-        <Ionicons name="home" size={22} color="#4F46E5" />
+        <Ionicons name="home" size={22} color={colors.primary} />
       </TouchableOpacity>
     </View>
   );
@@ -429,7 +436,7 @@ function RoleSummary({ roleSummary = {}, counts = {} }) {
     ["Student Attendance Summary", roleSummary.student || counts],
   ];
   return (
-    <View style={styles.card}>
+    <GlassCard style={styles.card}>
       {cards.map(([title, data]) => (
         <View key={title} style={styles.metricCard}>
           <Text style={styles.metricTitle}>{title}</Text>
@@ -440,7 +447,7 @@ function RoleSummary({ roleSummary = {}, counts = {} }) {
           </View>
         </View>
       ))}
-    </View>
+    </GlassCard>
   );
 }
 
@@ -455,7 +462,7 @@ function Metric({ label, value, color }) {
 
 function SecurityConfigurator({ settingsDraft, setSettingsDraft, onSave, saving }) {
   return (
-    <View style={styles.card}>
+    <GlassCard style={styles.card}>
       <Text style={styles.cardTitle}>Geofencing and Security</Text>
       <Input label="School address" value={settingsDraft.schoolAddress} onChangeText={(value) => setSettingsDraft((draft) => ({ ...draft, schoolAddress: value }))} />
       <View style={{ flexDirection: "row", gap: 10 }}>
@@ -480,22 +487,24 @@ function SecurityConfigurator({ settingsDraft, setSettingsDraft, onSave, saving 
         active={settingsDraft.enforceReceptionQr}
         onPress={() => setSettingsDraft((draft) => ({ ...draft, enforceReceptionQr: !draft.enforceReceptionQr }))}
       />
-      <TouchableOpacity style={styles.primaryButton} onPress={onSave} disabled={saving}>
-        <Ionicons name="shield-checkmark-outline" size={20} color="#fff" />
-        <Text style={styles.primaryButtonText}>Save Security Config</Text>
+      <TouchableOpacity onPress={onSave} disabled={saving} activeOpacity={0.85} style={{ borderRadius: 16, overflow: "hidden" }}>
+        <LinearGradient colors={gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.primaryButton}>
+          <Ionicons name="shield-checkmark-outline" size={20} color="#fff" />
+          <Text style={styles.primaryButtonText}>Save Security Config</Text>
+        </LinearGradient>
       </TouchableOpacity>
-    </View>
+    </GlassCard>
   );
 }
 
 function ClockCard({ role, locationState, onCheck, onClock, saving }) {
   const enabled = Boolean(locationState.point?.inside && !locationState.point?.isMockLocation);
   return (
-    <View style={styles.card}>
+    <GlassCard style={styles.card}>
       <Text style={styles.cardTitle}>My Attendance</Text>
       <Text style={styles.muted}>{role === "teacher" ? "Teacher" : "Clerk"} self-service clock-in and clock-out requires verified GPS.</Text>
       <TouchableOpacity style={styles.secondaryButton} onPress={onCheck} disabled={locationState.checking}>
-        <Ionicons name="locate-outline" size={20} color="#4F46E5" />
+        <Ionicons name="locate-outline" size={20} color={colors.primary} />
         <Text style={styles.secondaryButtonText}>{locationState.checking ? "Checking GPS..." : "Check School Boundary"}</Text>
       </TouchableOpacity>
       {!!locationState.message && (
@@ -505,14 +514,28 @@ function ClockCard({ role, locationState, onCheck, onClock, saving }) {
         </Text>
       )}
       <View style={{ flexDirection: "row", gap: 10 }}>
-        <TouchableOpacity style={[styles.clockButton, !enabled && styles.disabled]} onPress={() => onClock("clock-in")} disabled={!enabled || saving}>
-          <Text style={styles.clockText}>Clock In</Text>
+        <TouchableOpacity
+          activeOpacity={0.85}
+          disabled={!enabled || saving}
+          onPress={() => onClock("clock-in")}
+          style={[{ flex: 1, borderRadius: 16, overflow: "hidden" }, !enabled && styles.disabled]}
+        >
+          <LinearGradient colors={gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.clockButton}>
+            <Text style={styles.clockText}>Clock In</Text>
+          </LinearGradient>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.clockButton, !enabled && styles.disabled]} onPress={() => onClock("clock-out")} disabled={!enabled || saving}>
-          <Text style={styles.clockText}>Clock Out</Text>
+        <TouchableOpacity
+          activeOpacity={0.85}
+          disabled={!enabled || saving}
+          onPress={() => onClock("clock-out")}
+          style={[{ flex: 1, borderRadius: 16, overflow: "hidden" }, !enabled && styles.disabled]}
+        >
+          <LinearGradient colors={gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.clockButton}>
+            <Text style={styles.clockText}>Clock Out</Text>
+          </LinearGradient>
         </TouchableOpacity>
       </View>
-    </View>
+    </GlassCard>
   );
 }
 
@@ -536,7 +559,7 @@ function RegisterCard(props) {
     setOverrideToken,
   } = props;
   return (
-    <View style={styles.card}>
+    <GlassCard style={styles.card}>
       <Text style={styles.cardTitle}>{isAdmin ? "Global Override Register" : "Student Attendance Register"}</Text>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 }}>
         <TouchableOpacity style={styles.iconButton} onPress={() => setDate(addDays(date, -1))}>
@@ -586,7 +609,7 @@ function RegisterCard(props) {
       ))}
       {!roster.length && <Text style={styles.emptyText}>No students found for this class and date.</Text>}
       <DateModal visible={calendarOpen} date={date} onClose={() => setCalendarOpen(false)} onSave={setDate} />
-    </View>
+    </GlassCard>
   );
 }
 
@@ -616,7 +639,7 @@ function AttendanceToggle({ value, onChange, readonly }) {
 function StudentLedger({ metrics, monthDays, logs }) {
   return (
     <>
-      <View style={styles.card}>
+      <GlassCard style={styles.card}>
         <Text style={styles.cardTitle}>Read Only Attendance Ledger</Text>
         <View style={styles.metricRow}>
           <Metric label="Working" value={metrics.working} color="#4F46E5" />
@@ -624,8 +647,8 @@ function StudentLedger({ metrics, monthDays, logs }) {
           <Metric label="Absent" value={metrics.absent} color="#DC2626" />
           <Metric label="Percent" value={`${metrics.percentage}%`} color={metrics.percentage >= 75 ? "#16A34A" : "#DC2626"} />
         </View>
-      </View>
-      <View style={styles.card}>
+      </GlassCard>
+      <GlassCard style={styles.card}>
         <Text style={styles.cardTitle}>Current Month Calendar</Text>
         <View style={styles.calendarGrid}>
           {monthDays.map((item) => {
@@ -642,8 +665,8 @@ function StudentLedger({ metrics, monthDays, logs }) {
             );
           })}
         </View>
-      </View>
-      <View style={styles.card}>
+      </GlassCard>
+      <GlassCard style={styles.card}>
         <Text style={styles.cardTitle}>Historical Log</Text>
         {logs.slice(0, 60).map((log) => (
           <View key={log._id || `${log.entityId}-${log.attendanceDate}`} style={styles.logRow}>
@@ -654,18 +677,18 @@ function StudentLedger({ metrics, monthDays, logs }) {
           </View>
         ))}
         {!logs.length && <Text style={styles.emptyText}>No attendance records found yet.</Text>}
-      </View>
+      </GlassCard>
     </>
   );
 }
 
 function AccessDenied() {
   return (
-    <View style={styles.card}>
+    <GlassCard style={styles.card}>
       <Ionicons name="lock-closed-outline" size={36} color="#DC2626" />
       <Text style={styles.cardTitle}>Access denied</Text>
       <Text style={styles.muted}>Only a designated class teacher can mark student attendance.</Text>
-    </View>
+    </GlassCard>
   );
 }
 
@@ -675,19 +698,22 @@ function DateModal({ visible, date, onClose, onSave }) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
-        <View style={styles.modalCard}>
+        <GlassCard strong style={styles.modalCard}>
           <Text style={styles.cardTitle}>Select Date</Text>
           <Input label="Date (YYYY-MM-DD)" value={value} onChangeText={setValue} />
           <TouchableOpacity
-            style={styles.primaryButton}
+            activeOpacity={0.85}
             onPress={() => {
               onSave(value);
               onClose();
             }}
+            style={{ borderRadius: 16, overflow: "hidden" }}
           >
-            <Text style={styles.primaryButtonText}>Apply Date</Text>
+            <LinearGradient colors={gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.primaryButton}>
+              <Text style={styles.primaryButtonText}>Apply Date</Text>
+            </LinearGradient>
           </TouchableOpacity>
-        </View>
+        </GlassCard>
       </View>
     </Modal>
   );
@@ -729,19 +755,17 @@ function ActionButton({ label, color, onPress, disabled }) {
 
 const styles = {
   card: {
-    backgroundColor: "#fff",
     borderRadius: 20,
     padding: 16,
     marginBottom: 14,
-    borderWidth: 1,
-    borderColor: "#EEF2F7",
-    elevation: 2,
   },
   headerButton: {
     width: 42,
     height: 42,
     borderRadius: 14,
-    backgroundColor: "#fff",
+    backgroundColor: "rgba(255,255,255,0.7)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.8)",
     alignItems: "center",
     justifyContent: "center",
     elevation: 2,
@@ -753,12 +777,12 @@ const styles = {
     marginBottom: 12,
   },
   metricCard: {
-    backgroundColor: "#F8FAFF",
+    backgroundColor: glassColors.cardBgSoft,
     borderRadius: 16,
     padding: 14,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "rgba(255,255,255,0.6)",
   },
   metricTitle: {
     fontSize: 14,
@@ -781,8 +805,8 @@ const styles = {
     minHeight: 46,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#F8FAFF",
+    borderColor: "rgba(255,255,255,0.8)",
+    backgroundColor: "rgba(255,255,255,0.6)",
     paddingHorizontal: 12,
     justifyContent: "center",
     color: "#0F172A",
@@ -793,12 +817,12 @@ const styles = {
     paddingVertical: 10,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#fff",
+    borderColor: "rgba(255,255,255,0.8)",
+    backgroundColor: "rgba(255,255,255,0.6)",
   },
   pillActive: {
-    backgroundColor: "#4F46E5",
-    borderColor: "#4F46E5",
+    backgroundColor: colors.primaryDark,
+    borderColor: colors.primaryDark,
   },
   pillText: {
     color: "#475569",
@@ -810,7 +834,6 @@ const styles = {
   primaryButton: {
     minHeight: 50,
     borderRadius: 16,
-    backgroundColor: "#4F46E5",
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
@@ -823,7 +846,7 @@ const styles = {
   secondaryButton: {
     minHeight: 48,
     borderRadius: 16,
-    backgroundColor: "#EEF2FF",
+    backgroundColor: "rgba(99,102,241,0.12)",
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
@@ -831,14 +854,12 @@ const styles = {
     marginVertical: 12,
   },
   secondaryButtonText: {
-    color: "#4F46E5",
+    color: colors.primary,
     fontWeight: "900",
   },
   clockButton: {
-    flex: 1,
     minHeight: 50,
     borderRadius: 16,
-    backgroundColor: "#16A34A",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -857,7 +878,7 @@ const styles = {
     width: 46,
     height: 46,
     borderRadius: 14,
-    backgroundColor: "#EEF2FF",
+    backgroundColor: "rgba(99,102,241,0.12)",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -867,18 +888,18 @@ const styles = {
     gap: 10,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#EEF2F7",
+    borderBottomColor: "rgba(148,163,184,0.25)",
   },
   rollBadge: {
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: "#EEF2FF",
+    backgroundColor: "rgba(99,102,241,0.12)",
     alignItems: "center",
     justifyContent: "center",
   },
   rollText: {
-    color: "#4F46E5",
+    color: colors.primaryDark,
     fontWeight: "900",
   },
   studentName: {
@@ -921,10 +942,10 @@ const styles = {
     bottom: 0,
     flexDirection: "row",
     gap: 10,
-    backgroundColor: "#fff",
+    backgroundColor: "rgba(255,255,255,0.85)",
     padding: 14,
     borderTopWidth: 1,
-    borderTopColor: "#E2E8F0",
+    borderTopColor: "rgba(255,255,255,0.8)",
   },
   barButton: {
     flex: 1,
@@ -954,7 +975,7 @@ const styles = {
     justifyContent: "space-between",
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#EEF2F7",
+    borderBottomColor: "rgba(148,163,184,0.25)",
   },
   toggleRow: {
     flexDirection: "row",
@@ -984,7 +1005,6 @@ const styles = {
   },
   modalCard: {
     width: "100%",
-    backgroundColor: "#fff",
     borderRadius: 22,
     padding: 18,
   },

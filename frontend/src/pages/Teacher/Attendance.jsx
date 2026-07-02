@@ -176,7 +176,7 @@ const Attendance = ({ session }) => {
 
   if (!assignedClass) {
     return (
-      <div className="min-h-[70vh] grid place-items-center font-sans text-[#1A1A1A]">
+      <div className="min-h-[70vh] grid place-items-center font-sans text-slate-900">
         <div className="max-w-md rounded-3xl border border-rose-100 bg-rose-50 p-6 text-center">
           <Lock className="mx-auto h-8 w-8 text-rose-700" />
           <h2 className="mt-3 text-lg font-black">Access denied</h2>
@@ -189,14 +189,14 @@ const Attendance = ({ session }) => {
   }
 
   return (
-    <div className="space-y-5 pb-28 select-none font-sans text-[#1A1A1A]">
-      <section className="rounded-3xl border border-[#C8C8C8] bg-white p-5">
+    <div className="space-y-5 pb-28 select-none font-sans text-slate-900">
+      <section className="glass-card rounded-3xl p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 className="flex items-center gap-2 text-lg font-black">
               <CalendarCheck className="h-5 w-5 text-emerald-700" /> Attendance
             </h2>
-            <p className="mt-1 text-xs font-bold text-[#555555]">
+            <p className="mt-1 text-xs font-bold text-slate-500">
               {session?.displayName || session?.username} | Class Teacher: {assignedClass}
             </p>
           </div>
@@ -207,27 +207,27 @@ const Attendance = ({ session }) => {
         </div>
       </section>
 
-      {(message || error) && <div className="rounded-2xl bg-[#1A1A1A] px-4 py-3 text-xs font-bold text-white">{message || error}</div>}
+      {(message || error) && <div className="rounded-2xl bg-slate-900/90 px-4 py-3 text-xs font-bold text-white">{message || error}</div>}
 
-      <section className="rounded-3xl border border-[#C8C8C8] bg-white p-5">
+      <section className="glass-card rounded-3xl p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-[10px] font-black uppercase text-[#555555]">Mark My Attendance</p>
+            <p className="text-[10px] font-black uppercase text-slate-500">Mark My Attendance</p>
             <p className="mt-1 text-sm font-black">{device.text}</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={validateDevice} className="h-11 rounded-2xl border border-[#C8C8C8] bg-[#F8F8F8] px-4 text-xs font-black inline-flex items-center gap-2">
+            <button type="button" onClick={validateDevice} className="h-11 rounded-2xl glass-soft px-4 text-xs font-black inline-flex items-center gap-2">
               <LocateFixed className="h-4 w-4" /> Validate
             </button>
-            <button type="button" disabled={!device.allowed} onClick={markMyAttendance} className="h-11 rounded-2xl bg-[#E1FA6C] px-4 text-xs font-black disabled:opacity-40 inline-flex items-center gap-2">
+            <button type="button" disabled={!device.allowed} onClick={markMyAttendance} className="h-11 rounded-2xl btn-primary px-4 text-xs font-black disabled:opacity-40 inline-flex items-center gap-2">
               <ShieldCheck className="h-4 w-4" /> Mark My Attendance
             </button>
           </div>
         </div>
       </section>
 
-      <section className="rounded-3xl border border-[#C8C8C8] bg-white p-5">
-        <div className="flex flex-col gap-3 border-b border-[#EAEAEA] pb-4 sm:flex-row sm:items-center sm:justify-between">
+      <section className="glass-card rounded-3xl p-5">
+        <div className="flex flex-col gap-3 border-b border-slate-100/80 pb-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h3 className="text-sm font-black">{assignedClass} Class Roster</h3>
             {isHistorical && (
@@ -243,21 +243,21 @@ const Attendance = ({ session }) => {
                 value={overrideToken}
                 onChange={(event) => setOverrideToken(event.target.value)}
                 placeholder="Admin override token"
-                className="h-10 rounded-2xl border border-[#EAEAEA] bg-[#F8F8F8] px-3 text-xs font-bold outline-none"
+                className="h-10 rounded-2xl bg-white/60 border border-white/80 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none transition-all px-3 text-xs font-bold"
               />
             )}
           </div>
         </div>
 
-        <div className="mt-4 divide-y divide-[#EAEAEA] overflow-hidden rounded-2xl border border-[#EAEAEA]">
+        <div className="mt-4 divide-y divide-slate-100/80 overflow-hidden rounded-2xl border border-slate-100/80">
           {roster.map((student) => {
             const status = draftStatus[student.entityId] || 'present';
             return (
-              <div key={student.entityId} className="grid grid-cols-[56px_1fr_96px] items-center gap-2 bg-white p-3 text-xs font-bold">
-                <span className="font-mono text-[#555555]">{student.rollNo || '-'}</span>
+              <div key={student.entityId} className="grid grid-cols-[56px_1fr_96px] items-center gap-2 bg-white/60 p-3 text-xs font-bold">
+                <span className="font-mono text-slate-500">{student.rollNo || '-'}</span>
                 <div className="min-w-0">
                   <p className="truncate font-black">{student.displayName}</p>
-                  <p className="truncate text-[10px] text-[#555555]">{student.admissionNumber}</p>
+                  <p className="truncate text-[10px] text-slate-500">{student.admissionNumber}</p>
                 </div>
                 <div className="flex justify-end gap-2">
                   <StatusButton label="A" active={status === 'absent'} tone="absent" onClick={() => setDraftStatus((draft) => ({ ...draft, [student.entityId]: 'absent' }))} />
@@ -274,15 +274,15 @@ const Attendance = ({ session }) => {
         </div>
       </section>
 
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[#C8C8C8] bg-white/95 px-4 py-3 backdrop-blur">
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-white/70 glass-strong px-4 py-3">
         <div className="mx-auto flex max-w-3xl justify-end gap-2">
-          <button type="button" onClick={resetDraft} className="h-11 rounded-2xl border border-[#C8C8C8] bg-white px-4 text-xs font-black inline-flex items-center gap-2">
+          <button type="button" onClick={resetDraft} className="h-11 rounded-2xl border border-slate-200/70 bg-white/60 px-4 text-xs font-black inline-flex items-center gap-2">
             <X className="h-4 w-4" /> Cancel
           </button>
-          <button type="button" onClick={resetDraft} className="h-11 rounded-2xl border border-[#C8C8C8] bg-[#F8F8F8] px-4 text-xs font-black inline-flex items-center gap-2">
+          <button type="button" onClick={resetDraft} className="h-11 rounded-2xl glass-soft px-4 text-xs font-black inline-flex items-center gap-2">
             <RotateCcw className="h-4 w-4" /> Reset
           </button>
-          <button type="button" disabled={!canSave} onClick={saveRegister} className="h-11 rounded-2xl bg-[#E1FA6C] px-4 text-xs font-black disabled:opacity-40 inline-flex items-center gap-2">
+          <button type="button" disabled={!canSave} onClick={saveRegister} className="h-11 rounded-2xl btn-primary px-4 text-xs font-black disabled:opacity-40 inline-flex items-center gap-2">
             <Save className="h-4 w-4" /> Save Attendance
           </button>
         </div>
@@ -292,12 +292,12 @@ const Attendance = ({ session }) => {
 };
 
 const DateShifter = ({ date, setDate }) => (
-  <div className="h-10 rounded-2xl border border-[#EAEAEA] bg-[#F8F8F8] px-2 inline-flex items-center gap-1">
-    <button type="button" onClick={() => setDate(addDays(date, -1))} className="grid h-8 w-8 place-items-center rounded-xl bg-white">
+  <div className="h-10 rounded-2xl glass-soft px-2 inline-flex items-center gap-1">
+    <button type="button" onClick={() => setDate(addDays(date, -1))} className="grid h-8 w-8 place-items-center rounded-xl bg-white/70">
       <ChevronLeft className="h-4 w-4" />
     </button>
     <input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="h-8 bg-transparent text-xs font-black outline-none" />
-    <button type="button" onClick={() => setDate(addDays(date, 1))} className="grid h-8 w-8 place-items-center rounded-xl bg-white">
+    <button type="button" onClick={() => setDate(addDays(date, 1))} className="grid h-8 w-8 place-items-center rounded-xl bg-white/70">
       <ChevronRight className="h-4 w-4" />
     </button>
   </div>
@@ -313,7 +313,7 @@ const Metric = ({ label, value, tone }) => (
 const StatusButton = ({ label, active, tone, onClick }) => {
   const activeClass = tone === 'absent' ? 'bg-rose-600 text-white border-rose-700' : 'bg-emerald-600 text-white border-emerald-700';
   return (
-    <button type="button" onClick={onClick} className={`h-10 w-10 rounded-full border text-sm font-black ${active ? activeClass : 'border-[#C8C8C8] bg-white text-[#555555]'}`}>
+    <button type="button" onClick={onClick} className={`h-10 w-10 rounded-full border text-sm font-black ${active ? activeClass : 'border-slate-200/70 bg-white/60 text-slate-500'}`}>
       {label}
     </button>
   );

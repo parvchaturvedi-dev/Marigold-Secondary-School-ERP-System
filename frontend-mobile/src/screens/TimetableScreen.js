@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import PageHeader from "../components/cards/PageHeader";
 import { useAuth } from "../auth/AuthContext";
 import {
@@ -11,6 +12,10 @@ import {
   saveTimetableTemplate,
   todayIsoDate,
 } from "../api/timetableApi";
+import { colors } from "../shared/theme/colors";
+import { gradients, glassColors } from "../shared/theme/glass";
+import AuroraBackground from "../shared/components/AuroraBackground";
+import GlassCard from "../shared/components/GlassCard";
 
 const classFromUser = (user) =>
   user?.activeStudent?.className || user?.studentProfiles?.[0]?.className || "Class 1";
@@ -94,22 +99,23 @@ export default function TimetableScreen() {
   const rows = effective?.periods || [];
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#F8FAFF" }}>
+    <View style={{ flex: 1 }}>
+      <AuroraBackground />
       <PageHeader title="Timetable" />
       <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: 40 }}>
-        <View style={styles.panel}>
+        <GlassCard style={styles.panel}>
           <Text style={styles.title}>Live Class Timetable</Text>
           <Text style={styles.muted}>{date} • {selectedClass}</Text>
-          <TextInput value={date} onChangeText={setDate} style={styles.input} placeholder="YYYY-MM-DD" />
-          <TextInput value={selectedClass} onChangeText={setSelectedClass} style={styles.input} placeholder="Class name" />
-        </View>
+          <TextInput value={date} onChangeText={setDate} style={styles.input} placeholder="YYYY-MM-DD" placeholderTextColor="#94A3B8" />
+          <TextInput value={selectedClass} onChangeText={setSelectedClass} style={styles.input} placeholder="Class name" placeholderTextColor="#94A3B8" />
+        </GlassCard>
 
         {rows.map((period) => {
           const cell = effective?.cells?.[cellKey(period.id, selectedClass)] || {};
           return (
             <View key={period.id} style={styles.row}>
               <View style={styles.periodBadge}>
-                <Text style={{ color: "#4F46E5", fontWeight: "900" }}>{period.label?.replace("Period ", "")}</Text>
+                <Text style={{ color: colors.primaryDark, fontWeight: "900" }}>{period.label?.replace("Period ", "")}</Text>
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.rowTitle}>{cell.subject || "Free / Not assigned"}</Text>
@@ -120,14 +126,14 @@ export default function TimetableScreen() {
         })}
 
         {!rows.length && (
-          <View style={styles.panel}>
+          <GlassCard style={styles.panel}>
             <Ionicons name="calendar-outline" size={42} color="#94A3B8" />
             <Text style={styles.muted}>No timetable published for this class yet.</Text>
-          </View>
+          </GlassCard>
         )}
 
         {canEdit && (
-          <View style={styles.panel}>
+          <GlassCard style={styles.panel}>
             <Text style={styles.title}>Admin / Clerk Editor</Text>
             <Text style={styles.muted}>Edit and publish the default timetable grid.</Text>
             <TextInput
@@ -135,6 +141,7 @@ export default function TimetableScreen() {
               onChangeText={(name) => setDraft((current) => ({ ...current, name }))}
               style={styles.input}
               placeholder="Timetable name"
+              placeholderTextColor="#94A3B8"
             />
 
             <ScrollView horizontal>
@@ -185,7 +192,7 @@ export default function TimetableScreen() {
               <ActionButton label="Save" icon="save-outline" onPress={save} primary />
             </View>
             {!!status && <Text style={[styles.muted, { marginTop: 10 }]}>{status}</Text>}
-          </View>
+          </GlassCard>
         )}
       </ScrollView>
     </View>
@@ -193,64 +200,72 @@ export default function TimetableScreen() {
 }
 
 function ActionButton({ label, icon, onPress, primary }) {
+  if (primary) {
+    return (
+      <TouchableOpacity onPress={onPress} activeOpacity={0.85} style={{ flex: 1, borderRadius: 14, overflow: "hidden" }}>
+        <LinearGradient colors={gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.button}>
+          <Ionicons name={icon} size={18} color="#fff" />
+          <Text style={{ color: "#fff", fontWeight: "900" }}>{label}</Text>
+        </LinearGradient>
+      </TouchableOpacity>
+    );
+  }
   return (
-    <TouchableOpacity onPress={onPress} style={[styles.button, primary && { backgroundColor: "#4F46E5" }]}>
-      <Ionicons name={icon} size={18} color={primary ? "#fff" : "#4F46E5"} />
-      <Text style={{ color: primary ? "#fff" : "#4F46E5", fontWeight: "900" }}>{label}</Text>
+    <TouchableOpacity onPress={onPress} style={styles.button}>
+      <Ionicons name={icon} size={18} color={colors.primary} />
+      <Text style={{ color: colors.primary, fontWeight: "900" }}>{label}</Text>
     </TouchableOpacity>
   );
 }
 
 const styles = {
   panel: {
-    backgroundColor: "#fff",
     borderRadius: 22,
     padding: 18,
     marginBottom: 14,
-    borderWidth: 1,
-    borderColor: "#EEF2F7",
   },
   title: { fontSize: 18, fontWeight: "900", color: "#0F172A" },
   muted: { color: "#64748B", marginTop: 6, fontWeight: "700" },
   input: {
     marginTop: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "rgba(255,255,255,0.8)",
+    backgroundColor: "rgba(255,255,255,0.6)",
     borderRadius: 14,
     padding: 12,
     fontWeight: "800",
     color: "#0F172A",
   },
   row: {
-    backgroundColor: "#fff",
+    backgroundColor: glassColors.cardBgSoft,
     borderRadius: 18,
     padding: 14,
     marginBottom: 10,
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#EEF2F7",
+    borderColor: "rgba(255,255,255,0.6)",
   },
   periodBadge: {
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: "#EEF2FF",
+    backgroundColor: "rgba(99,102,241,0.12)",
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
   },
   rowTitle: { fontSize: 16, fontWeight: "900", color: "#0F172A" },
-  headerCell: { width: 110, padding: 10, backgroundColor: "#EEF2FF", borderRadius: 10, margin: 3 },
-  headerText: { fontWeight: "900", color: "#4F46E5" },
-  headerInput: { width: 130, padding: 10, backgroundColor: "#EEF2FF", borderRadius: 10, margin: 3, fontWeight: "900" },
-  periodInput: { width: 110, padding: 10, backgroundColor: "#F8FAFF", borderRadius: 10, margin: 3, fontWeight: "800" },
-  cellInput: { width: 130, padding: 10, backgroundColor: "#F8FAFF", borderRadius: 10, margin: 3, fontWeight: "800" },
+  headerCell: { width: 110, padding: 10, backgroundColor: "rgba(99,102,241,0.12)", borderRadius: 10, margin: 3 },
+  headerText: { fontWeight: "900", color: colors.primaryDark },
+  headerInput: { width: 130, padding: 10, backgroundColor: "rgba(99,102,241,0.12)", borderRadius: 10, margin: 3, fontWeight: "900" },
+  periodInput: { width: 110, padding: 10, backgroundColor: "rgba(255,255,255,0.6)", borderRadius: 10, margin: 3, fontWeight: "800" },
+  cellInput: { width: 130, padding: 10, backgroundColor: "rgba(255,255,255,0.6)", borderRadius: 10, margin: 3, fontWeight: "800" },
   button: {
     flex: 1,
     borderRadius: 14,
     padding: 12,
-    backgroundColor: "#EEF2FF",
+    backgroundColor: "rgba(99,102,241,0.12)",
     flexDirection: "row",
     justifyContent: "center",
     gap: 6,

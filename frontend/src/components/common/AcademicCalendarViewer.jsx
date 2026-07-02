@@ -47,13 +47,13 @@ const AcademicCalendarViewer = ({ portalLabel = 'Portal' }) => {
 
   return (
     <div className="space-y-6 pb-8 select-none font-sans">
-      <div className="bg-white p-6 rounded-3xl border border-[#EAEAEA] shadow-sm">
+      <div className="glass-card p-6 rounded-3xl">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h3 className="text-base font-bold text-[#1A1A1A] flex items-center gap-2">
+            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
               <CalendarDays className="w-5 h-5 text-[#8b5cf6]" /> Academic Calendar
             </h3>
-            <p className="text-xs text-[#666666] mt-0.5">
+            <p className="text-xs text-slate-400 mt-0.5">
               {portalLabel} access is synchronized with the latest Admin upload.
             </p>
           </div>
@@ -66,14 +66,14 @@ const AcademicCalendarViewer = ({ portalLabel = 'Portal' }) => {
 
       {calendarPdf ? (
         <>
-          <div className="bg-white p-5 rounded-3xl border border-[#EAEAEA] shadow-sm">
+          <div className="glass-card p-5 rounded-3xl">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3.5">
-              <div className="md:col-span-2 bg-[#EAEAEA] p-4 rounded-2xl border border-[#DADADA] flex items-start gap-3.5">
+              <div className="md:col-span-2 glass-soft p-4 rounded-2xl flex items-start gap-3.5">
                 <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl shrink-0">
                   <FileText className="w-6 h-6" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-xs font-bold text-[#1A1A1A] truncate">{calendarPdf.name}</p>
+                  <p className="text-xs font-bold text-slate-900 truncate">{calendarPdf.name}</p>
                   <p className="text-[10px] text-gray-500 font-medium mt-0.5">
                     {formatFileSize(calendarPdf.size)} - PDF Document
                   </p>
@@ -84,7 +84,7 @@ const AcademicCalendarViewer = ({ portalLabel = 'Portal' }) => {
                 <Clock className="w-4 h-4 text-[#8b5cf6]" />
                 <div>
                   <p className="text-[9px] uppercase font-black text-gray-400">Updated</p>
-                  <p className="text-xs font-bold text-[#1A1A1A]">{formatCalendarDate(calendarPdf.uploadedAt)}</p>
+                  <p className="text-xs font-bold text-slate-900">{formatCalendarDate(calendarPdf.uploadedAt)}</p>
                 </div>
               </div>
 
@@ -92,15 +92,15 @@ const AcademicCalendarViewer = ({ portalLabel = 'Portal' }) => {
                 <UserCheck className="w-4 h-4 text-[#f59e0b]" />
                 <div>
                   <p className="text-[9px] uppercase font-black text-gray-400">Published By</p>
-                  <p className="text-xs font-bold text-[#1A1A1A] truncate">{calendarPdf.uploadedBy}</p>
+                  <p className="text-xs font-bold text-slate-900 truncate">{calendarPdf.uploadedBy}</p>
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="bg-white p-5 rounded-3xl border border-[#EAEAEA] shadow-sm animate-fadeIn">
+          <div className="glass-card p-5 rounded-3xl animate-fadeIn">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-4">
-              <h4 className="text-xs font-bold text-[#1A1A1A] flex items-center gap-2">
+              <h4 className="text-xs font-bold text-slate-900 flex items-center gap-2">
                 <Eye className="w-4 h-4" /> Calendar PDF
               </h4>
               <span className="text-[10px] bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded font-bold">
@@ -108,7 +108,7 @@ const AcademicCalendarViewer = ({ portalLabel = 'Portal' }) => {
               </span>
             </div>
 
-            <div className="w-full bg-[#EAEAEA] rounded-2xl border border-gray-300 h-[620px] overflow-hidden">
+            <div className="w-full bg-white/50 rounded-2xl border border-white/70 h-[620px] overflow-hidden">
               <iframe
                 title="Academic Calendar PDF"
                 src={`${calendarPdf.dataUrl}#toolbar=0&navpanes=0&scrollbar=1`}
@@ -118,11 +118,11 @@ const AcademicCalendarViewer = ({ portalLabel = 'Portal' }) => {
           </div>
         </>
       ) : (
-        <div className="bg-white p-10 rounded-3xl border border-[#EAEAEA] shadow-sm text-center">
-          <div className="w-14 h-14 rounded-2xl bg-[#EAEAEA] text-gray-400 mx-auto flex items-center justify-center mb-4">
+        <div className="glass-card p-10 rounded-3xl text-center">
+          <div className="w-14 h-14 rounded-2xl glass-soft text-slate-400 mx-auto flex items-center justify-center mb-4">
             <FileText className="w-7 h-7" />
           </div>
-          <h4 className="text-sm font-black text-[#1A1A1A]">No Academic Calendar Published</h4>
+          <h4 className="text-sm font-black text-slate-900">No Academic Calendar Published</h4>
           <p className="text-xs text-gray-500 mt-1">
             No PDF has been uploaded by Admin yet.
           </p>

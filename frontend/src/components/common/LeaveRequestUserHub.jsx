@@ -67,11 +67,11 @@ const LeaveCard = ({ request, actions }) => {
   const isClosed = TERMINAL_LEAVE_STATUSES.includes(request.status);
 
   return (
-    <div className="bg-white border border-[#EAEAEA] rounded-3xl p-4 space-y-4 shadow-sm">
+    <div className="glass-card rounded-3xl p-4 space-y-4">
       <div className="flex flex-col md:flex-row md:items-start justify-between gap-3">
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[9px] px-2 py-0.5 rounded-md bg-[#F8F8F8] border border-gray-200 text-gray-500 font-black uppercase">
+            <span className="text-[9px] px-2 py-0.5 rounded-md bg-white/60 border border-white/80 text-slate-500 font-black uppercase">
               {request.id}
             </span>
             <span
@@ -88,7 +88,7 @@ const LeaveCard = ({ request, actions }) => {
           </div>
 
           <div>
-            <h4 className="text-sm font-black text-[#1A1A1A] leading-tight">{request.title}</h4>
+            <h4 className="text-sm font-black text-slate-900 leading-tight">{request.title}</h4>
             <p className="text-[11px] text-gray-500 mt-1 font-bold">
               {request.applicantName} - {request.metaInfo || request.className}
             </p>
@@ -100,14 +100,14 @@ const LeaveCard = ({ request, actions }) => {
         </span>
       </div>
 
-      <p className="text-xs leading-relaxed text-gray-700 bg-[#F8F8F8] border border-gray-100 rounded-2xl p-3">
+      <p className="text-xs leading-relaxed text-slate-700 glass-soft rounded-2xl p-3">
         {request.description}
       </p>
 
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-t border-gray-100 pt-3">
         <div className="space-y-1">
           <p className="text-[10px] font-black uppercase text-gray-400">Leave Dates</p>
-          <p className="text-xs font-black text-[#1A1A1A] flex items-center gap-2">
+          <p className="text-xs font-black text-slate-900 flex items-center gap-2">
             <CalendarClock className="w-4 h-4 text-gray-500" />
             {getLeaveDurationLabel(request)}
           </p>
@@ -252,20 +252,20 @@ const LeaveRequestUserHub = ({ session, role }) => {
 
   return (
     <div className="space-y-6 pb-8 select-none font-sans">
-      <div className="bg-white p-5 rounded-3xl border border-[#EAEAEA] shadow-sm">
+      <div className="glass-card p-5 rounded-3xl">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h3 className="text-base font-bold text-[#1A1A1A] flex items-center gap-2">
+            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
               <CalendarClock className="w-5 h-5 text-[#8b5cf6]" /> Leave Request Desk
             </h3>
-            <p className="text-xs text-[#666666] mt-0.5">
+            <p className="text-xs text-slate-400 mt-0.5">
               {role === 'student'
                 ? 'Student leave goes to Class Teacher first and remains visible to Admin.'
                 : 'Staff leave goes directly to Admin.'}
             </p>
           </div>
 
-          <div className="px-3 py-2 rounded-full bg-[#F8F8F8] border border-gray-200 text-[11px] font-bold text-gray-600">
+          <div className="px-3 py-2 rounded-full bg-white/60 border border-white/80 text-[11px] font-bold text-slate-500">
             {`${ownRequests.length} submitted`}
           </div>
         </div>
@@ -274,11 +274,11 @@ const LeaveRequestUserHub = ({ session, role }) => {
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
         <form
           onSubmit={handleSubmit}
-          className="xl:col-span-2 bg-white p-5 rounded-3xl border border-[#EAEAEA] shadow-sm space-y-4"
+          className="xl:col-span-2 glass-card p-5 rounded-3xl space-y-4"
         >
           <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
             <Send className="w-4 h-4 text-[#8b5cf6]" />
-            <h4 className="text-sm font-black text-[#1A1A1A]">New Leave Request</h4>
+            <h4 className="text-sm font-black text-slate-900">New Leave Request</h4>
           </div>
 
           {identityConfig.isSiblingAccount && (
@@ -287,7 +287,7 @@ const LeaveRequestUserHub = ({ session, role }) => {
               <select
                 value={selectedIdentityId}
                 onChange={(event) => setSelectedIdentityId(event.target.value)}
-                className="w-full bg-[#F8F8F8] border border-gray-200 rounded-2xl px-3 py-2.5 text-xs font-bold outline-none focus:border-[#8b5cf6]"
+                className="w-full bg-white/60 border border-white/80 rounded-2xl px-3 py-2.5 text-xs font-bold outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all"
               >
                 {identityConfig.members.map((member) => (
                   <option key={member.id} value={member.id}>
@@ -299,8 +299,8 @@ const LeaveRequestUserHub = ({ session, role }) => {
           )}
 
           {!identityConfig.isSiblingAccount && (
-            <div className="bg-[#F8F8F8] border border-gray-200 rounded-2xl px-3 py-2.5 text-xs font-bold flex items-center justify-between gap-3">
-              <span className="flex items-center gap-2 text-[#1A1A1A] min-w-0">
+            <div className="bg-white/60 border border-white/80 rounded-2xl px-3 py-2.5 text-xs font-bold flex items-center justify-between gap-3">
+              <span className="flex items-center gap-2 text-slate-900 min-w-0">
                 <UserRound className="w-4 h-4 text-gray-500 shrink-0" />
                 <span className="truncate">{selectedIdentity?.name}</span>
               </span>
@@ -314,7 +314,7 @@ const LeaveRequestUserHub = ({ session, role }) => {
               value={formState.title}
               onChange={(event) => updateField('title', event.target.value)}
               placeholder="Example: Medical leave request"
-              className="w-full bg-[#F8F8F8] border border-gray-200 rounded-2xl px-3 py-2.5 text-xs font-bold outline-none focus:border-[#8b5cf6]"
+              className="w-full bg-white/60 border border-white/80 rounded-2xl px-3 py-2.5 text-xs font-bold outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all"
             />
           </div>
 
@@ -325,7 +325,7 @@ const LeaveRequestUserHub = ({ session, role }) => {
               onChange={(event) => updateField('description', event.target.value)}
               rows={6}
               placeholder="Write the leave reason..."
-              className="w-full bg-[#F8F8F8] border border-gray-200 rounded-2xl px-3 py-3 text-xs font-medium outline-none focus:border-[#8b5cf6] resize-none leading-relaxed"
+              className="w-full bg-white/60 border border-white/80 rounded-2xl px-3 py-3 text-xs font-medium outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all resize-none leading-relaxed"
             />
           </div>
 
@@ -337,8 +337,8 @@ const LeaveRequestUserHub = ({ session, role }) => {
                 onClick={() => updateField('leaveMode', 'single')}
                 className={`py-2.5 rounded-xl text-xs font-black border ${
                   formState.leaveMode === 'single'
-                    ? 'bg-[#E1FA6C] border-[#1A1A1A]/10 text-[#1A1A1A]'
-                    : 'bg-[#F8F8F8] border-gray-200 text-gray-500'
+                    ? 'btn-primary border-transparent'
+                    : 'bg-white/60 border-white/80 text-slate-500'
                 }`}
               >
                 Single Day
@@ -348,8 +348,8 @@ const LeaveRequestUserHub = ({ session, role }) => {
                 onClick={() => updateField('leaveMode', 'multiple')}
                 className={`py-2.5 rounded-xl text-xs font-black border ${
                   formState.leaveMode === 'multiple'
-                    ? 'bg-[#E1FA6C] border-[#1A1A1A]/10 text-[#1A1A1A]'
-                    : 'bg-[#F8F8F8] border-gray-200 text-gray-500'
+                    ? 'btn-primary border-transparent'
+                    : 'bg-white/60 border-white/80 text-slate-500'
                 }`}
               >
                 Multiple Days
@@ -364,7 +364,7 @@ const LeaveRequestUserHub = ({ session, role }) => {
                 type="date"
                 value={formState.startDate}
                 onChange={(event) => updateField('startDate', event.target.value)}
-                className="w-full bg-[#F8F8F8] border border-gray-200 rounded-2xl px-3 py-2.5 text-xs font-bold outline-none focus:border-[#8b5cf6]"
+                className="w-full bg-white/60 border border-white/80 rounded-2xl px-3 py-2.5 text-xs font-bold outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all"
               />
             </div>
           ) : (
@@ -375,7 +375,7 @@ const LeaveRequestUserHub = ({ session, role }) => {
                   type="date"
                   value={formState.startDate}
                   onChange={(event) => updateField('startDate', event.target.value)}
-                  className="w-full bg-[#F8F8F8] border border-gray-200 rounded-2xl px-3 py-2.5 text-xs font-bold outline-none focus:border-[#8b5cf6]"
+                  className="w-full bg-white/60 border border-white/80 rounded-2xl px-3 py-2.5 text-xs font-bold outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all"
                 />
               </div>
               <div className="space-y-1">
@@ -384,7 +384,7 @@ const LeaveRequestUserHub = ({ session, role }) => {
                   type="date"
                   value={formState.endDate}
                   onChange={(event) => updateField('endDate', event.target.value)}
-                  className="w-full bg-[#F8F8F8] border border-gray-200 rounded-2xl px-3 py-2.5 text-xs font-bold outline-none focus:border-[#8b5cf6]"
+                  className="w-full bg-white/60 border border-white/80 rounded-2xl px-3 py-2.5 text-xs font-bold outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all"
                 />
               </div>
             </div>
@@ -392,7 +392,7 @@ const LeaveRequestUserHub = ({ session, role }) => {
 
           <button
             type="submit"
-            className="w-full flex items-center justify-center gap-2 py-3 bg-[#E1FA6C] text-[#1A1A1A] rounded-2xl text-xs font-black shadow-sm hover:bg-[#d2eb5b] transition-colors"
+            className="w-full flex items-center justify-center gap-2 py-3 btn-primary rounded-2xl text-xs font-black shadow-sm transition-colors"
           >
             <Send className="w-4 h-4" /> Send Leave Request
           </button>
@@ -400,9 +400,9 @@ const LeaveRequestUserHub = ({ session, role }) => {
 
         <div className="xl:col-span-3 space-y-6">
           {role === 'teacher' && (
-            <div className="bg-white p-5 rounded-3xl border border-[#EAEAEA] shadow-sm">
+            <div className="glass-card p-5 rounded-3xl">
               <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-3">
-                <h4 className="text-sm font-black text-[#1A1A1A] flex items-center gap-2">
+                <h4 className="text-sm font-black text-slate-900 flex items-center gap-2">
                   <ClipboardList className="w-4 h-4 text-[#8b5cf6]" /> Class Teacher Review
                 </h4>
                 <span className="text-[10px] font-bold text-gray-400">
@@ -414,7 +414,7 @@ const LeaveRequestUserHub = ({ session, role }) => {
                 {teacherReviewRequests.length === 0 && (
                   <div className="p-8 text-center text-gray-400">
                     <ClipboardList className="w-10 h-10 mx-auto mb-2 stroke-[1.4]" />
-                    <p className="text-xs font-black text-[#1A1A1A]">No student leave requests</p>
+                    <p className="text-xs font-black text-slate-900">No student leave requests</p>
                   </div>
                 )}
 
@@ -460,9 +460,9 @@ const LeaveRequestUserHub = ({ session, role }) => {
             </div>
           )}
 
-          <div className="bg-white p-5 rounded-3xl border border-[#EAEAEA] shadow-sm">
+          <div className="glass-card p-5 rounded-3xl">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-3">
-              <h4 className="text-sm font-black text-[#1A1A1A] flex items-center gap-2">
+              <h4 className="text-sm font-black text-slate-900 flex items-center gap-2">
                 <ClipboardList className="w-4 h-4 text-[#8b5cf6]" /> Submitted Leave Requests
               </h4>
               <span className="text-[10px] font-bold text-gray-400">
@@ -474,7 +474,7 @@ const LeaveRequestUserHub = ({ session, role }) => {
               {ownRequests.length === 0 && (
                 <div className="p-8 text-center text-gray-400">
                   <CalendarClock className="w-10 h-10 mx-auto mb-2 stroke-[1.4]" />
-                  <p className="text-xs font-black text-[#1A1A1A]">No leave requests yet</p>
+                  <p className="text-xs font-black text-slate-900">No leave requests yet</p>
                 </div>
               )}
 

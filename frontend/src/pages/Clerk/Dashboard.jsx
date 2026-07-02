@@ -79,7 +79,7 @@ const Dashboard = ({ session, setActivePage }) => {
       documentChart: [
         { name: 'Verified', value: CLERK_DOCUMENT_QUEUE.filter((item) => item.status === 'Verified').length, color: '#10b981' },
         { name: 'Review', value: CLERK_DOCUMENT_QUEUE.filter((item) => item.status === 'Review').length, color: '#f59e0b' },
-        { name: 'Hold', value: CLERK_DOCUMENT_QUEUE.filter((item) => item.status === 'Hold').length, color: '#ef4444' },
+        { name: 'Hold', value: CLERK_DOCUMENT_QUEUE.filter((item) => item.status === 'Hold').length, color: '#f43f5e' },
       ],
     };
   }, []);
@@ -92,26 +92,26 @@ const Dashboard = ({ session, setActivePage }) => {
   ];
 
   return (
-    <div className="space-y-6 pb-8 select-none font-sans text-[#1A1A1A]">
-      <section className="bg-white border border-[#C8C8C8] rounded-3xl p-6 flex flex-col xl:flex-row xl:items-center justify-between gap-6">
+    <div className="space-y-6 pb-8 select-none font-sans text-slate-900 animate-fadeIn">
+      <section className="glass-card rounded-3xl p-6 flex flex-col xl:flex-row xl:items-center justify-between gap-6">
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[10px] font-black uppercase bg-[#E1FA6C] border border-[#1A1A1A]/10 px-2.5 py-1 rounded-md">
+            <span className="text-[10px] font-black uppercase bg-indigo-100 text-indigo-700 border border-indigo-200 px-2.5 py-1 rounded-md">
               Clerk Portal
             </span>
-            <span className="text-[10px] font-mono font-black bg-[#EAEAEA] px-2.5 py-1 rounded-md">
+            <span className="text-[10px] font-mono font-black bg-white/50 px-2.5 py-1 rounded-md">
               {profile.id}
             </span>
           </div>
 
           <div>
-            <h2 className="text-2xl font-black tracking-tight">{profile.name}</h2>
-            <p className="text-xs font-bold text-[#555555] mt-1">
+            <h2 className="text-2xl font-black tracking-tight text-gradient">{profile.name}</h2>
+            <p className="text-xs font-bold text-slate-500 mt-1">
               {profile.department} | {profile.shift} | {profile.deskWindow}
             </p>
           </div>
 
-          <p className="text-xs text-[#555555] font-semibold max-w-2xl leading-relaxed">
+          <p className="text-xs text-slate-500 font-semibold max-w-2xl leading-relaxed">
             Monitor attendance, documents, notices, ID cards, meetings, and staff/student records from the main office desk.
           </p>
         </div>
@@ -125,9 +125,9 @@ const Dashboard = ({ session, setActivePage }) => {
                 key={action.label}
                 type="button"
                 onClick={() => setActivePage?.(action.page)}
-                className="bg-[#F8F8F8] hover:bg-[#E1FA6C] border border-[#EAEAEA] rounded-2xl p-3 text-left transition-colors min-h-24"
+                className="glass-soft glass-hover hover:bg-indigo-50/70 rounded-2xl p-3 text-left transition-colors min-h-24"
               >
-                <Icon className="w-4 h-4 mb-2 text-[#1A1A1A]" />
+                <Icon className="w-4 h-4 mb-2 text-indigo-600" />
                 <span className="text-[11px] font-black block">{action.label}</span>
               </button>
             );
@@ -135,7 +135,7 @@ const Dashboard = ({ session, setActivePage }) => {
         </div>
       </section>
 
-      <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
+      <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 stagger">
         <MetricCard icon={Users} label="Attendance" value={`${metrics.attendanceRate}%`} note="Across submitted registers" />
         <MetricCard icon={ClipboardList} label="Assignments" value={metrics.activeAssignments} note="Visible to office desk" />
         <MetricCard icon={Send} label="Applications" value={metrics.pendingApplications} note="Pending admin review" />
@@ -144,18 +144,18 @@ const Dashboard = ({ session, setActivePage }) => {
       </section>
 
       <section className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <div className="xl:col-span-2 bg-white border border-[#C8C8C8] rounded-3xl p-5 space-y-4">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-[#EAEAEA] pb-3">
+        <div className="xl:col-span-2 glass-card rounded-3xl p-5 space-y-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100/80 pb-3">
             <div>
               <h3 className="text-sm font-black flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4" /> Attendance Registers
               </h3>
-              <p className="text-[10px] font-bold text-[#555555] mt-1">Today&apos;s section submission health</p>
+              <p className="text-[10px] font-bold text-slate-500 mt-1">Today&apos;s section submission health</p>
             </div>
             <button
               type="button"
               onClick={() => setActivePage?.('Attendance')}
-              className="px-3 py-2 bg-[#1A1A1A] text-[#E1FA6C] rounded-xl text-[10px] font-black"
+              className="px-3 py-2 btn-primary rounded-xl text-[10px] font-black"
             >
               Open Register
             </button>
@@ -164,24 +164,24 @@ const Dashboard = ({ session, setActivePage }) => {
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={metrics.attendanceChart} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#EAEAEA" vertical={false} />
-                <XAxis dataKey="name" tick={{ fill: '#555555', fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: '#555555', fontSize: 11 }} axisLine={false} tickLine={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
                 <Tooltip />
-                <Bar dataKey="Present" fill="#10b981" radius={[8, 8, 0, 0]} />
-                <Bar dataKey="Absent" fill="#ef4444" radius={[8, 8, 0, 0]} />
+                <Bar dataKey="Present" fill="#6366f1" radius={[8, 8, 0, 0]} />
+                <Bar dataKey="Absent" fill="#f43f5e" radius={[8, 8, 0, 0]} />
                 <Bar dataKey="Late" fill="#f59e0b" radius={[8, 8, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        <div className="bg-white border border-[#C8C8C8] rounded-3xl p-5 space-y-4">
-          <div className="flex items-center justify-between border-b border-[#EAEAEA] pb-3">
+        <div className="glass-card rounded-3xl p-5 space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100/80 pb-3">
             <h3 className="text-sm font-black flex items-center gap-2">
               <FileCheck2 className="w-4 h-4" /> Document Flow
             </h3>
-            <span className="text-[10px] font-black text-[#555555]">Live desk packets</span>
+            <span className="text-[10px] font-black text-slate-500">Live desk packets</span>
           </div>
 
           <div className="h-40 relative">
@@ -196,7 +196,7 @@ const Dashboard = ({ session, setActivePage }) => {
             </ResponsiveContainer>
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
               <span className="text-xl font-black">{CLERK_DOCUMENT_QUEUE.length}</span>
-              <span className="text-[9px] font-black text-[#555555] uppercase">Packets</span>
+              <span className="text-[9px] font-black text-slate-500 uppercase">Packets</span>
             </div>
           </div>
 
@@ -215,12 +215,12 @@ const Dashboard = ({ session, setActivePage }) => {
       </section>
 
       <section className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <div className="xl:col-span-2 bg-white border border-[#C8C8C8] rounded-3xl p-5 space-y-4">
-          <div className="flex items-center justify-between border-b border-[#EAEAEA] pb-3">
+        <div className="xl:col-span-2 glass-card rounded-3xl p-5 space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100/80 pb-3">
             <h3 className="text-sm font-black flex items-center gap-2">
               <ClipboardList className="w-4 h-4" /> Clerk Work Queue
             </h3>
-            <TrendingUp className="w-4 h-4 text-[#555555]" />
+            <TrendingUp className="w-4 h-4 text-slate-500" />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -229,10 +229,10 @@ const Dashboard = ({ session, setActivePage }) => {
                 key={task.id}
                 type="button"
                 onClick={() => setActivePage?.(task.page)}
-                className="bg-[#F8F8F8] hover:bg-white border border-[#EAEAEA] hover:border-black rounded-2xl p-4 text-left transition-all min-h-28"
+                className="glass-soft glass-hover hover:bg-white/60 hover:border-indigo-200 rounded-2xl p-4 text-left transition-all min-h-28"
               >
                 <div className="flex items-center justify-between gap-2 mb-2">
-                  <span className="text-[9px] font-mono font-black bg-white border border-[#EAEAEA] px-2 py-0.5 rounded-md">
+                  <span className="text-[9px] font-mono font-black bg-white/60 border border-slate-100/80 px-2 py-0.5 rounded-md">
                     {task.id}
                   </span>
                   <span className={`text-[9px] font-black px-2 py-0.5 rounded-md border ${priorityTone[task.priority]}`}>
@@ -240,27 +240,27 @@ const Dashboard = ({ session, setActivePage }) => {
                   </span>
                 </div>
                 <p className="text-xs font-black leading-snug">{task.label}</p>
-                <p className="text-[10px] font-bold text-[#555555] mt-2">{task.owner}</p>
+                <p className="text-[10px] font-bold text-slate-500 mt-2">{task.owner}</p>
               </button>
             ))}
           </div>
         </div>
 
-        <div className="bg-white border border-[#C8C8C8] rounded-3xl p-5 space-y-4">
-          <div className="flex items-center justify-between border-b border-[#EAEAEA] pb-3">
+        <div className="glass-card rounded-3xl p-5 space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100/80 pb-3">
             <h3 className="text-sm font-black flex items-center gap-2">
               <CalendarDays className="w-4 h-4" /> Register Status
             </h3>
-            <span className="text-[10px] font-black text-[#555555]">{formatShortDate(new Date())}</span>
+            <span className="text-[10px] font-black text-slate-500">{formatShortDate(new Date())}</span>
           </div>
 
           <div className="space-y-3">
             {CLERK_ATTENDANCE_REGISTERS.map((register) => (
-              <div key={register.id} className="bg-[#F8F8F8] border border-[#EAEAEA] rounded-2xl p-3">
+              <div key={register.id} className="glass-soft rounded-2xl p-3">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-xs font-black">{register.className}-{register.section}</p>
-                    <p className="text-[10px] font-bold text-[#555555] mt-0.5">{register.teacher}</p>
+                    <p className="text-[10px] font-bold text-slate-500 mt-0.5">{register.teacher}</p>
                   </div>
                   <span className={`text-[9px] font-black px-2 py-0.5 rounded-md border ${statusTone[register.status]}`}>
                     {register.status}
@@ -272,21 +272,21 @@ const Dashboard = ({ session, setActivePage }) => {
         </div>
       </section>
 
-      <section className="bg-white border border-[#C8C8C8] rounded-3xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <section className="glass-card rounded-3xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h3 className="text-sm font-black flex items-center gap-2">
             <MessageSquare className="w-4 h-4" /> Office Broadcasts
           </h3>
-          <p className="text-xs font-bold text-[#555555] mt-1">
-            Send quick class, parent, or staff updates from Communication.
+          <p className="text-xs font-bold text-slate-500 mt-1">
+            Send quick class, parent, or staff updates from Notices.
           </p>
         </div>
         <button
           type="button"
-          onClick={() => setActivePage?.('Communication')}
-          className="px-5 py-3 bg-[#E1FA6C] border border-[#1A1A1A]/10 rounded-2xl text-xs font-black flex items-center justify-center gap-2"
+          onClick={() => setActivePage?.('Notices')}
+          className="px-5 py-3 btn-primary rounded-2xl text-xs font-black flex items-center justify-center gap-2"
         >
-          <Send className="w-4 h-4" /> Open Communication
+          <Send className="w-4 h-4" /> Open Notices
         </button>
       </section>
     </div>
@@ -294,17 +294,17 @@ const Dashboard = ({ session, setActivePage }) => {
 };
 
 const MetricCard = ({ icon, label, value, note }) => (
-  <div className="bg-white border border-[#C8C8C8] rounded-3xl p-4 min-h-32 flex flex-col justify-between">
+  <div className="glass-card glass-hover rounded-3xl p-4 min-h-32 flex flex-col justify-between">
     <div className="flex items-center justify-between">
-      <span className="w-10 h-10 rounded-2xl bg-[#F8F8F8] border border-[#EAEAEA] flex items-center justify-center">
+      <span className="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-md shadow-indigo-500/20 flex items-center justify-center">
         {React.createElement(icon, { className: 'w-5 h-5' })}
       </span>
-      <TrendingUp className="w-4 h-4 text-[#555555]" />
+      <TrendingUp className="w-4 h-4 text-slate-500" />
     </div>
     <div>
-      <p className="text-[11px] font-bold text-[#555555]">{label}</p>
+      <p className="text-[11px] font-bold text-slate-500">{label}</p>
       <p className="text-2xl font-black mt-1">{value}</p>
-      <p className="text-[10px] font-semibold text-[#555555] mt-1">{note}</p>
+      <p className="text-[10px] font-semibold text-slate-500 mt-1">{note}</p>
     </div>
   </div>
 );

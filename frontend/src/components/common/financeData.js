@@ -429,3 +429,242 @@ export const buildReceiptPayload = (familyLedger, amount, breakdown, mode) => ({
     category: familyLedger.category,
   },
 });
+
+/* ============================================================================
+   CLASS-WISE FEE LEDGER  (per-student, per-class) + WATERFALL ALLOCATION
+   ----------------------------------------------------------------------------
+   Source of truth on each student record:
+     student.feeLedger = [ { className, assigned, paid, note, payments:[
+                              { id, amount, date, mode, receiptNo } ] } ]
+   pending(entry) = max(assigned - paid, 0).
+   Legacy aggregate mirrors (paidFees / pendingFees / yearlyFee / annualFee /
+   assignedFees) are always re-synced from the ledger so older readers
+   (dashboards, /api/fees, class summaries) keep working unchanged.
+
+   Payment rule (admin-driven, manual): a collected amount waterfalls across a
+   student's UNPAID class entries in CLASS-PREFERENCE ORDER (lowest class first),
+   e.g. Class 6 pending 5000 + parent pays 7000  ->  Class 6 cleared, 2000 flows
+   into Class 7. Family mode repeats this student-by-student across siblings.
+   ============================================================================ */
+
+const normalizeClassName = (value = '') => String(value || '').trim();
+
+// Ordered class names from the `admin-class-preferences` namespace value.
+export const getClassOrder = (classPreferences = []) => {
+  const list = Array.isArray(classPreferences) ? classPreferences : [];
+  return list
+    .map((entry) =>
+      typeof entry === 'string' ? entry : entry?.name || entry?.className || entry?.class || ''
+    )
+    .map(normalizeClassName)
+    .filter(Boolean);
+};
+
+const classRankIn = (className, classOrder = []) => {
+  const target = normalizeClassName(className).toLowerCase();
+  const idx = classOrder.findIndex((c) => normalizeClassName(c).toLowerCase() === target);
+  return idx === -1 ? Number.MAX_SAFE_INTEGER : idx;
+};
+
+let ledgerSeq = 0;
+const makePaymentId = () => `PAY-${Date.now()}-${(ledgerSeq += 1)}`;
+
+const normalizeLedgerPayment = (payment = {}) => ({
+  id: payment.id || makePaymentId(),
+  amount: parseAmount(payment.amount ?? payment.amountPaid ?? payment.paid),
+  date: payment.date || payment.paidAt || payment.createdAt || new Date().toISOString(),
+  mode: payment.mode || 'School Desk',
+  receiptNo: payment.receiptNo || payment.id || '',
+});
+
+const normalizeLedgerEntry = (entry = {}) => {
+  const assigned = Math.max(0, parseAmount(entry.assigned ?? entry.totalFees ?? entry.amount ?? entry.assignedFees));
+  const paid = Math.max(0, parseAmount(entry.paid ?? entry.paidFees ?? entry.collected));
+  const payments = Array.isArray(entry.payments) ? entry.payments.map(normalizeLedgerPayment) : [];
+  return {
+    className: normalizeClassName(entry.className || entry.class),
+    assigned,
+    paid,
+    note: entry.note || '',
+    payments,
+  };
+};
+
+// Always returns a normalized ledger; migrates legacy flat fields when absent.
+export const ensureFeeLedger = (student = {}) => {
+  if (Array.isArray(student.feeLedger) && student.feeLedger.length) {
+    return student.feeLedger.map(normalizeLedgerEntry).filter((entry) => entry.className);
+  }
+
+  const className = getStudentClassName(student);
+  const assigned = getAssignedFees(student);
+  const paid = getPaidFees(student);
+
+  if (!className) return [];
+  if (!assigned && !paid) return [normalizeLedgerEntry({ className, assigned: 0, paid: 0 })];
+
+  const payments = (Array.isArray(student.paymentHistory) ? student.paymentHistory : []).map((entry) => ({
+    id: entry.id,
+    amount: getFirstAmount(entry, ['amountPaid', 'amount', 'paid']),
+    date: entry.paidAt || entry.date || entry.createdAt,
+    mode: entry.mode || 'School Desk',
+    receiptNo: entry.receiptNo || entry.id,
+  }));
+
+  return [normalizeLedgerEntry({ className, assigned, paid, payments })];
+};
+
+export const entryPending = (entry = {}) =>
+  Math.max(0, parseAmount(entry.assigned) - parseAmount(entry.paid));
+
+export const entryStatus = (entry = {}) => {
+  const assigned = parseAmount(entry.assigned);
+  const paid = parseAmount(entry.paid);
+  if (assigned > 0 && entryPending(entry) === 0) return 'Paid';
+  if (paid > 0) return 'Partial';
+  return 'Due';
+};
+
+export const sortedFeeLedger = (feeLedger = [], classOrder = []) =>
+  [...feeLedger].sort((a, b) => classRankIn(a.className, classOrder) - classRankIn(b.className, classOrder));
+
+export const ledgerTotals = (feeLedger = []) =>
+  feeLedger.reduce(
+    (acc, entry) => {
+      const assigned = parseAmount(entry.assigned);
+      const paid = parseAmount(entry.paid);
+      acc.assigned += assigned;
+      acc.paid += paid;
+      acc.pending += Math.max(0, assigned - paid);
+      return acc;
+    },
+    { assigned: 0, paid: 0, pending: 0 }
+  );
+
+export const studentFeeTotals = (student = {}) => ledgerTotals(ensureFeeLedger(student));
+
+export const studentHasPending = (student = {}) => studentFeeTotals(student).pending > 0;
+
+// Write a ledger back onto a student and refresh the legacy aggregate mirrors.
+export const applyLedgerToStudent = (student = {}, feeLedger = []) => {
+  const totals = ledgerTotals(feeLedger);
+  return {
+    ...student,
+    feeLedger,
+    paidFees: totals.paid,
+    pendingFees: totals.pending,
+    yearlyFee: totals.assigned,
+    annualFee: totals.assigned,
+    assignedFees: totals.assigned,
+  };
+};
+
+// Admin assigns (or edits) the fee for ONE class on a student.
+export const assignClassFeeToStudent = (student = {}, className, amount, note = '') => {
+  const target = normalizeClassName(className);
+  if (!target) return student;
+  const assigned = Math.max(0, parseAmount(amount));
+  const ledger = ensureFeeLedger(student);
+  const has = ledger.some((entry) => entry.className.toLowerCase() === target.toLowerCase());
+  const nextLedger = has
+    ? ledger.map((entry) =>
+        entry.className.toLowerCase() === target.toLowerCase()
+          ? { ...entry, assigned, note: note || entry.note }
+          : entry
+      )
+    : [...ledger, normalizeLedgerEntry({ className: target, assigned, paid: 0, note })];
+  return applyLedgerToStudent(student, nextLedger);
+};
+
+// Ensure a (possibly empty) ledger row exists for a class — used on promotion so
+// the new class shows up ready for the admin to set its fee.
+export const ensureClassRow = (student = {}, className) => {
+  const target = normalizeClassName(className);
+  if (!target) return student;
+  const ledger = ensureFeeLedger(student);
+  if (ledger.some((entry) => entry.className.toLowerCase() === target.toLowerCase())) {
+    return applyLedgerToStudent(student, ledger);
+  }
+  return applyLedgerToStudent(student, [...ledger, normalizeLedgerEntry({ className: target, assigned: 0, paid: 0 })]);
+};
+
+// Waterfall an amount across one ledger (class-order first). Pure helper.
+const waterfallLedger = (feeLedger = [], amount, classOrder = [], receiptNo = '', date = '') => {
+  let remaining = Math.max(0, parseAmount(amount));
+  const stamp = date || new Date().toISOString();
+  const ordered = sortedFeeLedger(feeLedger, classOrder);
+  const breakdown = [];
+  const nextLedger = ordered.map((entry) => {
+    const pending = entryPending(entry);
+    if (remaining <= 0 || pending <= 0) return entry;
+    const applied = Math.min(pending, remaining);
+    remaining -= applied;
+    breakdown.push({ className: entry.className, amount: applied });
+    return {
+      ...entry,
+      paid: parseAmount(entry.paid) + applied,
+      payments: [
+        ...entry.payments,
+        normalizeLedgerPayment({ amount: applied, date: stamp, mode: 'School Desk', receiptNo }),
+      ],
+    };
+  });
+  return { feeLedger: nextLedger, breakdown, remaining };
+};
+
+// Collect a payment for ONE student (waterfalls across their classes).
+export const collectStudentPayment = (student = {}, amount, classOrder = [], receiptNo = '', date = '') => {
+  const ledger = ensureFeeLedger(student);
+  const result = waterfallLedger(ledger, amount, classOrder, receiptNo, date);
+  return {
+    student: applyLedgerToStudent(student, result.feeLedger),
+    breakdown: result.breakdown,
+    remaining: result.remaining,
+  };
+};
+
+// Collect a family payment across siblings; each sibling waterfalls their classes.
+export const collectFamilyPayment = (familyStudents = [], amount, classOrder = [], receiptNo = '', date = '') => {
+  let remaining = Math.max(0, parseAmount(amount));
+  const stamp = date || new Date().toISOString();
+  const breakdown = [];
+  const students = familyStudents.map((student) => {
+    if (remaining <= 0) return student;
+    const ledger = ensureFeeLedger(student);
+    const result = waterfallLedger(ledger, remaining, classOrder, receiptNo, stamp);
+    remaining = result.remaining;
+    result.breakdown.forEach((row) =>
+      breakdown.push({
+        admissionNumber: getStudentAdmissionNumber(student),
+        name: getStudentDisplayName(student),
+        className: row.className,
+        amount: row.amount,
+      })
+    );
+    return applyLedgerToStudent(student, result.feeLedger);
+  });
+  return { students, breakdown, remaining };
+};
+
+// Class-sequence helpers for session promotion.
+export const isLastClass = (className, classOrder = []) =>
+  classOrder.length > 0 && classRankIn(className, classOrder) === classOrder.length - 1;
+
+export const nextClassName = (className, classOrder = []) => {
+  const idx = classRankIn(className, classOrder);
+  if (idx === Number.MAX_SAFE_INTEGER || idx >= classOrder.length - 1) return '';
+  return classOrder[idx + 1];
+};
+
+// Build a class-wise receipt payload for a collected payment.
+export const buildClassWiseReceipt = ({ payerName = '', admissionNumber = '', amount = 0, breakdown = [], mode = 'individual', contact = '', guardianEmail = '' } = {}) => ({
+  receiptNo: `REC-${Date.now().toString().slice(-6)}`,
+  timestamp: new Date().toLocaleString(),
+  amountPaid: parseAmount(amount),
+  mode,
+  payerName,
+  admissionNumber,
+  contact,
+  guardianEmail,
+  breakdown, // [{ admissionNumber?, name?, className, amount }]
+});

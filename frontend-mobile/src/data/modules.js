@@ -5,7 +5,6 @@ export const studentModules = [
   { title: "Application", icon: "document-text-outline", color: "#22C55E" },
   { title: "Assignment", icon: "clipboard-outline", color: "#F97316" },
   { title: "Attendance", icon: "shield-checkmark-outline", color: "#22C55E" },
-  { title: "Communication", icon: "chatbubble-ellipses-outline", color: "#7C3AED" },
   { title: "Events", icon: "calendar-number-outline", color: "#F43F5E" },
   { title: "Examinations", icon: "reader-outline", color: "#3B82F6" },
   { title: "Fees", icon: "wallet-outline", color: "#F59E0B" },

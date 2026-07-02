@@ -1,6 +1,7 @@
 import React from "react";
 import { TouchableOpacity, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { glassStyles, glassColors } from "../../shared/theme/glass";
 
 export default function ModuleCard({ title, icon, color, onPress }) {
   return (
@@ -8,21 +9,14 @@ export default function ModuleCard({ title, icon, color, onPress }) {
       onPress={onPress}
       activeOpacity={0.82}
       style={{
+        ...glassStyles.card,
         width: "23%",
         minHeight: 98,
-        backgroundColor: "#fff",
         borderRadius: 17,
         alignItems: "center",
         justifyContent: "center",
         padding: 8,
         marginBottom: 12,
-        elevation: 3,
-        shadowColor: "#1E293B",
-        shadowOpacity: 0.08,
-        shadowRadius: 14,
-        shadowOffset: { width: 0, height: 8 },
-        borderWidth: 1,
-        borderColor: "#EEF2F7",
       }}
     >
       <View
@@ -45,7 +39,7 @@ export default function ModuleCard({ title, icon, color, onPress }) {
           textAlign: "center",
           fontSize: 12,
           fontWeight: "700",
-          color: "#0F172A",
+          color: glassColors.ink,
           lineHeight: 15,
         }}
       >

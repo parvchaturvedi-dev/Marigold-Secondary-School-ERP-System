@@ -24,6 +24,7 @@ import ClerkLayout from './layouts/ClerkLayout';
 import StudentLayout from './layouts/StudentLayout';
 import TeacherLayout from './layouts/TeacherLayout';
 import Login from './pages/Auth/Login';
+import AuroraBackground from './components/common/AuroraBackground';
 import { portalRoutes } from './routes/portalRoutes';
 
 const portalLayouts = {
@@ -100,8 +101,9 @@ function PasswordChangeGate({ session, onPasswordChanged, onLogout }) {
   };
 
   return (
-    <div className="min-h-screen bg-[#D9D9D9] flex items-center justify-center p-4">
-      <form onSubmit={handleSubmit} className="w-full max-w-md rounded-3xl border border-neutral-300 bg-white p-8 shadow-2xl">
+    <div className="min-h-screen flex items-center justify-center p-4 relative">
+      <AuroraBackground />
+      <form onSubmit={handleSubmit} className="w-full max-w-md rounded-3xl glass-card p-8 animate-fadeInUp">
         <div className="mb-6">
           <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">Security required</p>
           <h1 className="mt-1 text-xl font-black text-neutral-950">Change your password now</h1>
@@ -124,7 +126,7 @@ function PasswordChangeGate({ session, onPasswordChanged, onLogout }) {
               required
               value={currentPassword}
               onChange={(event) => setCurrentPassword(event.target.value)}
-              className="w-full rounded-xl border border-neutral-300 bg-neutral-50 px-3 py-3 text-xs font-bold outline-none focus:border-neutral-950"
+              className="w-full rounded-xl border border-white/80 bg-white/60 px-3 py-3 text-xs font-bold outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all"
             />
           </label>
           <label className="block space-y-1">
@@ -134,7 +136,7 @@ function PasswordChangeGate({ session, onPasswordChanged, onLogout }) {
               required
               value={newPassword}
               onChange={(event) => setNewPassword(event.target.value)}
-              className="w-full rounded-xl border border-neutral-300 bg-neutral-50 px-3 py-3 text-xs font-bold outline-none focus:border-neutral-950"
+              className="w-full rounded-xl border border-white/80 bg-white/60 px-3 py-3 text-xs font-bold outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all"
             />
           </label>
           <label className="block space-y-1">
@@ -144,7 +146,7 @@ function PasswordChangeGate({ session, onPasswordChanged, onLogout }) {
               required
               value={confirmPassword}
               onChange={(event) => setConfirmPassword(event.target.value)}
-              className="w-full rounded-xl border border-neutral-300 bg-neutral-50 px-3 py-3 text-xs font-bold outline-none focus:border-neutral-950"
+              className="w-full rounded-xl border border-white/80 bg-white/60 px-3 py-3 text-xs font-bold outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all"
             />
           </label>
         </div>
@@ -160,7 +162,7 @@ function PasswordChangeGate({ session, onPasswordChanged, onLogout }) {
           <button
             type="submit"
             disabled={isSaving}
-            className="flex-1 rounded-xl bg-neutral-950 px-4 py-3 text-xs font-black uppercase tracking-widest text-white disabled:opacity-60"
+            className="flex-1 btn-primary rounded-xl px-4 py-3 text-xs font-black uppercase tracking-widest"
           >
             {isSaving ? 'Saving...' : 'Save Password'}
           </button>

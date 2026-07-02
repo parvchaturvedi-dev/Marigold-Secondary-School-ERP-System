@@ -3,9 +3,29 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { loginApi } from "../api/authApi";
 import { apiRequest } from "../api/apiClient";
 import { getActiveStudentProfile, getTeacherProfile } from "../shared/profile";
+import {
+  registerForPushNotifications,
+  setupNotificationHandler,
+} from "../notifications/registerPush";
 
 const AuthContext = createContext(null);
 const SESSION_KEY = "mgps_erp_auth_session";
+
+setupNotificationHandler();
+
+async function registerPushToken() {
+  try {
+    const token = await registerForPushNotifications();
+    if (token) {
+      await apiRequest("/notifications/register-token", {
+        method: "POST",
+        body: JSON.stringify({ token }),
+      });
+    }
+  } catch (error) {
+    console.warn("Push token registration failed:", error?.message || error);
+  }
+}
 
 function hydrateUser(session = {}) {
   const activeStudent = getActiveStudentProfile(session);
@@ -61,6 +81,7 @@ export function AuthProvider({ children }) {
 
             // Update stored session with fresh data from server
             await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(serverSession));
+            registerPushToken();
             return;
           }
         } catch (validationError) {
@@ -92,6 +113,7 @@ export function AuthProvider({ children }) {
       await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(sessionData));
       setUser(sessionData);
       setScreen(`${role}-dashboard`);
+      registerPushToken();
     } catch (error) {
       // Re-throw so LoginScreen can show the error in an Alert
       throw error;

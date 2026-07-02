@@ -59,31 +59,31 @@ const Settings = ({ session }) => {
   };
 
   return (
-    <div className="space-y-6 pb-8 select-none font-sans text-[#1A1A1A]">
-      <section className="bg-white border border-[#C8C8C8] rounded-3xl p-6">
+    <div className="space-y-6 pb-8 select-none font-sans text-slate-900 animate-fadeIn">
+      <section className="glass-card rounded-3xl p-6">
         <h2 className="text-xl font-black flex items-center gap-2">
           <SettingsIcon className="w-5 h-5" /> Clerk Settings
         </h2>
-        <p className="text-xs font-bold text-[#555555] mt-1">
+        <p className="text-xs font-bold text-slate-500 mt-1">
           Configure clerk desk notifications, security, print controls, and table preferences.
         </p>
       </section>
 
       <section className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
         <aside className="xl:col-span-4 space-y-6">
-          <div className="bg-white border border-[#C8C8C8] rounded-3xl p-5 space-y-4">
-            <span className="text-[10px] text-[#555555] uppercase block font-black tracking-wider">
+          <div className="glass-card rounded-3xl p-5 space-y-4">
+            <span className="text-[10px] text-slate-500 uppercase block font-black tracking-wider">
               Desk Identity
             </span>
 
             <div className="space-y-2 text-xs font-bold">
-              <label className="text-[#555555]">Username</label>
+              <label className="text-slate-500">Username</label>
               <div className="relative">
                 <input
                   type="text"
                   disabled
                   value={profile.username}
-                  className="w-full p-3 bg-[#EAEAEA] border border-[#C8C8C8] text-[#555555] rounded-2xl cursor-not-allowed font-mono font-black"
+                  className="w-full p-3 bg-white/50 border border-white/70 text-slate-500 rounded-2xl cursor-not-allowed font-mono font-black"
                 />
               </div>
               <p className="text-[10px] text-red-600 flex items-center gap-1 font-semibold pt-1">
@@ -92,8 +92,8 @@ const Settings = ({ session }) => {
             </div>
           </div>
 
-          <div className="bg-white border border-[#C8C8C8] rounded-3xl p-5 space-y-3">
-            <span className="text-[10px] text-[#555555] uppercase block font-black tracking-wider">
+          <div className="glass-card rounded-3xl p-5 space-y-3">
+            <span className="text-[10px] text-slate-500 uppercase block font-black tracking-wider">
               Desk Controls
             </span>
 
@@ -115,9 +115,9 @@ const Settings = ({ session }) => {
         <div className="xl:col-span-8 space-y-6">
           <form
             onSubmit={handlePasswordSubmit}
-            className="bg-white border border-[#C8C8C8] rounded-3xl p-5 space-y-4"
+            className="glass-card rounded-3xl p-5 space-y-4"
           >
-            <div className="flex items-center gap-2 border-b border-[#EAEAEA] pb-3">
+            <div className="flex items-center gap-2 border-b border-slate-100/80 pb-3">
               <KeyRound className="w-4 h-4" />
               <h3 className="text-sm font-black">Password Update</h3>
             </div>
@@ -146,14 +146,14 @@ const Settings = ({ session }) => {
 
             <button
               type="submit"
-              className="w-full bg-[#E1FA6C] border border-[#1A1A1A]/10 rounded-2xl py-3 text-xs font-black flex items-center justify-center gap-2"
+              className="w-full btn-primary rounded-2xl py-3 text-xs font-black flex items-center justify-center gap-2"
             >
               <Save className="w-4 h-4" /> Save Password
             </button>
           </form>
 
-          <div className="bg-white border border-[#C8C8C8] rounded-3xl p-5 space-y-4">
-            <div className="flex items-center gap-2 border-b border-[#EAEAEA] pb-3">
+          <div className="glass-card rounded-3xl p-5 space-y-4">
+            <div className="flex items-center gap-2 border-b border-slate-100/80 pb-3">
               <BellRing className="w-4 h-4" />
               <h3 className="text-sm font-black">Notifications</h3>
             </div>
@@ -180,7 +180,7 @@ const Settings = ({ session }) => {
             </div>
           </div>
 
-          <div className="bg-white border border-[#C8C8C8] rounded-3xl p-5 space-y-3">
+          <div className="glass-card rounded-3xl p-5 space-y-3">
             <h3 className="text-sm font-black flex items-center gap-2">
               <Lock className="w-4 h-4" /> Clerk Permissions
             </h3>
@@ -193,7 +193,7 @@ const Settings = ({ session }) => {
                 'Publish notices and meetings',
                 'View but not delete restricted faculty records',
               ].map((permission) => (
-                <div key={permission} className="bg-[#F8F8F8] border border-[#EAEAEA] rounded-2xl p-3">
+                <div key={permission} className="glass-soft rounded-2xl p-3">
                   {permission}
                 </div>
               ))}
@@ -207,7 +207,7 @@ const Settings = ({ session }) => {
 
 const PasswordField = ({ label, value, visible, onChange, onToggle }) => (
   <label className="block space-y-1 text-xs font-bold">
-    <span className="text-[10px] font-black uppercase text-[#555555]">{label}</span>
+    <span className="text-[10px] font-black uppercase text-slate-500">{label}</span>
     <span className="relative flex items-center">
       <input
         type={visible ? 'text' : 'password'}
@@ -215,12 +215,12 @@ const PasswordField = ({ label, value, visible, onChange, onToggle }) => (
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder="Enter secure token"
-        className="w-full bg-[#F8F8F8] border border-[#EAEAEA] rounded-2xl px-3 py-3 pr-10 text-xs font-mono font-bold outline-none focus:border-black"
+        className="w-full bg-white/60 border border-white/80 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none transition-all rounded-2xl px-3 py-3 pr-10 text-xs font-mono font-bold"
       />
       <button
         type="button"
         onClick={onToggle}
-        className="absolute right-3 text-[#555555] hover:text-black"
+        className="absolute right-3 text-slate-500 hover:text-indigo-600"
       >
         {visible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
       </button>
@@ -232,18 +232,18 @@ const ToggleRow = ({ label, description, checked, onClick }) => (
   <button
     type="button"
     onClick={onClick}
-    className="w-full bg-[#F8F8F8] border border-[#EAEAEA] rounded-2xl p-3 flex items-center justify-between gap-3 text-left min-h-24"
+    className="w-full glass-soft glass-hover rounded-2xl p-3 flex items-center justify-between gap-3 text-left min-h-24"
   >
     <span>
       <span className="block text-xs font-black">{label}</span>
-      <span className="block text-[10px] font-semibold text-[#555555] mt-1 leading-relaxed">
+      <span className="block text-[10px] font-semibold text-slate-500 mt-1 leading-relaxed">
         {description}
       </span>
     </span>
     {checked ? (
-      <ToggleRight className="w-9 h-9 text-emerald-600 shrink-0" />
+      <ToggleRight className="w-9 h-9 text-indigo-500 shrink-0" />
     ) : (
-      <ToggleLeft className="w-9 h-9 text-[#777777] shrink-0" />
+      <ToggleLeft className="w-9 h-9 text-slate-400 shrink-0" />
     )}
   </button>
 );

@@ -17,6 +17,9 @@ import {
   TrendingUp,
   Users,
   Clock,
+  UserX,
+  Tag,
+  X,
 } from 'lucide-react';
 import {
   LineChart,
@@ -29,20 +32,31 @@ import {
   Legend,
 } from 'recharts';
 import { sendGmailMessages } from '../../components/common/gmail';
+import { apiFetch } from '../../components/common/api';
 import { useMasterData } from '../../components/common/masterData';
+import { useMongoState } from '../../components/common/mongoState';
 import {
-  allocatePayment,
-  applyFeeAssignmentToStudents,
-  applyPaymentToStudents,
-  buildFeeAssignmentNoticeMessage,
-  buildFeeAssignmentPayload,
+  buildFinanceAnalytics,
   buildClassFinanceSummaries,
   buildFamilyLedger,
-  buildFinanceAnalytics,
-  buildReceiptPayload,
   formatCurrency,
   normalizeFinanceStudent,
   parseAmount,
+  getStudentAdmissionNumber,
+  getStudentDisplayName,
+  getStudentClassName,
+  getClassOrder,
+  ensureFeeLedger,
+  entryPending,
+  entryStatus,
+  sortedFeeLedger,
+  ledgerTotals,
+  studentFeeTotals,
+  studentHasPending,
+  assignClassFeeToStudent,
+  collectStudentPayment,
+  collectFamilyPayment,
+  buildClassWiseReceipt,
 } from '../../components/common/financeData';
 
 const getClassColor = (className) => {
@@ -69,17 +83,19 @@ const buildFeeReminderMessage = (student) => ({
 });
 
 const buildReceiptMessage = (receipt) => ({
-  to: receipt.familyDetails?.guardianEmail,
+  to: receipt.guardianEmail,
   subject: `Fee Receipt ${receipt.receiptNo}`,
   text: [
-    `Dear ${receipt.familyDetails?.fatherName || 'Guardian'},`,
+    `Dear ${receipt.payerName || 'Guardian'},`,
     '',
     `Payment received: ${formatCurrency(receipt.amountPaid)}.`,
     `Receipt number: ${receipt.receiptNo}.`,
     `Receipt time: ${receipt.timestamp}.`,
     '',
-    'Allocation breakdown:',
-    ...(receipt.breakdown || []).map((item) => `- ${item.name}: ${formatCurrency(item.allocated)}`),
+    'Class-wise allocation:',
+    ...(receipt.breakdown || []).map(
+      (item) => `- ${item.name ? `${item.name} · ` : ''}${item.className}: ${formatCurrency(item.amount)}`
+    ),
     '',
     'Regards,',
     'Accounts Department',
@@ -113,27 +129,47 @@ const FinanceTooltip = ({ active, payload, label }) => {
   );
 };
 
+const StatusBadge = ({ status }) => {
+  const styles =
+    status === 'Paid'
+      ? 'bg-emerald-100 text-emerald-700'
+      : status === 'Partial'
+      ? 'bg-amber-100 text-amber-700'
+      : 'bg-red-100 text-red-700';
+  return (
+    <span className={`text-[9px] px-2 py-0.5 rounded font-mono font-black uppercase ${styles}`}>{status}</span>
+  );
+};
+
 const Finance = ({ setActivePage }) => {
   const masterData = useMasterData();
+  const [alumniPending, setAlumniPending] = useMongoState('admin-finance-alumni-pending', []);
+
   const [isSendingReminder, setIsSendingReminder] = useState(false);
   const [isSendingReceiptMail, setIsSendingReceiptMail] = useState(false);
   const [currentView, setCurrentView] = useState('dashboard');
   const [selectedClassName, setSelectedClassName] = useState('');
   const [selectedAdmissionNumber, setSelectedAdmissionNumber] = useState('');
+  const [selectedIsAlumni, setSelectedIsAlumni] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortOrder, setSortOrder] = useState('none');
-  const [paymentMode, setPaymentMode] = useState('family');
+  const [paymentMode, setPaymentMode] = useState('individual');
   const [selectedIndividualId, setSelectedIndividualId] = useState('');
-  const [feeAssignmentStudentId, setFeeAssignmentStudentId] = useState('');
-  const [feeAssignmentAmount, setFeeAssignmentAmount] = useState('');
-  const [feeAssignmentNote, setFeeAssignmentNote] = useState('');
   const [inputAmount, setInputAmount] = useState('');
   const [latestReceipt, setLatestReceipt] = useState(null);
-  const [isSendingFeeAssignmentMail, setIsSendingFeeAssignmentMail] = useState(false);
+
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [assignClassName, setAssignClassName] = useState('');
+  const [assignAmount, setAssignAmount] = useState('');
+  const [assignNote, setAssignNote] = useState('');
 
   const students = useMemo(
     () => masterData.raw.students.map(normalizeFinanceStudent),
     [masterData.raw.students]
+  );
+  const classOrder = useMemo(
+    () => getClassOrder(masterData.raw.classPreferences),
+    [masterData.raw.classPreferences]
   );
   const classSummaries = useMemo(
     () => buildClassFinanceSummaries(masterData.raw.students, masterData.classNames),
@@ -143,6 +179,22 @@ const Finance = ({ setActivePage }) => {
     () => buildFinanceAnalytics(masterData.raw.students, masterData.classNames),
     [masterData.classNames, masterData.raw.students]
   );
+
+  const alumniList = useMemo(
+    () => (Array.isArray(alumniPending) ? alumniPending.map(normalizeFinanceStudent) : []),
+    [alumniPending]
+  );
+  const alumniTotals = useMemo(() => {
+    return alumniList.reduce(
+      (acc, student) => {
+        const totals = studentFeeTotals(student);
+        acc.pending += totals.pending;
+        acc.count += totals.pending > 0 ? 1 : 0;
+        return acc;
+      },
+      { pending: 0, count: 0 }
+    );
+  }, [alumniList]);
 
   const totals = useMemo(() => {
     const totalCollected = students.reduce((sum, student) => sum + student.paidFees, 0);
@@ -169,34 +221,57 @@ const Finance = ({ setActivePage }) => {
           .toLowerCase();
         return !normalizedSearch || haystack.includes(normalizedSearch);
       })
+      .map((student) => {
+        const ledger = ensureFeeLedger(student);
+        const currentEntry = ledger.find(
+          (entry) => entry.className.toLowerCase() === student.className.toLowerCase()
+        );
+        const overall = studentFeeTotals(student);
+        return {
+          ...student,
+          currentClassAssigned: currentEntry ? parseAmount(currentEntry.assigned) : 0,
+          currentClassPaid: currentEntry ? parseAmount(currentEntry.paid) : 0,
+          currentClassPending: currentEntry ? entryPending(currentEntry) : 0,
+          currentClassStatus: currentEntry ? entryStatus(currentEntry) : 'Due',
+          overallPending: overall.pending,
+        };
+      })
       .sort((a, b) => {
-        if (sortOrder === 'high-to-low') return b.pendingFees - a.pendingFees;
-        if (sortOrder === 'low-to-high') return a.pendingFees - b.pendingFees;
+        if (sortOrder === 'high-to-low') return b.currentClassPending - a.currentClassPending;
+        if (sortOrder === 'low-to-high') return a.currentClassPending - b.currentClassPending;
         return a.name.localeCompare(b.name);
       });
   }, [searchTerm, selectedClassName, sortOrder, students]);
 
   const familyLedger = useMemo(
-    () => buildFamilyLedger(masterData.raw.students, selectedAdmissionNumber),
-    [masterData.raw.students, selectedAdmissionNumber]
+    () => buildFamilyLedger(masterData.raw.students, selectedIsAlumni ? '' : selectedAdmissionNumber),
+    [masterData.raw.students, selectedAdmissionNumber, selectedIsAlumni]
   );
 
+  // Ledger view target: either a live student (with family siblings) or an alumni record (standalone).
+  const ledgerStudent = useMemo(() => {
+    if (selectedIsAlumni) {
+      return alumniList.find((student) => student.admissionNumber === selectedAdmissionNumber) || null;
+    }
+    return familyLedger.selectedStudent || null;
+  }, [selectedIsAlumni, alumniList, selectedAdmissionNumber, familyLedger.selectedStudent]);
+
+  const ledgerSiblings = selectedIsAlumni ? (ledgerStudent ? [ledgerStudent] : []) : familyLedger.students;
+
+  const ledgerEntries = useMemo(() => {
+    if (!ledgerStudent) return [];
+    return sortedFeeLedger(ensureFeeLedger(ledgerStudent), classOrder);
+  }, [ledgerStudent, classOrder]);
+
+  const ledgerFeeTotals = useMemo(() => ledgerTotals(ledgerEntries), [ledgerEntries]);
+
   useEffect(() => {
+    if (selectedIsAlumni) return;
     const firstLedgerStudent = familyLedger.students[0];
     if (firstLedgerStudent && !familyLedger.students.some((student) => student.id === selectedIndividualId)) {
       setSelectedIndividualId(firstLedgerStudent.id);
     }
-  }, [familyLedger.students, selectedIndividualId]);
-
-  useEffect(() => {
-    const firstLedgerStudent = familyLedger.students[0];
-    const hasSelected = familyLedger.students.some(
-      (student) => student.id === feeAssignmentStudentId || student.admissionNumber === feeAssignmentStudentId
-    );
-    if (firstLedgerStudent && !hasSelected) {
-      setFeeAssignmentStudentId(firstLedgerStudent.id);
-    }
-  }, [familyLedger.students, feeAssignmentStudentId]);
+  }, [familyLedger.students, selectedIndividualId, selectedIsAlumni]);
 
   const statsOverview = [
     {
@@ -272,42 +347,73 @@ const Finance = ({ setActivePage }) => {
     }
   };
 
-  const executeFeeAssignment = async (event) => {
-    event.preventDefault();
-    const amount = parseAmount(feeAssignmentAmount);
-    const targetStudent = familyLedger.students.find(
-      (student) => student.id === feeAssignmentStudentId || student.admissionNumber === feeAssignmentStudentId
-    );
+  const openAssignModal = () => {
+    if (!ledgerStudent) return;
+    setAssignClassName(ledgerStudent.className || classOrder[0] || '');
+    setAssignAmount('');
+    setAssignNote('');
+    setShowAssignModal(true);
+  };
 
-    if (!targetStudent) {
+  const persistStudentUpdate = (updatedStudent) => {
+    if (selectedIsAlumni) {
+      setAlumniPending((current) =>
+        (Array.isArray(current) ? current : []).map((student) =>
+          getStudentAdmissionNumber(student) === getStudentAdmissionNumber(updatedStudent) ? updatedStudent : student
+        )
+      );
+      return;
+    }
+    masterData.actions.setStudents(
+      masterData.raw.students.map((student, index) => {
+        const normalized = normalizeFinanceStudent(student, index);
+        return normalized.admissionNumber === getStudentAdmissionNumber(updatedStudent) ? updatedStudent : student;
+      })
+    );
+  };
+
+  const executeFeeAssignment = (event) => {
+    event.preventDefault();
+    const amount = parseAmount(assignAmount);
+    const target = assignClassName.trim();
+
+    if (!ledgerStudent) {
       alert('Select a student before assigning fees.');
       return;
     }
-
+    if (!target) {
+      alert('Choose a class to assign fees for.');
+      return;
+    }
     if (amount <= 0) {
-      alert('Enter a valid total fee amount.');
+      alert('Enter a valid fee amount.');
       return;
     }
 
-    const assignment = buildFeeAssignmentPayload(targetStudent, amount, feeAssignmentNote);
-    masterData.actions.setStudents(applyFeeAssignmentToStudents(masterData.raw.students, assignment));
-    setFeeAssignmentAmount('');
-    setFeeAssignmentNote('');
+    const updated = assignClassFeeToStudent(ledgerStudent, target, amount, assignNote);
+    persistStudentUpdate(updated);
+    setShowAssignModal(false);
+    setAssignAmount('');
+    setAssignNote('');
+    alert(`Fee of ${formatCurrency(amount)} set for ${target}.`);
+  };
 
-    if (!assignment.guardianEmail) {
-      alert('Total fee saved, but guardian email is missing for this student.');
-      return;
-    }
-
-    setIsSendingFeeAssignmentMail(true);
-    try {
-      await sendGmailMessages(buildFeeAssignmentNoticeMessage(assignment));
-      alert(`Total fee saved and email notice sent to ${assignment.guardianEmail}.`);
-    } catch (error) {
-      alert(`Total fee saved, but email notice failed: ${error.message}`);
-    } finally {
-      setIsSendingFeeAssignmentMail(false);
-    }
+  const notifyFeePayment = (admissionNumber, amount) => {
+    if (!admissionNumber) return;
+    apiFetch('/notifications', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: 'Fee Payment Received',
+        description: `A payment of ${formatCurrency(amount)} was recorded to your account.`,
+        type: 'fee',
+        linkPage: 'Fees',
+        recipientRole: 'student',
+        recipientStudentId: admissionNumber,
+      }),
+    }).catch((error) => {
+      console.warn('Failed to send fee payment notification', error);
+    });
   };
 
   const executeManualPayment = (event) => {
@@ -318,30 +424,156 @@ const Finance = ({ setActivePage }) => {
       return;
     }
 
-    const allocations = allocatePayment(familyLedger.students, amount, paymentMode, selectedIndividualId);
-    if (!allocations.length) {
-      alert('No pending balance found for the selected ledger.');
+    const receiptNo = `REC-${Date.now().toString().slice(-6)}`;
+    const nowISO = new Date().toISOString();
+
+    if (selectedIsAlumni) {
+      if (!ledgerStudent) {
+        alert('No alumni record selected.');
+        return;
+      }
+      const result = collectStudentPayment(ledgerStudent, amount, classOrder, receiptNo, nowISO);
+      if (!result.breakdown.length) {
+        alert('No pending balance found for this record.');
+        return;
+      }
+
+      const stillPending = studentHasPending(result.student);
+      setAlumniPending((current) => {
+        const list = Array.isArray(current) ? current : [];
+        if (!stillPending) {
+          return list.filter(
+            (student) => getStudentAdmissionNumber(student) !== getStudentAdmissionNumber(result.student)
+          );
+        }
+        return list.map((student) =>
+          getStudentAdmissionNumber(student) === getStudentAdmissionNumber(result.student) ? result.student : student
+        );
+      });
+
+      const receipt = buildClassWiseReceipt({
+        payerName: getStudentDisplayName(result.student),
+        admissionNumber: getStudentAdmissionNumber(result.student),
+        amount,
+        breakdown: result.breakdown,
+        mode: 'individual',
+        contact: result.student.guardianPhone,
+        guardianEmail: result.student.guardianEmail,
+      });
+      setLatestReceipt(receipt);
+      setInputAmount('');
+      try {
+        localStorage.setItem('latest_invoice_payload', JSON.stringify(receipt));
+      } catch (error) {
+        console.warn('Failed to persist invoice payload', error);
+      }
+      notifyFeePayment(getStudentAdmissionNumber(result.student), amount);
+      if (typeof setActivePage === 'function') setActivePage('Fees Receipt');
+      else setCurrentView('receipt');
+      if (!stillPending) {
+        setCurrentView('alumni');
+      }
       return;
     }
 
-    const nextStudents = applyPaymentToStudents(masterData.raw.students, allocations);
-    const receipt = buildReceiptPayload(familyLedger, amount, allocations, paymentMode);
-    masterData.actions.setStudents(nextStudents);
+    if (paymentMode === 'individual') {
+      const targetStudent = familyLedger.students.find(
+        (student) => student.id === selectedIndividualId || student.admissionNumber === selectedIndividualId
+      );
+      if (!targetStudent) {
+        alert('Select a student to collect payment for.');
+        return;
+      }
+
+      const result = collectStudentPayment(targetStudent, amount, classOrder, receiptNo, nowISO);
+      if (!result.breakdown.length) {
+        alert('No pending balance found for the selected student.');
+        return;
+      }
+
+      masterData.actions.setStudents(
+        masterData.raw.students.map((student, index) => {
+          const normalized = normalizeFinanceStudent(student, index);
+          return normalized.admissionNumber === getStudentAdmissionNumber(result.student) ? result.student : student;
+        })
+      );
+
+      const receipt = buildClassWiseReceipt({
+        payerName: getStudentDisplayName(result.student),
+        admissionNumber: getStudentAdmissionNumber(result.student),
+        amount,
+        breakdown: result.breakdown,
+        mode: 'individual',
+        contact: familyLedger.contact,
+        guardianEmail: familyLedger.guardianEmail,
+      });
+      setLatestReceipt(receipt);
+      setInputAmount('');
+      try {
+        localStorage.setItem('latest_invoice_payload', JSON.stringify(receipt));
+      } catch (error) {
+        console.warn('Failed to persist invoice payload', error);
+      }
+      notifyFeePayment(getStudentAdmissionNumber(result.student), amount);
+      if (typeof setActivePage === 'function') setActivePage('Fees Receipt');
+      else setCurrentView('receipt');
+      return;
+    }
+
+    // family mode
+    const result = collectFamilyPayment(familyLedger.students, amount, classOrder, receiptNo, nowISO);
+    if (!result.breakdown.length) {
+      alert('No pending balance found for this family.');
+      return;
+    }
+
+    const updatedByAdmission = new Map(
+      result.students.map((student) => [getStudentAdmissionNumber(student), student])
+    );
+    masterData.actions.setStudents(
+      masterData.raw.students.map((student, index) => {
+        const normalized = normalizeFinanceStudent(student, index);
+        const updated = updatedByAdmission.get(normalized.admissionNumber);
+        return updated || student;
+      })
+    );
+
+    const receipt = buildClassWiseReceipt({
+      payerName: familyLedger.fatherName || familyLedger.motherName || 'Guardian',
+      admissionNumber: familyLedger.selectedStudent?.admissionNumber || '',
+      amount,
+      breakdown: result.breakdown,
+      mode: 'family',
+      contact: familyLedger.contact,
+      guardianEmail: familyLedger.guardianEmail,
+    });
     setLatestReceipt(receipt);
     setInputAmount('');
-
     try {
       localStorage.setItem('latest_invoice_payload', JSON.stringify(receipt));
     } catch (error) {
       console.warn('Failed to persist invoice payload', error);
     }
-
+    const perStudentTotals = new Map();
+    result.breakdown.forEach((row) => {
+      if (!row.admissionNumber) return;
+      perStudentTotals.set(row.admissionNumber, (perStudentTotals.get(row.admissionNumber) || 0) + parseAmount(row.amount));
+    });
+    perStudentTotals.forEach((studentAmount, admissionNumber) => notifyFeePayment(admissionNumber, studentAmount));
     if (typeof setActivePage === 'function') setActivePage('Fees Receipt');
     else setCurrentView('receipt');
   };
 
+  const openLedger = (student, isAlumni = false) => {
+    setSelectedIsAlumni(isAlumni);
+    setSelectedAdmissionNumber(student.admissionNumber);
+    setPaymentMode('individual');
+    setSelectedIndividualId(student.id);
+    setCurrentView('ledger');
+  };
+
   return (
-    <div className="w-full min-h-screen bg-[#D9D9D9] p-6 text-neutral-800 font-sans box-border select-none">
+    <div className="w-full min-h-screen p-6 text-neutral-800 font-sans box-border select-none">
       {currentView === 'dashboard' && (
         <div className="animate-fadeIn">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 border-b border-neutral-400/60 pb-5">
@@ -350,10 +582,10 @@ const Finance = ({ setActivePage }) => {
                 Institutional Finance Ledger <Sparkles className="w-5 h-5 text-neutral-700" />
               </h2>
               <p className="text-xs text-neutral-600 font-medium font-mono mt-1">
-                Student Management, Dashboard, Class Finance, and Fee Receipt now share one fee ledger.
+                Class-wise fee ledger shared across Student Management, Dashboard, Class Finance, and Fee Receipt.
               </p>
             </div>
-            <div className="flex items-center gap-2 bg-white p-1.5 rounded-2xl border border-neutral-300 shadow-sm">
+            <div className="flex items-center gap-2 glass-card p-1.5 rounded-2xl">
               <span className="text-[10px] font-black uppercase tracking-wider px-2 text-neutral-500 font-mono">
                 Reminders:
               </span>
@@ -380,7 +612,7 @@ const Finance = ({ setActivePage }) => {
             {statsOverview.map((card) => {
               const Icon = card.icon;
               return (
-                <div key={card.id} className="bg-white p-5 rounded-2xl shadow-md border border-neutral-300/40">
+                <div key={card.id} className="glass-card p-5 rounded-2xl">
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-[10px] font-black uppercase text-neutral-500 font-mono">{card.title}</span>
                     <div className="w-7 h-7 bg-neutral-100 border border-neutral-200 rounded-xl flex items-center justify-center">
@@ -394,7 +626,7 @@ const Finance = ({ setActivePage }) => {
             })}
           </div>
 
-          <div className="w-full bg-white border border-neutral-300 shadow-md p-5 rounded-2xl mb-6">
+          <div className="w-full glass-card p-5 rounded-2xl mb-6">
             <div className="w-full h-64 font-mono text-[10px] font-bold">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={analytics.chartData}>
@@ -421,7 +653,7 @@ const Finance = ({ setActivePage }) => {
           <h3 className="text-xs font-black uppercase tracking-widest text-neutral-600 mb-4 font-mono">
             Classwise Accounts Index
           </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
             {classSummaries.map((cls) => (
               <button
                 key={cls.id}
@@ -431,7 +663,7 @@ const Finance = ({ setActivePage }) => {
                   setSearchTerm('');
                   setCurrentView('list');
                 }}
-                className="bg-white hover:bg-neutral-50 border border-neutral-300 p-5 rounded-2xl cursor-pointer transition-all text-left shadow-sm"
+                className="glass-card glass-hover p-5 rounded-2xl cursor-pointer transition-all text-left"
               >
                 <div className="flex items-center justify-between mb-4">
                   <span className="text-sm font-black text-neutral-900">{cls.className}</span>
@@ -449,6 +681,30 @@ const Finance = ({ setActivePage }) => {
               </button>
             ))}
           </div>
+
+          <button
+            type="button"
+            onClick={() => setCurrentView('alumni')}
+            className="w-full glass-card glass-hover p-5 rounded-2xl cursor-pointer transition-all text-left flex items-center justify-between gap-4"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-amber-100 border border-amber-200 rounded-xl flex items-center justify-center">
+                <UserX className="w-5 h-5 text-amber-700" />
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-neutral-900">Pending · Alumni (Passed-out / Left)</h3>
+                <p className="text-[10px] text-neutral-500 font-semibold mt-0.5">
+                  {alumniTotals.count} record(s) with outstanding dues
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-[10px] bg-red-100 text-red-700 px-2.5 py-1.5 rounded-lg font-black font-mono">
+                Pend: {formatCurrency(alumniTotals.pending)}
+              </span>
+              <ArrowRight className="w-3.5 h-3.5 text-neutral-800" />
+            </div>
+          </button>
         </div>
       )}
 
@@ -459,7 +715,7 @@ const Finance = ({ setActivePage }) => {
               <button
                 type="button"
                 onClick={() => setCurrentView('dashboard')}
-                className="p-2 bg-white border border-neutral-300 rounded-xl shadow-sm"
+                className="p-2 bg-white/60 border border-white/80 rounded-xl hover:bg-white/80 transition-all"
               >
                 <ArrowLeft className="w-4 h-4" />
               </button>
@@ -468,7 +724,7 @@ const Finance = ({ setActivePage }) => {
               </h2>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <div className="relative bg-white rounded-xl border border-neutral-300 shadow-sm flex items-center px-3 py-1.5 w-full sm:w-64">
+              <div className="relative bg-white/60 border border-white/80 rounded-xl flex items-center px-3 py-1.5 w-full sm:w-64">
                 <Search className="w-4 h-4 text-neutral-400 mr-2" />
                 <input
                   type="text"
@@ -481,31 +737,33 @@ const Finance = ({ setActivePage }) => {
               <button
                 type="button"
                 onClick={() => setSortOrder(sortOrder === 'high-to-low' ? 'low-to-high' : 'high-to-low')}
-                className="flex items-center gap-1.5 text-[10px] font-black bg-white border border-neutral-300 px-3 py-2.5 rounded-xl shadow-sm"
+                className="flex items-center gap-1.5 text-[10px] font-black bg-white/60 border border-white/80 px-3 py-2.5 rounded-xl hover:bg-white/80 transition-all"
               >
                 <ArrowUpDown className="w-3.5 h-3.5" /> Sort Due: {sortOrder}
               </button>
             </div>
           </div>
 
-          <div className="w-full bg-white border border-neutral-300 rounded-2xl shadow-md overflow-hidden">
+          <div className="w-full glass-card rounded-2xl overflow-hidden">
             <div className="w-full overflow-x-auto">
-              <table className="w-full text-left border-collapse min-w-[900px]">
+              <table className="w-full text-left border-collapse min-w-[960px]">
                 <thead>
-                  <tr className="bg-neutral-50 border-b border-neutral-200 text-[10px] font-black uppercase text-neutral-500 font-mono">
+                  <tr className="bg-indigo-50/60 border-b border-slate-100/80 text-[10px] font-black uppercase text-slate-500 font-mono">
                     <th className="py-3 px-4">Adm. Number</th>
                     <th className="py-3 px-4">Student Name</th>
                     <th className="py-3 px-4">Father's Name</th>
                     <th className="py-3 px-4">Contact</th>
-                    <th className="py-3 px-4 text-right">Total Fees</th>
-                    <th className="py-3 px-4 text-right">Paid Fees</th>
-                    <th className="py-3 px-4 text-right">Pending Fees</th>
+                    <th className="py-3 px-4 text-center">Class Status</th>
+                    <th className="py-3 px-4 text-right">{selectedClassName} Fee</th>
+                    <th className="py-3 px-4 text-right">{selectedClassName} Paid</th>
+                    <th className="py-3 px-4 text-right">{selectedClassName} Pending</th>
+                    <th className="py-3 px-4 text-right">Overall Pending</th>
                     <th className="py-3 px-4 text-center">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-100 text-xs font-medium">
                   {selectedClassStudents.map((student) => (
-                    <tr key={student.admissionNumber} className="hover:bg-neutral-50/60">
+                    <tr key={student.admissionNumber} className="hover:bg-white/60">
                       <td className="py-3.5 px-4 font-mono font-bold text-neutral-600">{student.admissionNumber}</td>
                       <td className="py-3.5 px-4 font-bold text-neutral-900">
                         <span className="inline-flex items-center gap-2">
@@ -515,22 +773,25 @@ const Finance = ({ setActivePage }) => {
                       </td>
                       <td className="py-3.5 px-4 text-neutral-600">{student.fatherName || '-'}</td>
                       <td className="py-3.5 px-4 font-mono text-neutral-500">{student.guardianPhone || '-'}</td>
+                      <td className="py-3.5 px-4 text-center">
+                        <StatusBadge status={student.currentClassStatus} />
+                      </td>
                       <td className="py-3.5 px-4 text-right font-mono font-bold text-neutral-800">
-                        {formatCurrency(student.yearlyFee)}
+                        {formatCurrency(student.currentClassAssigned)}
                       </td>
                       <td className="py-3.5 px-4 text-right font-mono font-bold text-emerald-600">
-                        {formatCurrency(student.paidFees)}
+                        {formatCurrency(student.currentClassPaid)}
                       </td>
                       <td className="py-3.5 px-4 text-right font-mono font-bold text-red-500">
-                        {formatCurrency(student.pendingFees)}
+                        {formatCurrency(student.currentClassPending)}
+                      </td>
+                      <td className="py-3.5 px-4 text-right font-mono font-bold text-neutral-500">
+                        {formatCurrency(student.overallPending)}
                       </td>
                       <td className="py-3.5 px-4 text-center">
                         <button
                           type="button"
-                          onClick={() => {
-                            setSelectedAdmissionNumber(student.admissionNumber);
-                            setCurrentView('ledger');
-                          }}
+                          onClick={() => openLedger(student, false)}
                           className="inline-flex items-center gap-1 text-[10px] font-black bg-neutral-100 border border-neutral-300 px-3 py-1.5 rounded-xl hover:bg-neutral-800 hover:text-white transition-all"
                         >
                           <Eye className="w-3 h-3" /> View Ledger
@@ -540,8 +801,92 @@ const Finance = ({ setActivePage }) => {
                   ))}
                   {!selectedClassStudents.length && (
                     <tr>
-                      <td colSpan="8" className="py-10 text-center text-[10px] font-black uppercase tracking-widest text-neutral-400">
+                      <td colSpan="10" className="py-10 text-center text-[10px] font-black uppercase tracking-widest text-neutral-400">
                         No synced student fee records found for this class.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {currentView === 'alumni' && (
+        <div className="animate-fadeIn">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 border-b border-neutral-400/60 pb-5">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setCurrentView('dashboard')}
+                className="p-2 bg-white/60 border border-white/80 rounded-xl hover:bg-white/80 transition-all"
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </button>
+              <h2 className="text-xl font-black uppercase tracking-widest text-neutral-900 flex items-center gap-2">
+                <UserX className="w-5 h-5 text-amber-700" /> Pending · Alumni (Passed-out / Left)
+              </h2>
+            </div>
+            <span className="text-[10px] bg-red-100 text-red-700 px-3 py-1.5 rounded-lg font-black font-mono">
+              Total Outstanding: {formatCurrency(alumniTotals.pending)}
+            </span>
+          </div>
+
+          <div className="w-full glass-card rounded-2xl overflow-hidden">
+            <div className="w-full overflow-x-auto">
+              <table className="w-full text-left border-collapse min-w-[900px]">
+                <thead>
+                  <tr className="bg-amber-50/60 border-b border-slate-100/80 text-[10px] font-black uppercase text-slate-500 font-mono">
+                    <th className="py-3 px-4">Adm. Number</th>
+                    <th className="py-3 px-4">Student Name</th>
+                    <th className="py-3 px-4">Last Class</th>
+                    <th className="py-3 px-4">Contact</th>
+                    <th className="py-3 px-4 text-right">Total Fees</th>
+                    <th className="py-3 px-4 text-right">Paid</th>
+                    <th className="py-3 px-4 text-right">Pending</th>
+                    <th className="py-3 px-4 text-center">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-100 text-xs font-medium">
+                  {alumniList.map((student) => {
+                    const t = studentFeeTotals(student);
+                    return (
+                      <tr key={student.admissionNumber} className="hover:bg-white/60">
+                        <td className="py-3.5 px-4 font-mono font-bold text-neutral-600">{student.admissionNumber}</td>
+                        <td className="py-3.5 px-4 font-bold text-neutral-900">
+                          <span className="inline-flex items-center gap-2">
+                            <Tag className="w-3.5 h-3.5 text-amber-600" />
+                            {student.name}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 text-neutral-600">{student.className}</td>
+                        <td className="py-3.5 px-4 font-mono text-neutral-500">{student.guardianPhone || '-'}</td>
+                        <td className="py-3.5 px-4 text-right font-mono font-bold text-neutral-800">
+                          {formatCurrency(t.assigned)}
+                        </td>
+                        <td className="py-3.5 px-4 text-right font-mono font-bold text-emerald-600">
+                          {formatCurrency(t.paid)}
+                        </td>
+                        <td className="py-3.5 px-4 text-right font-mono font-bold text-red-500">
+                          {formatCurrency(t.pending)}
+                        </td>
+                        <td className="py-3.5 px-4 text-center">
+                          <button
+                            type="button"
+                            onClick={() => openLedger(student, true)}
+                            className="inline-flex items-center gap-1 text-[10px] font-black bg-neutral-100 border border-neutral-300 px-3 py-1.5 rounded-xl hover:bg-neutral-800 hover:text-white transition-all"
+                          >
+                            <Eye className="w-3 h-3" /> View / Collect
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {!alumniList.length && (
+                    <tr>
+                      <td colSpan="8" className="py-10 text-center text-[10px] font-black uppercase tracking-widest text-neutral-400">
+                        No alumni records with pending dues.
                       </td>
                     </tr>
                   )}
@@ -557,135 +902,154 @@ const Finance = ({ setActivePage }) => {
           <div className="flex items-center gap-3 border-b border-neutral-400/60 pb-4">
             <button
               type="button"
-              onClick={() => setCurrentView('list')}
-              className="p-2 bg-white border border-neutral-300 rounded-xl shadow-sm"
+              onClick={() => setCurrentView(selectedIsAlumni ? 'alumni' : 'list')}
+              className="p-2 bg-white/60 border border-white/80 rounded-xl hover:bg-white/80 transition-all"
             >
               <ArrowLeft className="w-4 h-4" />
             </button>
-            <div>
+            <div className="flex-1">
               <h2 className="text-xl font-black uppercase text-neutral-900">
-                Family Ledger: {familyLedger.selectedStudent?.name || 'Student'}
+                {selectedIsAlumni ? 'Alumni Ledger' : 'Family Ledger'}: {ledgerStudent ? getStudentDisplayName(ledgerStudent) : 'Student'}
               </h2>
-              <p className="text-xs text-neutral-600 font-mono">Family ID: {familyLedger.familyId}</p>
+              <p className="text-xs text-neutral-600 font-mono">
+                {selectedIsAlumni ? `Last Class: ${ledgerStudent?.className || '-'}` : `Family ID: ${familyLedger.familyId}`}
+              </p>
             </div>
-          </div>
-
-          <div className="bg-white p-5 rounded-2xl border border-neutral-300 shadow-md grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div><span className="text-[9px] font-black text-neutral-400 block font-mono">Father Name</span><p className="text-sm font-bold">{familyLedger.fatherName || '-'}</p></div>
-            <div><span className="text-[9px] font-black text-neutral-400 block font-mono">Mother Name</span><p className="text-sm font-bold">{familyLedger.motherName || '-'}</p></div>
-            <div><span className="text-[9px] font-black text-neutral-400 block font-mono">Contact</span><p className="text-sm font-bold font-mono">{familyLedger.contact || '-'}</p></div>
-            <div><span className="text-[9px] font-black text-neutral-400 block font-mono">Category</span><p className="text-sm font-bold uppercase">{familyLedger.category || '-'}</p></div>
-          </div>
-
-          <div className="bg-white border border-neutral-300 rounded-2xl shadow-md overflow-hidden">
-            <div className="p-4 bg-neutral-50 border-b border-neutral-200 flex items-center justify-between">
-              <h3 className="text-xs font-black uppercase font-mono text-neutral-500">Connected Sibling Registers</h3>
-              <span className="text-[10px] bg-red-100 text-red-700 px-2 py-1 rounded-md font-black font-mono">
-                Total Family Dues: {formatCurrency(familyLedger.totalPending)}
+            {selectedIsAlumni && (
+              <span className="text-[9px] bg-amber-100 text-amber-700 px-2.5 py-1 rounded-lg font-black font-mono uppercase">
+                Passed-out / Left
               </span>
+            )}
+          </div>
+
+          <div className="glass-card p-5 rounded-2xl grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div><span className="text-[9px] font-black text-neutral-400 block font-mono">Father Name</span><p className="text-sm font-bold">{ledgerStudent?.fatherName || '-'}</p></div>
+            <div><span className="text-[9px] font-black text-neutral-400 block font-mono">Mother Name</span><p className="text-sm font-bold">{ledgerStudent?.motherName || '-'}</p></div>
+            <div><span className="text-[9px] font-black text-neutral-400 block font-mono">Contact</span><p className="text-sm font-bold font-mono">{ledgerStudent?.guardianPhone || '-'}</p></div>
+            <div><span className="text-[9px] font-black text-neutral-400 block font-mono">Category</span><p className="text-sm font-bold uppercase">{ledgerStudent?.category || '-'}</p></div>
+          </div>
+
+          {!selectedIsAlumni && ledgerSiblings.length > 1 && (
+            <div className="glass-card rounded-2xl overflow-hidden">
+              <div className="p-4 bg-indigo-50/60 border-b border-slate-100/80 flex items-center justify-between">
+                <h3 className="text-xs font-black uppercase font-mono text-neutral-500">Connected Sibling Registers</h3>
+                <span className="text-[10px] bg-red-100 text-red-700 px-2 py-1 rounded-md font-black font-mono">
+                  Total Family Dues: {formatCurrency(familyLedger.totalPending)}
+                </span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left min-w-[820px]">
+                  <thead>
+                    <tr className="bg-indigo-50/60 border-b border-slate-100/80 text-[9px] font-black text-neutral-400 font-mono">
+                      <th className="p-3">Student Name</th>
+                      <th className="p-3">Class</th>
+                      <th className="p-3 text-center">Status</th>
+                      <th className="p-3 text-right">Total Fees</th>
+                      <th className="p-3 text-right">Cumulative Paid</th>
+                      <th className="p-3 text-right">Unpaid Balance</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-100 text-xs font-medium">
+                    {familyLedger.students.map((student) => (
+                      <tr
+                        key={student.admissionNumber}
+                        className={`hover:bg-white/60 cursor-pointer ${
+                          student.admissionNumber === selectedAdmissionNumber ? 'bg-indigo-50/40' : ''
+                        }`}
+                        onClick={() => setSelectedAdmissionNumber(student.admissionNumber)}
+                      >
+                        <td className="p-3 font-bold text-neutral-900">{student.name}</td>
+                        <td className="p-3 font-mono">{student.className}</td>
+                        <td className="p-3 text-center">
+                          <span className={`text-[9px] px-2 py-0.5 rounded font-mono font-black ${student.status === 'Active' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                            {student.status}
+                          </span>
+                        </td>
+                        <td className="p-3 text-right text-neutral-800 font-bold font-mono">{formatCurrency(student.yearlyFee)}</td>
+                        <td className="p-3 text-right text-emerald-600 font-bold font-mono">{formatCurrency(student.paidFees)}</td>
+                        <td className={`p-3 text-right font-bold font-mono ${student.pendingFees > 0 ? 'text-red-500' : 'text-neutral-400'}`}>
+                          {formatCurrency(student.pendingFees)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          <div className="glass-card rounded-2xl overflow-hidden">
+            <div className="p-4 bg-indigo-50/60 border-b border-slate-100/80 flex items-center justify-between flex-wrap gap-3">
+              <h3 className="text-xs font-black uppercase font-mono text-neutral-500 flex items-center gap-1.5">
+                <DollarSign className="w-4 h-4" /> Class-wise Fee Ledger
+              </h3>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] bg-red-100 text-red-700 px-2 py-1 rounded-md font-black font-mono">
+                  Pending: {formatCurrency(ledgerFeeTotals.pending)}
+                </span>
+                <button
+                  type="button"
+                  onClick={openAssignModal}
+                  className="inline-flex items-center gap-1 text-[10px] font-black bg-neutral-900 text-white px-3 py-1.5 rounded-xl hover:bg-neutral-800 transition-all"
+                >
+                  <DollarSign className="w-3 h-3" /> Assign Fee
+                </button>
+              </div>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-left min-w-[820px]">
+              <table className="w-full text-left min-w-[720px]">
                 <thead>
-                  <tr className="bg-neutral-50 border-b border-neutral-200 text-[9px] font-black text-neutral-400 font-mono">
-                    <th className="p-3">Student Name</th>
+                  <tr className="bg-indigo-50/60 border-b border-slate-100/80 text-[9px] font-black text-neutral-400 font-mono">
                     <th className="p-3">Class</th>
                     <th className="p-3 text-center">Status</th>
-                    <th className="p-3 text-right">Total Fees</th>
-                    <th className="p-3 text-right">Cumulative Paid</th>
-                    <th className="p-3 text-right">Unpaid Balance</th>
+                    <th className="p-3 text-right">Assigned</th>
+                    <th className="p-3 text-right">Paid</th>
+                    <th className="p-3 text-right">Pending</th>
+                    <th className="p-3">Note</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-100 text-xs font-medium">
-                  {familyLedger.students.map((student) => (
-                    <tr key={student.admissionNumber} className="hover:bg-neutral-50/50">
-                      <td className="p-3 font-bold text-neutral-900">{student.name}</td>
-                      <td className="p-3 font-mono">{student.className}</td>
-                      <td className="p-3 text-center">
-                        <span className={`text-[9px] px-2 py-0.5 rounded font-mono font-black ${student.status === 'Active' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                          {student.status}
-                        </span>
+                  {ledgerEntries.map((entry) => (
+                    <tr key={entry.className} className="hover:bg-white/60">
+                      <td className="p-3 font-bold text-neutral-900">{entry.className}</td>
+                      <td className="p-3 text-center"><StatusBadge status={entryStatus(entry)} /></td>
+                      <td className="p-3 text-right font-mono font-bold text-neutral-800">{formatCurrency(entry.assigned)}</td>
+                      <td className="p-3 text-right font-mono font-bold text-emerald-600">{formatCurrency(entry.paid)}</td>
+                      <td className={`p-3 text-right font-mono font-bold ${entryPending(entry) > 0 ? 'text-red-500' : 'text-neutral-400'}`}>
+                        {formatCurrency(entryPending(entry))}
                       </td>
-                      <td className="p-3 text-right text-neutral-800 font-bold font-mono">{formatCurrency(student.yearlyFee)}</td>
-                      <td className="p-3 text-right text-emerald-600 font-bold font-mono">{formatCurrency(student.paidFees)}</td>
-                      <td className={`p-3 text-right font-bold font-mono ${student.pendingFees > 0 ? 'text-red-500' : 'text-neutral-400'}`}>
-                        {formatCurrency(student.pendingFees)}
-                      </td>
+                      <td className="p-3 text-neutral-500">{entry.note || '-'}</td>
                     </tr>
                   ))}
+                  {!ledgerEntries.length && (
+                    <tr>
+                      <td colSpan="6" className="py-8 text-center text-[10px] font-black uppercase tracking-widest text-neutral-400">
+                        No class fee assigned yet. Use "Assign Fee" to set one.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
           </div>
 
-          <form onSubmit={executeFeeAssignment} className="bg-white p-5 rounded-2xl border border-neutral-300 shadow-md space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-              <div>
-                <h4 className="text-xs font-black uppercase text-neutral-900 flex items-center gap-1">
-                  <DollarSign className="w-4 h-4" /> Add / Set Total Fees
-                </h4>
-                <p className="mt-1 text-[11px] text-neutral-600 font-semibold">
-                  Set the student's total fee first. Paid amounts are deducted from this total and the pending balance updates automatically.
-                </p>
-              </div>
-              <span className="text-[10px] font-black text-red-600 bg-red-50 border border-red-100 px-2 py-1 rounded-lg">
-                Email notice auto-sends
-              </span>
-            </div>
-            <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_1fr_1.4fr_auto] gap-3">
-              <select
-                value={feeAssignmentStudentId}
-                onChange={(event) => setFeeAssignmentStudentId(event.target.value)}
-                className="w-full p-2.5 bg-neutral-50 border border-neutral-300 rounded-xl text-xs font-bold outline-none"
-              >
-                {familyLedger.students.map((student) => (
-                  <option key={student.id} value={student.id}>
-                    {student.name} ({student.className}) - Current total {formatCurrency(student.yearlyFee)}
-                  </option>
-                ))}
-              </select>
-              <div className="relative flex items-center bg-neutral-50 border border-neutral-300 rounded-xl px-3 py-1">
-                <span className="text-sm font-mono font-black mr-2">Rs.</span>
-                <input
-                  type="number"
-                  value={feeAssignmentAmount}
-                  onChange={(event) => setFeeAssignmentAmount(event.target.value)}
-                  placeholder="Total fee"
-                  className="w-full bg-transparent p-2 outline-none font-mono text-sm font-bold"
-                />
-              </div>
-              <input
-                type="text"
-                value={feeAssignmentNote}
-                onChange={(event) => setFeeAssignmentNote(event.target.value)}
-                placeholder="Optional accounts note"
-                className="w-full p-2.5 bg-neutral-50 border border-neutral-300 rounded-xl text-xs font-bold outline-none"
-              />
-              <button
-                type="submit"
-                disabled={isSendingFeeAssignmentMail}
-                className="px-4 py-2.5 bg-neutral-900 hover:bg-neutral-800 text-white font-black text-[10px] uppercase tracking-widest rounded-xl transition-all shadow-md disabled:opacity-60 flex items-center justify-center gap-2"
-              >
-                <Mail className="w-3.5 h-3.5" /> {isSendingFeeAssignmentMail ? 'Sending' : 'Save Fee'}
-              </button>
-            </div>
-          </form>
-
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-white p-5 rounded-2xl border border-neutral-300 shadow-md md:col-span-2 space-y-4">
+            <div className="glass-card p-5 rounded-2xl md:col-span-2 space-y-4">
               <h4 className="text-xs font-black uppercase text-neutral-900 flex items-center gap-1"><CreditCard className="w-4 h-4" /> Fee Collection</h4>
               <form onSubmit={executeManualPayment} className="space-y-4">
-                <div className="flex flex-wrap gap-4 bg-neutral-50 p-3 rounded-xl border border-neutral-200 text-xs font-bold">
-                  <label className="flex items-center gap-1.5 cursor-pointer">
-                    <input type="radio" checked={paymentMode === 'family'} onChange={() => setPaymentMode('family')} />
-                    Family Distribution
-                  </label>
-                  <label className="flex items-center gap-1.5 cursor-pointer">
-                    <input type="radio" checked={paymentMode === 'individual'} onChange={() => setPaymentMode('individual')} />
-                    Individual Payment
-                  </label>
-                </div>
-                {paymentMode === 'individual' && (
+                {!selectedIsAlumni && (
+                  <div className="flex flex-wrap gap-4 bg-white/50 p-3 rounded-xl border border-slate-100/80 text-xs font-bold">
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input type="radio" checked={paymentMode === 'individual'} onChange={() => setPaymentMode('individual')} />
+                      Individual Payment
+                    </label>
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input type="radio" checked={paymentMode === 'family'} onChange={() => setPaymentMode('family')} />
+                      Family Distribution
+                    </label>
+                  </div>
+                )}
+                {!selectedIsAlumni && paymentMode === 'individual' && (
                   <select
                     value={selectedIndividualId}
                     onChange={(event) => setSelectedIndividualId(event.target.value)}
@@ -693,12 +1057,15 @@ const Finance = ({ setActivePage }) => {
                   >
                     {familyLedger.students.map((student) => (
                       <option key={student.id} value={student.id}>
-                        {student.name} - Due: {formatCurrency(student.pendingFees)}
+                        {student.name} ({student.className}) - Due: {formatCurrency(student.pendingFees)}
                       </option>
                     ))}
                   </select>
                 )}
-                <div className="relative flex items-center bg-neutral-50 border border-neutral-300 rounded-xl px-3 py-1">
+                <p className="text-[10px] text-neutral-500 font-semibold bg-white/50 p-2.5 rounded-xl border border-slate-100/80">
+                  Amount waterfalls into unpaid classes in class-preference order (lowest class first).
+                </p>
+                <div className="relative flex items-center bg-white/60 border border-white/80 rounded-xl px-3 py-1">
                   <span className="text-sm font-mono font-black mr-2">Rs.</span>
                   <input
                     type="number"
@@ -717,12 +1084,13 @@ const Finance = ({ setActivePage }) => {
               </form>
             </div>
 
-            <div className="bg-white p-5 rounded-2xl border border-neutral-300 shadow-md flex flex-col justify-between">
+            <div className="glass-card p-5 rounded-2xl flex flex-col justify-between">
               <div>
                 <h4 className="text-xs font-black uppercase text-neutral-900 mb-3">Ledger Policy</h4>
                 <p className="text-[11px] text-neutral-600 leading-relaxed font-semibold">
-                  Passed-out or TC-issued students stay visible while balances are positive. Clearing a payment updates
-                  the shared student ledger for Dashboard, Class Finance, and receipt generation.
+                  Passed-out or TC-issued students stay visible in the Alumni bucket while balances are positive.
+                  Clearing a payment updates the shared ledger and removes the record automatically once dues are
+                  fully cleared.
                 </p>
               </div>
               <div className="bg-amber-50 p-3 rounded-xl border border-amber-200 text-[10px] text-amber-800 font-mono mt-3 flex gap-2">
@@ -741,14 +1109,15 @@ const Finance = ({ setActivePage }) => {
             <p className="text-[10px] font-mono text-neutral-400">{latestReceipt.timestamp} | Ref: {latestReceipt.receiptNo}</p>
           </div>
           <div className="text-xs space-y-1 bg-neutral-50 p-3 rounded-xl border border-neutral-200">
-            <p><strong>Primary Guardian:</strong> {latestReceipt.familyDetails?.fatherName || '-'}</p>
-            <p><strong>Registered Mobile:</strong> {latestReceipt.familyDetails?.contact || '-'}</p>
+            <p><strong>Payer:</strong> {latestReceipt.payerName || '-'}</p>
+            <p><strong>Registered Mobile:</strong> {latestReceipt.contact || '-'}</p>
           </div>
           <div className="space-y-2 font-mono text-xs">
-            {latestReceipt.breakdown?.map((item) => (
-              <div key={item.admissionNumber} className="p-2 flex justify-between border-b border-neutral-100">
-                <span>{item.name}</span>
-                <span className="font-bold">{formatCurrency(item.allocated)}</span>
+            <p className="text-[9px] font-black uppercase text-neutral-400 font-mono">Class-wise Allocation</p>
+            {latestReceipt.breakdown?.map((item, index) => (
+              <div key={`${item.admissionNumber || ''}-${item.className}-${index}`} className="p-2 flex justify-between border-b border-neutral-100">
+                <span>{item.name ? `${item.name} · ` : ''}{item.className}</span>
+                <span className="font-bold">{formatCurrency(item.amount)}</span>
               </div>
             ))}
             <div className="p-3 bg-neutral-900 text-white flex justify-between rounded-xl font-black">
@@ -758,7 +1127,7 @@ const Finance = ({ setActivePage }) => {
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <button type="button" onClick={() => window.print()} className="flex items-center justify-center gap-1.5 text-[10px] font-black bg-neutral-100 border border-neutral-300 p-2.5 rounded-xl"><Printer className="w-3.5 h-3.5" /> Print</button>
-            <button type="button" onClick={() => alert(`WhatsApp alert queued for ${latestReceipt.familyDetails?.contact || 'guardian'}.`)} className="flex items-center justify-center gap-1.5 text-[10px] font-black bg-neutral-100 border border-neutral-300 p-2.5 rounded-xl"><MessageSquare className="w-3.5 h-3.5 text-emerald-600" /> WhatsApp</button>
+            <button type="button" onClick={() => alert(`WhatsApp alert queued for ${latestReceipt.contact || 'guardian'}.`)} className="flex items-center justify-center gap-1.5 text-[10px] font-black bg-neutral-100 border border-neutral-300 p-2.5 rounded-xl"><MessageSquare className="w-3.5 h-3.5 text-emerald-600" /> WhatsApp</button>
             <button type="button" onClick={() => sendReceiptMail(latestReceipt)} disabled={isSendingReceiptMail} className="flex items-center justify-center gap-1.5 text-[10px] font-black bg-neutral-100 border border-neutral-300 p-2.5 rounded-xl disabled:opacity-60"><Mail className="w-3.5 h-3.5 text-red-500" /> {isSendingReceiptMail ? 'Sending...' : 'Email'}</button>
           </div>
           <button
@@ -768,6 +1137,81 @@ const Finance = ({ setActivePage }) => {
           >
             Exit To Finance Dashboard
           </button>
+        </div>
+      )}
+
+      {showAssignModal && ledgerStudent && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="glass-card bg-white/95 max-w-md w-full rounded-2xl p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-black uppercase text-neutral-900 flex items-center gap-1.5">
+                <DollarSign className="w-4 h-4" /> Assign / Edit Class Fee
+              </h4>
+              <button type="button" onClick={() => setShowAssignModal(false)} className="p-1.5 hover:bg-neutral-100 rounded-lg">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-[11px] text-neutral-600 font-semibold">
+              Set the fee amount for {getStudentDisplayName(ledgerStudent)}. Choose the class this fee applies to.
+            </p>
+            <form onSubmit={executeFeeAssignment} className="space-y-3">
+              <div>
+                <span className="text-[9px] font-black text-neutral-400 block font-mono mb-1">Class</span>
+                <select
+                  value={assignClassName}
+                  onChange={(event) => setAssignClassName(event.target.value)}
+                  className="w-full p-2.5 bg-white border border-neutral-300 rounded-xl text-xs font-bold outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all"
+                >
+                  {(classOrder.length ? classOrder : masterData.classNames).map((className) => (
+                    <option key={className} value={className}>
+                      {className}
+                    </option>
+                  ))}
+                  {!classOrder.includes(ledgerStudent.className) && ledgerStudent.className && (
+                    <option value={ledgerStudent.className}>{ledgerStudent.className}</option>
+                  )}
+                </select>
+              </div>
+              <div>
+                <span className="text-[9px] font-black text-neutral-400 block font-mono mb-1">Amount</span>
+                <div className="relative flex items-center bg-white border border-neutral-300 rounded-xl px-3 py-1">
+                  <span className="text-sm font-mono font-black mr-2">Rs.</span>
+                  <input
+                    type="number"
+                    value={assignAmount}
+                    onChange={(event) => setAssignAmount(event.target.value)}
+                    placeholder="Fee amount"
+                    className="w-full bg-transparent p-2 outline-none font-mono text-sm font-bold"
+                  />
+                </div>
+              </div>
+              <div>
+                <span className="text-[9px] font-black text-neutral-400 block font-mono mb-1">Note (optional)</span>
+                <input
+                  type="text"
+                  value={assignNote}
+                  onChange={(event) => setAssignNote(event.target.value)}
+                  placeholder="Accounts note"
+                  className="w-full p-2.5 bg-white border border-neutral-300 rounded-xl text-xs font-bold outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all"
+                />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowAssignModal(false)}
+                  className="flex-1 py-2.5 text-center text-xs font-black border border-neutral-300 rounded-xl hover:bg-neutral-100 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 bg-neutral-900 hover:bg-neutral-800 text-white font-black text-xs tracking-widest rounded-xl transition-all shadow-md"
+                >
+                  Save Fee
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

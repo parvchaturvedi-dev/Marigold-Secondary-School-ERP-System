@@ -4,7 +4,6 @@ export const teacherModules = [
   { title: "Application", icon: "document-text-outline", color: "#22C55E" },
   { title: "Assignment", icon: "clipboard-outline", color: "#F97316" },
   { title: "Attendance", icon: "checkbox-outline", color: "#10B981" },
-  { title: "Communication", icon: "chatbubble-ellipses-outline", color: "#7C3AED" },
   { title: "Events", icon: "calendar-number-outline", color: "#F43F5E" },
   {
     title: "Examination Desk",

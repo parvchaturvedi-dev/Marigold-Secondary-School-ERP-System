@@ -3,6 +3,9 @@ import multer from 'multer';
 import Assignment from '../models/Assignment.js';
 import { isMongoConnected } from '../db.js';
 import { emitRealtimeEvent } from '../realtime.js';
+import { requireRole } from '../middleware/auth.js';
+import { resolveDisplayName } from '../utils/nameLookup.js';
+import { notifyMany } from '../utils/notify.js';
 
 const router = express.Router();
 const upload = multer({
@@ -42,30 +45,41 @@ const applyAttachment = (assignment, file) => {
   };
 };
 
-const toAssignmentPayload = (assignment) => ({
-  id: assignment._id.toString(),
-  title: assignment.title,
-  description: assignment.description,
-  subject: assignment.subject,
-  targetClasses: assignment.targetClasses,
-  checkingDate: assignment.checkingDate,
-  attachment: assignment.attachment?.data
-    ? {
-        name: assignment.attachment.name,
-        mimeType: assignment.attachment.mimeType,
-        size: assignment.attachment.size,
-        dataUrl: `data:${assignment.attachment.mimeType};base64,${assignment.attachment.data.toString('base64')}`,
-      }
-    : null,
-  createdByRole: assignment.createdByRole,
-  createdByUsername: assignment.createdByUsername,
-  createdByName: assignment.createdByName,
-  updatedByName: assignment.updatedByName,
-  extensionLogs: assignment.extensionLogs || [],
-  createdAt: assignment.createdAt?.toISOString(),
-  updatedAt: assignment.updatedAt?.toISOString(),
-  isLocked: isLocked(assignment.checkingDate),
-});
+const toAssignmentPayload = async (assignment) => {
+  // Resolve a human name server-side so the UI never shows a raw username/role-id.
+  // Prefer the stored name only if it is a real name (not just the username echoed back).
+  const storedName = (assignment.createdByName || '').trim();
+  const createdByName =
+    storedName && storedName !== assignment.createdByUsername
+      ? storedName
+      : await resolveDisplayName(assignment.createdByUsername);
+
+  return {
+    id: assignment._id.toString(),
+    title: assignment.title,
+    description: assignment.description,
+    subject: assignment.subject,
+    targetClasses: assignment.targetClasses,
+    checkingDate: assignment.checkingDate,
+    attachment: assignment.attachment?.data
+      ? {
+          name: assignment.attachment.name,
+          mimeType: assignment.attachment.mimeType,
+          size: assignment.attachment.size,
+          dataUrl: `data:${assignment.attachment.mimeType};base64,${assignment.attachment.data.toString('base64')}`,
+        }
+      : null,
+    createdByRole: assignment.createdByRole,
+    createdByUsername: assignment.createdByUsername,
+    createdByName,
+    authorName: createdByName,
+    updatedByName: assignment.updatedByName,
+    extensionLogs: assignment.extensionLogs || [],
+    createdAt: assignment.createdAt?.toISOString(),
+    updatedAt: assignment.updatedAt?.toISOString(),
+    isLocked: isLocked(assignment.checkingDate),
+  };
+};
 
 const parseTargetClasses = (value) => {
   try {
@@ -93,7 +107,7 @@ router.get('/', ensureMongo, async (request, response) => {
   }
 
   const assignments = await Assignment.find(query).sort({ createdAt: -1 });
-  response.json(assignments.map(toAssignmentPayload));
+  response.json(await Promise.all(assignments.map(toAssignmentPayload)));
 });
 
 router.post('/', ensureMongo, upload.single('attachment'), async (request, response) => {
@@ -120,7 +134,24 @@ router.post('/', ensureMongo, upload.single('attachment'), async (request, respo
   await assignment.save();
 
   emitRealtimeEvent('mgps-erp-assignments-updated');
-  response.status(201).json(toAssignmentPayload(assignment));
+
+  // Notify students of each target class about the new assignment (best-effort).
+  try {
+    await notifyMany(
+      targetClasses.map((className) => ({
+        title: 'New Assignment',
+        description: `${assignment.title} (${assignment.subject})`,
+        type: 'assignment',
+        linkPage: 'Assignment',
+        recipientRole: 'student',
+        recipientClassName: className,
+      }))
+    );
+  } catch (error) {
+    console.error('[assignments] notify failed:', error?.message || error);
+  }
+
+  response.status(201).json(await toAssignmentPayload(assignment));
 });
 
 router.patch('/:id', ensureMongo, upload.single('attachment'), async (request, response) => {
@@ -156,7 +187,7 @@ router.patch('/:id', ensureMongo, upload.single('attachment'), async (request, r
   await assignment.save();
 
   emitRealtimeEvent('mgps-erp-assignments-updated');
-  response.json(toAssignmentPayload(assignment));
+  response.json(await toAssignmentPayload(assignment));
 });
 
 router.patch('/:id/checking-date', ensureMongo, async (request, response) => {
@@ -194,7 +225,16 @@ router.patch('/:id/checking-date', ensureMongo, async (request, response) => {
   await assignment.save();
 
   emitRealtimeEvent('mgps-erp-assignments-updated');
-  response.json(toAssignmentPayload(assignment));
+  response.json(await toAssignmentPayload(assignment));
+});
+
+// Session promotion resets the assignment board: every promoted class starts fresh.
+router.post('/reset', ensureMongo, requireRole('admin', 'clerk'), async (_request, response) => {
+  const result = await Assignment.deleteMany({});
+  const cleared = typeof result?.deletedCount === 'number' ? result.deletedCount : 0;
+
+  emitRealtimeEvent('mgps-erp-assignments-updated');
+  response.json({ cleared });
 });
 
 export default router;

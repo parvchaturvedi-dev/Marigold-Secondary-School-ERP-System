@@ -36,30 +36,30 @@ const ClassFinanceList = () => {
   }, [currentClassName, masterData.raw.students, searchTerm, sortOrder]);
 
   return (
-    <div className="w-full min-h-screen bg-[#D9D9D9] p-6 text-neutral-800 font-sans box-border select-none">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 border-b border-neutral-400/60 pb-5">
+    <div className="w-full min-h-screen p-6 text-slate-800 font-sans box-border select-none">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 border-b border-slate-200/70 pb-5">
         <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={() => window.history.back()}
-            className="p-2 bg-white hover:bg-neutral-100 border border-neutral-300 rounded-xl transition-all shadow-sm group"
+            className="p-2 btn-ghost rounded-xl group"
             title="Return to Financial Dashboard"
           >
-            <ArrowLeft className="w-4 h-4 text-neutral-700 group-hover:-translate-x-0.5 transition-transform" />
+            <ArrowLeft className="w-4 h-4 text-slate-700 group-hover:-translate-x-0.5 transition-transform" />
           </button>
           <div>
-            <h2 className="text-xl font-black uppercase tracking-widest flex items-center gap-2 text-neutral-900">
-              {currentClassName} Ledger Feed <Sparkles className="w-4 h-4 text-neutral-600" />
+            <h2 className="text-xl font-black uppercase tracking-widest flex items-center gap-2 text-slate-900">
+              {currentClassName} Ledger Feed <Sparkles className="w-4 h-4 text-indigo-500" />
             </h2>
-            <p className="text-xs text-neutral-600 font-medium font-mono mt-0.5">
+            <p className="text-xs text-slate-500 font-medium font-mono mt-0.5">
               Synced with Student Management fee records
             </p>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative bg-white rounded-xl border border-neutral-300 shadow-sm flex items-center px-3 py-1.5 w-full sm:w-64">
-            <Search className="w-4 h-4 text-neutral-400 mr-2 flex-shrink-0" />
+          <div className="relative bg-white/60 rounded-xl border border-white/80 focus-within:border-indigo-400 focus-within:ring-4 focus-within:ring-indigo-100 transition-all flex items-center px-3 py-1.5 w-full sm:w-64">
+            <Search className="w-4 h-4 text-slate-400 mr-2 flex-shrink-0" />
             <input
               type="text"
               value={searchTerm}

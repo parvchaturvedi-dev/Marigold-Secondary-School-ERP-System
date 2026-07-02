@@ -225,15 +225,15 @@ const AttendanceControl = ({ role = 'admin' }) => {
   };
 
   return (
-    <div className="space-y-6 pb-28 select-none font-sans text-[#1A1A1A]">
-      <section className="bg-white border border-[#C8C8C8] rounded-3xl p-6 space-y-5">
+    <div className="space-y-6 pb-28 select-none font-sans text-slate-900">
+      <section className="glass-card rounded-3xl p-6 space-y-5">
         <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
           <div>
             <h2 className="text-xl font-black flex items-center gap-2">
               <CalendarDays className="w-5 h-5 text-emerald-700" />
               {isAdmin ? 'Admin Attendance Control Center' : 'Clerk Attendance Management'}
             </h2>
-            <p className="text-xs font-bold text-[#555555] mt-1">
+            <p className="text-xs font-bold text-slate-500 mt-1">
               {isAdmin
                 ? 'Global monitoring, geofence rules, reception QR policy, and historical overrides.'
                 : 'Self-service staff attendance and full student register CRUD.'}
@@ -242,31 +242,31 @@ const AttendanceControl = ({ role = 'admin' }) => {
           <button
             type="button"
             onClick={reload}
-            className="h-10 px-4 rounded-2xl bg-[#E1FA6C] border border-[#1A1A1A]/10 text-xs font-black inline-flex items-center justify-center gap-2"
+            className="h-10 px-4 rounded-2xl btn-primary text-xs font-black inline-flex items-center justify-center gap-2"
           >
             <RefreshCcw className="w-4 h-4" /> Refresh
           </button>
         </div>
 
         {isAdmin ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 stagger">
             <MetricCard title="Clerk Attendance Summary" counts={roleSummary.clerk} />
             <MetricCard title="Teacher Attendance Summary" counts={roleSummary.teacher} />
             <MetricCard title="Student Attendance Summary" counts={roleSummary.student} />
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-            <div className="lg:col-span-2 rounded-2xl border border-[#EAEAEA] bg-[#F8F8F8] p-4">
-              <p className="text-[10px] font-black uppercase text-[#555555]">My Attendance</p>
+            <div className="lg:col-span-2 glass-soft rounded-2xl p-4">
+              <p className="text-[10px] font-black uppercase text-slate-500">My Attendance</p>
               <p className="mt-1 text-sm font-black">{gpsState.text}</p>
               <div className="mt-3 flex flex-wrap gap-2">
-                <button type="button" onClick={checkGps} className="h-10 px-4 rounded-2xl bg-white border border-[#C8C8C8] text-xs font-black inline-flex items-center gap-2">
+                <button type="button" onClick={checkGps} className="h-10 px-4 rounded-2xl btn-ghost text-xs font-black inline-flex items-center gap-2">
                   <LocateFixed className="w-4 h-4" /> Check GPS
                 </button>
                 <button type="button" onClick={() => clock('clock-in')} disabled={!gpsState.allowed} className="h-10 px-4 rounded-2xl bg-emerald-600 text-white text-xs font-black disabled:opacity-40">
                   Clock-In
                 </button>
-                <button type="button" onClick={() => clock('clock-out')} disabled={!gpsState.allowed} className="h-10 px-4 rounded-2xl bg-[#1A1A1A] text-white text-xs font-black disabled:opacity-40">
+                <button type="button" onClick={() => clock('clock-out')} disabled={!gpsState.allowed} className="h-10 px-4 rounded-2xl btn-primary text-xs font-black disabled:opacity-40">
                   Clock-Out
                 </button>
               </div>
@@ -277,14 +277,14 @@ const AttendanceControl = ({ role = 'admin' }) => {
       </section>
 
       {(message || error) && (
-        <div className="rounded-2xl border border-black bg-[#1A1A1A] px-4 py-3 text-xs font-bold text-white">
+        <div className="rounded-2xl bg-gradient-to-r from-indigo-500 to-violet-500 shadow-lg px-4 py-3 text-xs font-bold text-white">
           {message || error}
         </div>
       )}
 
       {isAdmin && (
         <section className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-          <div className="xl:col-span-7 bg-white border border-[#C8C8C8] rounded-3xl p-5 space-y-4">
+          <div className="xl:col-span-7 glass-card rounded-3xl p-5 space-y-4">
             <h3 className="text-sm font-black flex items-center gap-2">
               <MapPin className="w-4 h-4" /> Geofencing & Security Configurator
             </h3>
@@ -293,17 +293,17 @@ const AttendanceControl = ({ role = 'admin' }) => {
                 value={settingsDraft.schoolAddress}
                 onChange={(event) => setSettingsDraft((draft) => ({ ...draft, schoolAddress: event.target.value }))}
                 placeholder="Search school address"
-                className="lg:col-span-3 h-11 rounded-2xl border border-[#EAEAEA] bg-[#F8F8F8] px-3 text-xs font-bold outline-none"
+                className="lg:col-span-3 h-11 rounded-2xl bg-white/60 border border-white/80 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all px-3 text-xs font-bold outline-none"
               />
-              <button type="button" onClick={searchAddress} className="h-11 rounded-2xl bg-[#1A1A1A] text-white text-xs font-black inline-flex items-center justify-center gap-2">
+              <button type="button" onClick={searchAddress} className="h-11 rounded-2xl btn-primary text-xs font-black inline-flex items-center justify-center gap-2">
                 <Search className="w-4 h-4" /> Search
               </button>
             </div>
-            <iframe title="School geofence map" src={mapSrc} className="h-72 w-full rounded-2xl border border-[#EAEAEA] bg-[#F8F8F8]" loading="lazy" />
+            <iframe title="School geofence map" src={mapSrc} className="h-72 w-full rounded-2xl border border-white/70 bg-white/50" loading="lazy" />
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
               <Field label="Latitude" value={settingsDraft.geofenceLatitude} onChange={(value) => setSettingsDraft((draft) => ({ ...draft, geofenceLatitude: value }))} />
               <Field label="Longitude" value={settingsDraft.geofenceLongitude} onChange={(value) => setSettingsDraft((draft) => ({ ...draft, geofenceLongitude: value }))} />
-              <label className="rounded-2xl border border-[#EAEAEA] bg-[#F8F8F8] p-3 text-xs font-black">
+              <label className="glass-soft rounded-2xl p-3 text-xs font-black">
                 Radius: {settingsDraft.geofenceRadiusMeters}m
                 <input
                   type="range"
@@ -317,8 +317,8 @@ const AttendanceControl = ({ role = 'admin' }) => {
               </label>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              <label className="rounded-2xl border border-[#EAEAEA] bg-[#F8F8F8] p-3 text-xs font-black">
-                <span className="flex items-center gap-2 text-[#555555]"><Wifi className="w-4 h-4" /> Authorized WiFi BSSID</span>
+              <label className="glass-soft rounded-2xl p-3 text-xs font-black">
+                <span className="flex items-center gap-2 text-slate-500"><Wifi className="w-4 h-4" /> Authorized WiFi BSSID</span>
                 <input
                   value={settingsDraft.authorizedWifiBssid}
                   onChange={(event) => setSettingsDraft((draft) => ({ ...draft, authorizedWifiBssid: event.target.value }))}
@@ -326,8 +326,8 @@ const AttendanceControl = ({ role = 'admin' }) => {
                   className="mt-2 w-full bg-transparent font-mono outline-none"
                 />
               </label>
-              <label className="rounded-2xl border border-[#EAEAEA] bg-[#F8F8F8] p-3 text-xs font-black flex items-center justify-between gap-3">
-                <span className="flex items-center gap-2 text-[#555555]"><ShieldCheck className="w-4 h-4" /> Enforce Reception QR</span>
+              <label className="glass-soft rounded-2xl p-3 text-xs font-black flex items-center justify-between gap-3">
+                <span className="flex items-center gap-2 text-slate-500"><ShieldCheck className="w-4 h-4" /> Enforce Reception QR</span>
                 <input
                   type="checkbox"
                   checked={settingsDraft.enforceReceptionQr}
@@ -336,12 +336,12 @@ const AttendanceControl = ({ role = 'admin' }) => {
                 />
               </label>
             </div>
-            <button type="button" onClick={saveSettings} className="h-11 px-5 rounded-2xl bg-[#E1FA6C] border border-[#1A1A1A]/10 text-xs font-black inline-flex items-center gap-2">
+            <button type="button" onClick={saveSettings} className="h-11 px-5 rounded-2xl btn-primary text-xs font-black inline-flex items-center gap-2">
               <Save className="w-4 h-4" /> Save Global Configuration
             </button>
           </div>
 
-          <div className="xl:col-span-5 bg-white border border-[#C8C8C8] rounded-3xl p-5 space-y-4">
+          <div className="xl:col-span-5 glass-card rounded-3xl p-5 space-y-4">
             <h3 className="text-sm font-black flex items-center gap-2">
               <Clock3 className="w-4 h-4" /> Time Rules
             </h3>
@@ -350,38 +350,38 @@ const AttendanceControl = ({ role = 'admin' }) => {
               ['halfDayUntil', 'Late/Half-day until'],
               ['closeAfter', 'Close after'],
             ].map(([key, label]) => (
-              <label key={key} className="flex items-center justify-between gap-3 rounded-2xl border border-[#EAEAEA] bg-[#F8F8F8] p-3 text-xs font-black">
+              <label key={key} className="flex items-center justify-between gap-3 glass-soft rounded-2xl p-3 text-xs font-black">
                 {label}
-                <input type="time" value={settingsDraft[key]} onChange={(event) => setSettingsDraft((draft) => ({ ...draft, [key]: event.target.value }))} className="bg-white rounded-xl px-3 py-2 font-mono outline-none" />
+                <input type="time" value={settingsDraft[key]} onChange={(event) => setSettingsDraft((draft) => ({ ...draft, [key]: event.target.value }))} className="bg-white/60 rounded-xl px-3 py-2 font-mono outline-none" />
               </label>
             ))}
           </div>
         </section>
       )}
 
-      <section className="bg-white border border-[#C8C8C8] rounded-3xl p-5">
-        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 border-b border-[#EAEAEA] pb-4">
+      <section className="glass-card rounded-3xl p-5">
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 border-b border-slate-100/80 pb-4">
           <div>
             <h3 className="text-sm font-black">{isAdmin ? 'Global Override Action' : 'Student Attendance CRUD'}</h3>
-            <p className="text-[10px] font-bold text-[#555555] mt-1">
+            <p className="text-[10px] font-bold text-slate-500 mt-1">
               {selectedClass || 'Select class'} | {attendanceDate} | Present {localCounts.present} / Absent {localCounts.absent}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <select value={selectedClass} onChange={(event) => setSelectedClass(event.target.value)} className="h-10 rounded-2xl border border-[#EAEAEA] bg-[#F8F8F8] px-3 text-xs font-bold outline-none">
+            <select value={selectedClass} onChange={(event) => setSelectedClass(event.target.value)} className="h-10 rounded-2xl bg-white/60 border border-white/80 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all px-3 text-xs font-bold outline-none">
               {classNames.map((className) => <option key={className} value={className}>{className}</option>)}
             </select>
             <DateShifter date={attendanceDate} setDate={setAttendanceDate} />
-            <label className="h-10 rounded-2xl border border-[#EAEAEA] bg-[#F8F8F8] px-3 text-xs font-bold inline-flex items-center gap-2">
-              <Search className="w-4 h-4 text-[#555555]" />
+            <label className="h-10 rounded-2xl bg-white/60 border border-white/80 px-3 text-xs font-bold inline-flex items-center gap-2">
+              <Search className="w-4 h-4 text-slate-500" />
               <input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search roster" className="w-40 bg-transparent outline-none" />
             </label>
           </div>
         </div>
 
-        <div className="mt-4 overflow-x-auto rounded-2xl border border-[#EAEAEA]">
+        <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-100/80">
           <table className="w-full min-w-[720px] text-left text-xs font-bold">
-            <thead className="bg-[#EAEAEA] text-[#555555] uppercase text-[10px]">
+            <thead className="bg-indigo-50/60 text-slate-500 uppercase text-[10px]">
               <tr>
                 <th className="px-3 py-3">Roll No</th>
                 <th className="px-3 py-3">Name</th>
@@ -389,17 +389,17 @@ const AttendanceControl = ({ role = 'admin' }) => {
                 <th className="px-3 py-3">Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#EAEAEA]">
+            <tbody className="divide-y divide-slate-100/80">
               {roster.map((student) => {
                 const status = draftStatus[student.entityId] || 'present';
                 return (
-                  <tr key={student.entityId} className="hover:bg-[#F8F8F8]">
+                  <tr key={student.entityId} className="hover:bg-white/60">
                     <td className="px-3 py-3 font-mono">{student.rollNo || '-'}</td>
                     <td className="px-3 py-3">
                       <p className="font-black">{student.displayName}</p>
-                      <p className="text-[10px] text-[#555555]">{student.className}-{student.section || '-'}</p>
+                      <p className="text-[10px] text-slate-500">{student.className}-{student.section || '-'}</p>
                     </td>
-                    <td className="px-3 py-3 font-mono text-[#555555]">{student.admissionNumber}</td>
+                    <td className="px-3 py-3 font-mono text-slate-500">{student.admissionNumber}</td>
                     <td className="px-3 py-3">
                       <div className="flex gap-2">
                         <StatusButton label="A" active={status === 'absent'} tone="absent" onClick={() => setStudentStatus(student, 'absent')} />
@@ -421,15 +421,15 @@ const AttendanceControl = ({ role = 'admin' }) => {
         </div>
       </section>
 
-      <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-[#C8C8C8] bg-white/95 px-6 py-3 backdrop-blur">
+      <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-white/70 bg-white/70 px-6 py-3 backdrop-blur-xl">
         <div className="mx-auto flex max-w-5xl justify-end gap-2">
-          <button type="button" onClick={resetDraft} className="h-11 px-4 rounded-2xl border border-[#C8C8C8] bg-white text-xs font-black inline-flex items-center gap-2">
+          <button type="button" onClick={resetDraft} className="h-11 px-4 rounded-2xl btn-ghost text-xs font-black inline-flex items-center gap-2">
             <X className="w-4 h-4" /> Cancel
           </button>
-          <button type="button" onClick={resetDraft} className="h-11 px-4 rounded-2xl border border-[#C8C8C8] bg-[#F8F8F8] text-xs font-black inline-flex items-center gap-2">
+          <button type="button" onClick={resetDraft} className="h-11 px-4 rounded-2xl btn-ghost text-xs font-black inline-flex items-center gap-2">
             <RotateCcw className="w-4 h-4" /> Reset
           </button>
-          <button type="button" onClick={saveRegister} className="h-11 px-5 rounded-2xl bg-[#E1FA6C] border border-[#1A1A1A]/10 text-xs font-black inline-flex items-center gap-2">
+          <button type="button" onClick={saveRegister} className="h-11 px-5 rounded-2xl btn-primary text-xs font-black inline-flex items-center gap-2">
             <Save className="w-4 h-4" /> {isAdmin ? 'Save' : 'Save Attendance'}
           </button>
         </div>
@@ -439,8 +439,8 @@ const AttendanceControl = ({ role = 'admin' }) => {
 };
 
 const MetricCard = ({ title, counts = {} }) => (
-  <article className="rounded-2xl border border-[#EAEAEA] bg-[#F8F8F8] p-4">
-    <p className="text-[10px] font-black uppercase text-[#555555]">{title}</p>
+  <article className="glass-soft rounded-2xl p-4">
+    <p className="text-[10px] font-black uppercase text-slate-500">{title}</p>
     <div className="mt-3 grid grid-cols-3 gap-2">
       <MiniMetric label="Present" value={counts?.present || 0} tone="text-emerald-700" />
       <MiniMetric label="Absent" value={counts?.absent || 0} tone="text-rose-700" />
@@ -450,26 +450,26 @@ const MetricCard = ({ title, counts = {} }) => (
 );
 
 const MiniMetric = ({ label, value, tone }) => (
-  <div className="rounded-xl bg-white p-2">
-    <p className="text-[9px] font-black uppercase text-[#555555]">{label}</p>
+  <div className="rounded-xl bg-white/60 p-2">
+    <p className="text-[9px] font-black uppercase text-slate-500">{label}</p>
     <p className={`text-xl font-black ${tone}`}>{value}</p>
   </div>
 );
 
 const Field = ({ label, value, onChange }) => (
-  <label className="rounded-2xl border border-[#EAEAEA] bg-[#F8F8F8] p-3 text-xs font-black">
-    <span className="text-[#555555]">{label}</span>
+  <label className="glass-soft rounded-2xl p-3 text-xs font-black">
+    <span className="text-slate-500">{label}</span>
     <input value={value} onChange={(event) => onChange(event.target.value)} className="mt-2 w-full bg-transparent font-mono outline-none" />
   </label>
 );
 
 const DateShifter = ({ date, setDate }) => (
-  <div className="h-10 rounded-2xl border border-[#EAEAEA] bg-[#F8F8F8] px-2 inline-flex items-center gap-1">
-    <button type="button" onClick={() => setDate(addDays(date, -1))} className="h-8 w-8 grid place-items-center rounded-xl bg-white" title="Previous date">
+  <div className="h-10 rounded-2xl bg-white/60 border border-white/80 px-2 inline-flex items-center gap-1">
+    <button type="button" onClick={() => setDate(addDays(date, -1))} className="h-8 w-8 grid place-items-center rounded-xl bg-white/70" title="Previous date">
       <ChevronLeft className="w-4 h-4" />
     </button>
     <input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="h-8 bg-transparent px-1 text-xs font-black outline-none" />
-    <button type="button" onClick={() => setDate(addDays(date, 1))} className="h-8 w-8 grid place-items-center rounded-xl bg-white" title="Next date">
+    <button type="button" onClick={() => setDate(addDays(date, 1))} className="h-8 w-8 grid place-items-center rounded-xl bg-white/70" title="Next date">
       <ChevronRight className="w-4 h-4" />
     </button>
   </div>
@@ -482,7 +482,7 @@ const StatusButton = ({ label, active, tone, onClick }) => {
       type="button"
       onClick={onClick}
       className={`h-10 w-10 rounded-full border text-sm font-black transition-colors ${
-        active ? activeClass : 'bg-white text-[#555555] border-[#C8C8C8]'
+        active ? activeClass : 'bg-white/60 text-slate-500 border-white/80'
       }`}
     >
       {label}

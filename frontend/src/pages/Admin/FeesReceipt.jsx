@@ -23,7 +23,7 @@ const FeesReceipt = ({ setActivePage }) => {
   };
 
   const handleEmailBroadcast = async () => {
-    const guardianEmail = receiptData?.familyDetails?.guardianEmail || receiptData?.familyDetails?.email;
+    const guardianEmail = receiptData?.guardianEmail || receiptData?.familyDetails?.guardianEmail;
 
     if (!guardianEmail) {
       alert('Guardian email is missing for this receipt.');
@@ -36,14 +36,19 @@ const FeesReceipt = ({ setActivePage }) => {
         to: guardianEmail,
         subject: `Fee Receipt ${receiptData.receiptNo}`,
         text: [
-          `Dear ${receiptData.familyDetails?.fatherName || 'Guardian'},`,
+          `Dear ${receiptData.payerName || receiptData.familyDetails?.fatherName || 'Guardian'},`,
           '',
           `Payment received: ${formatCurrency(receiptData.amountPaid)}.`,
           `Receipt number: ${receiptData.receiptNo}.`,
           `Receipt time: ${receiptData.timestamp}.`,
           '',
-          'Allocation breakdown:',
-          ...(receiptData.breakdown || []).map((item) => `- ${item.name}: ${formatCurrency(item.allocated)}`),
+          'Class-wise allocation:',
+          ...(receiptData.breakdown || []).map(
+            (item) =>
+              `- ${item.name ? `${item.name} - ` : ''}${item.className || ''}: ${formatCurrency(
+                item.amount ?? item.allocated
+              )}`
+          ),
           '',
           'Regards,',
           'Accounts Department',
@@ -60,9 +65,9 @@ const FeesReceipt = ({ setActivePage }) => {
 
   if (!receiptData) {
     return (
-      <div className="flex flex-col items-center justify-center p-10 bg-white rounded-2xl border border-neutral-300 shadow-md">
-        <p className="text-sm font-bold text-neutral-500 font-mono">No active receipt payload found in stream.</p>
-        <button onClick={handleBack} className="mt-4 px-4 py-2 bg-neutral-900 text-white text-xs font-black rounded-xl">
+      <div className="flex flex-col items-center justify-center p-10 glass-card rounded-2xl">
+        <p className="text-sm font-bold text-slate-500 font-mono">No active receipt payload found in stream.</p>
+        <button onClick={handleBack} className="mt-4 px-4 py-2 btn-primary text-xs font-black rounded-xl">
           Go Back to Finance
         </button>
       </div>
@@ -105,15 +110,15 @@ const FeesReceipt = ({ setActivePage }) => {
           {/* 2. Remitter Information Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-neutral-50 p-4 rounded-xl border border-neutral-200/70 text-xs font-medium">
             <div className="space-y-2">
-              <p className="flex items-center"><span className="w-32 font-mono text-neutral-400 font-black uppercase">Received From:</span> <span className="font-bold text-neutral-900 text-sm">{receiptData.familyDetails?.fatherName}</span></p>
-              <p className="flex items-center"><span className="w-32 font-mono text-neutral-400 font-black uppercase">Contact Link:</span> <span className="font-mono text-neutral-700">{receiptData.familyDetails?.contact}</span></p>
+              <p className="flex items-center"><span className="w-32 font-mono text-neutral-400 font-black uppercase">Received From:</span> <span className="font-bold text-neutral-900 text-sm">{receiptData.payerName || receiptData.familyDetails?.fatherName}</span></p>
+              <p className="flex items-center"><span className="w-32 font-mono text-neutral-400 font-black uppercase">Contact Link:</span> <span className="font-mono text-neutral-700">{receiptData.contact || receiptData.familyDetails?.contact}</span></p>
             </div>
             <div className="space-y-2 md:text-right flex flex-col justify-end items-start md:items-end">
               <p className="flex items-center gap-1"><span className="font-mono text-neutral-400 font-black uppercase">Status:</span> <span className="inline-flex items-center gap-1 text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md font-black"><ShieldCheck className="w-3 h-3" /> VERIFIED CREDIT</span></p>
             </div>
           </div>
 
-          {/* 3. Breakdown Matrix Table */}
+          {/* 3. Breakdown Matrix Table (class-wise allocation) */}
           <div className="border border-neutral-200 rounded-xl overflow-hidden shadow-sm">
             <table className="w-full text-left border-collapse">
               <thead>
@@ -124,10 +129,12 @@ const FeesReceipt = ({ setActivePage }) => {
               </thead>
               <tbody className="divide-y divide-neutral-100 text-xs font-semibold">
                 {receiptData.breakdown?.map((item, index) => (
-                  <tr key={index} className="hover:bg-neutral-50/40">
-                    <td className="py-3.5 px-4 text-neutral-800 font-bold">{item.name} <span className="text-[10px] text-neutral-400 font-mono font-medium ml-1">(Tuition & Term Pooling Split)</span></td>
-                    {/* CRITICAL FIX: .toFixed(2) implemented to eliminate trailing float decimals */}
-                    <td className="py-3.5 px-4 text-right font-mono text-neutral-900 font-bold">Γé╣{Number(item.allocated).toFixed(2)}</td>
+                  <tr key={`${item.admissionNumber || item.name || 'row'}-${item.className || index}`} className="hover:bg-neutral-50/40">
+                    <td className="py-3.5 px-4 text-neutral-800 font-bold">
+                      {item.name ? `${item.name} - ` : ''}{item.className || 'Fee'}
+                      <span className="text-[10px] text-neutral-400 font-mono font-medium ml-1">(Class-wise Fee Allocation)</span>
+                    </td>
+                    <td className="py-3.5 px-4 text-right font-mono text-neutral-900 font-bold">Rs. {Number(item.amount ?? item.allocated ?? 0).toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -139,12 +146,12 @@ const FeesReceipt = ({ setActivePage }) => {
             <div>
               <span className="text-[9px] font-black uppercase tracking-widest text-blue-200 font-mono">Grand Total Remitted</span>
               <p className="text-xs font-bold font-serif opacity-90 mt-0.5">
-                Rupees {receiptData.amountPaid === 10000 ? "Ten Thousand Only" : "Specified Ledger Balance Settled"}
+                Rupees {formatCurrency(receiptData.amountPaid)} Settled Across {receiptData.breakdown?.length || 0} Ledger Row(s)
               </p>
             </div>
             <div className="bg-white/10 px-6 py-2.5 rounded-lg border border-white/20 text-right min-w-[160px]">
               <span className="text-[9px] font-black uppercase tracking-widest text-blue-200 font-mono block">Amount Paid</span>
-              <span className="text-xl font-black font-mono tracking-tight">Γé╣{Number(receiptData.amountPaid).toFixed(2)}</span>
+              <span className="text-xl font-black font-mono tracking-tight">Rs. {Number(receiptData.amountPaid).toFixed(2)}</span>
             </div>
           </div>
 
@@ -166,17 +173,17 @@ const FeesReceipt = ({ setActivePage }) => {
       {/* ====================================================================
           COMMUNICATION & CONTROL CONTAINER
           ==================================================================== */}
-      <div className="bg-neutral-200/60 border border-neutral-300 p-4 rounded-xl grid grid-cols-1 md:grid-cols-4 gap-3">
-        <button onClick={() => window.print()} className="flex items-center justify-center gap-2 text-xs font-black bg-white hover:bg-neutral-50 border border-neutral-300 p-3 rounded-xl transition-all shadow-sm">
-          <Printer className="w-4 h-4 text-neutral-700" /> Local Print
+      <div className="glass-card p-4 rounded-xl grid grid-cols-1 md:grid-cols-4 gap-3">
+        <button onClick={() => window.print()} className="flex items-center justify-center gap-2 text-xs font-black btn-ghost p-3 rounded-xl transition-all">
+          <Printer className="w-4 h-4 text-slate-700" /> Local Print
         </button>
-        <button onClick={() => alert(`ΓÜí WhatsApp Dispatched to ${receiptData.familyDetails?.contact}`)} className="flex items-center justify-center gap-2 text-xs font-black bg-white hover:bg-neutral-50 border border-neutral-300 p-3 rounded-xl transition-all shadow-sm">
+        <button onClick={() => alert(`WhatsApp Dispatched to ${receiptData.contact || receiptData.familyDetails?.contact}`)} className="flex items-center justify-center gap-2 text-xs font-black btn-ghost p-3 rounded-xl transition-all">
           <MessageSquare className="w-4 h-4 text-emerald-600" /> WhatsApp Slip
         </button>
-        <button onClick={handleEmailBroadcast} disabled={isSendingMail} className="flex items-center justify-center gap-2 text-xs font-black bg-white hover:bg-neutral-50 border border-neutral-300 p-3 rounded-xl transition-all shadow-sm disabled:opacity-60">
+        <button onClick={handleEmailBroadcast} disabled={isSendingMail} className="flex items-center justify-center gap-2 text-xs font-black btn-ghost p-3 rounded-xl transition-all disabled:opacity-60">
           <Mail className="w-4 h-4 text-red-500" /> {isSendingMail ? 'Sending...' : 'Email Broadcast'}
         </button>
-        <button onClick={handleBack} className="flex items-center justify-center gap-2 text-xs font-black bg-neutral-900 hover:bg-neutral-800 text-white p-3 rounded-xl transition-all shadow-sm md:col-span-1">
+        <button onClick={handleBack} className="flex items-center justify-center gap-2 text-xs font-black btn-primary p-3 rounded-xl transition-all md:col-span-1">
           <ArrowLeft className="w-4 h-4" /> BACK TO LEDGER
         </button>
       </div>

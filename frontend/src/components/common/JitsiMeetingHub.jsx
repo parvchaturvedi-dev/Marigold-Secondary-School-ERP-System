@@ -241,13 +241,13 @@ const JitsiMeetingHub = ({ session, role = session?.role }) => {
   };
 
   return (
-    <div className="space-y-6 pb-8 select-none font-sans text-[#1A1A1A]">
-      <section className="bg-white border border-[#C8C8C8] rounded-3xl p-6 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+    <div className="space-y-6 pb-8 select-none font-sans text-slate-900">
+      <section className="glass-card rounded-3xl p-6 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-black flex items-center gap-2">
             <Video className="w-5 h-5" /> Jitsi Video Meetings
           </h2>
-          <p className="text-xs font-bold text-[#555555] mt-1">
+          <p className="text-xs font-bold text-slate-500 mt-1">
             {isStudent
               ? 'Review meeting notifications, join live classes, or reject invitations.'
               : role === 'teacher'
@@ -258,13 +258,13 @@ const JitsiMeetingHub = ({ session, role = session?.role }) => {
             <p className="text-xs font-black text-red-600 mt-2">{meetingError}</p>
           )}
           {meetingsLoading && (
-            <p className="text-xs font-black text-[#555555] mt-2">Loading meetings from database...</p>
+            <p className="text-xs font-black text-slate-500 mt-2">Loading meetings from database...</p>
           )}
         </div>
 
         {!isStudent && (
-          <div className="flex items-center gap-2 bg-[#F8F8F8] border border-[#EAEAEA] rounded-2xl px-3 py-2 text-xs font-bold">
-            <Search className="w-4 h-4 text-[#555555]" />
+          <div className="flex items-center gap-2 glass-soft rounded-2xl px-3 py-2 text-xs font-bold">
+            <Search className="w-4 h-4 text-slate-500" />
             <input
               type="text"
               value={searchTerm}
@@ -290,8 +290,8 @@ const JitsiMeetingHub = ({ session, role = session?.role }) => {
                   setSelectedClass(className);
                   updateForm('targetClasses', [className]);
                 }}
-                className={`text-left bg-white border rounded-2xl p-4 min-h-28 transition ${
-                  isActive ? 'border-[#1A1A1A] shadow-sm' : 'border-[#C8C8C8]'
+                className={`text-left glass-card glass-hover rounded-2xl p-4 min-h-28 transition ${
+                  isActive ? 'border-indigo-300 shadow-sm' : ''
                 }`}
               >
                 <div className="flex items-center justify-between gap-2">
@@ -300,14 +300,14 @@ const JitsiMeetingHub = ({ session, role = session?.role }) => {
                     className={`text-[9px] font-black px-2 py-1 rounded-md border ${
                       ongoing
                         ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                        : 'bg-[#F8F8F8] text-[#555555] border-[#EAEAEA]'
+                        : 'bg-indigo-50/60 text-slate-500 border-slate-100/80'
                     }`}
                   >
                     {ongoing ? 'LIVE' : 'READY'}
                   </span>
                 </div>
                 <h3 className="text-sm font-black mt-4">{className}</h3>
-                <p className="text-[11px] font-bold text-[#555555] mt-1">
+                <p className="text-[11px] font-bold text-slate-500 mt-1">
                   {ongoing ? ongoing.title : role === 'teacher' ? 'Assigned class' : 'Click to inspect or host'}
                 </p>
               </button>
@@ -351,10 +351,10 @@ const JitsiMeetingHub = ({ session, role = session?.role }) => {
             {activeMeeting ? (
               <JitsiFrame meeting={activeMeeting} session={session} onLeave={() => setActiveMeetingId('')} />
             ) : (
-              <div className="bg-white border border-[#C8C8C8] rounded-3xl p-8 text-center">
+              <div className="glass-card rounded-3xl p-8 text-center">
                 <MonitorUp className="w-8 h-8 mx-auto" />
                 <h3 className="text-base font-black mt-3">No meeting opened</h3>
-                <p className="text-xs font-bold text-[#555555] mt-1">
+                <p className="text-xs font-bold text-slate-500 mt-1">
                   Enter an ongoing meeting or start a new one to open the Jitsi room here.
                 </p>
               </div>
@@ -384,8 +384,8 @@ const MeetingCreator = ({
   onToggleClass,
   onUpdate,
 }) => (
-  <form onSubmit={onSubmit} className="bg-white border border-[#C8C8C8] rounded-3xl p-5 space-y-4">
-    <div className="flex items-center gap-2 border-b border-[#EAEAEA] pb-3">
+  <form onSubmit={onSubmit} className="glass-card rounded-3xl p-5 space-y-4">
+    <div className="flex items-center gap-2 border-b border-slate-100/80 pb-3">
       <CalendarClock className="w-4 h-4" />
       <h3 className="text-sm font-black">{role === 'teacher' ? `Host ${selectedClass}` : 'Create Meeting'}</h3>
     </div>
@@ -395,7 +395,7 @@ const MeetingCreator = ({
         value={form.title}
         onChange={(event) => onUpdate('title', event.target.value)}
         placeholder="Example: Class revision meeting"
-        className="w-full bg-[#F8F8F8] border border-[#EAEAEA] rounded-2xl px-3 py-3 text-xs font-bold outline-none focus:border-black"
+        className="w-full bg-white/60 border border-white/80 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none transition-all rounded-2xl px-3 py-3 text-xs font-bold"
       />
     </Field>
 
@@ -405,7 +405,7 @@ const MeetingCreator = ({
         onChange={(event) => onUpdate('description', event.target.value)}
         placeholder="Agenda students will see before joining"
         rows={3}
-        className="w-full bg-[#F8F8F8] border border-[#EAEAEA] rounded-2xl px-3 py-3 text-xs font-bold outline-none resize-none focus:border-black"
+        className="w-full bg-white/60 border border-white/80 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none transition-all rounded-2xl px-3 py-3 text-xs font-bold resize-none"
       />
     </Field>
 
@@ -414,7 +414,7 @@ const MeetingCreator = ({
         <select
           value={form.scopeType}
           onChange={(event) => onUpdate('scopeType', event.target.value)}
-          className="w-full bg-[#F8F8F8] border border-[#EAEAEA] rounded-2xl px-3 py-3 text-xs font-bold outline-none"
+          className="w-full bg-white/60 border border-white/80 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none transition-all rounded-2xl px-3 py-3 text-xs font-bold"
         >
           <option value="class">Selected Classes</option>
           <option value="staff">Staff Meeting</option>
@@ -425,12 +425,12 @@ const MeetingCreator = ({
 
     {(role === 'teacher' || form.scopeType === 'class') && (
       <div className="space-y-2">
-        <p className="text-[10px] font-black uppercase text-[#555555]">Class Invites</p>
+        <p className="text-[10px] font-black uppercase text-slate-500">Class Invites</p>
         <div className="grid grid-cols-2 gap-2 max-h-48 overflow-auto pr-1">
           {availableClasses.map((className) => (
             <label
               key={className}
-              className="flex items-center gap-2 bg-[#F8F8F8] border border-[#EAEAEA] rounded-2xl px-3 py-2 text-xs font-bold"
+              className="flex items-center gap-2 glass-soft rounded-2xl px-3 py-2 text-xs font-bold"
             >
               <input
                 type="checkbox"
@@ -451,7 +451,7 @@ const MeetingCreator = ({
           type="date"
           value={form.date}
           onChange={(event) => onUpdate('date', event.target.value)}
-          className="w-full bg-[#F8F8F8] border border-[#EAEAEA] rounded-2xl px-3 py-3 text-xs font-bold outline-none"
+          className="w-full bg-white/60 border border-white/80 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none transition-all rounded-2xl px-3 py-3 text-xs font-bold"
         />
       </Field>
       <Field label="Time">
@@ -459,14 +459,14 @@ const MeetingCreator = ({
           type="time"
           value={form.time}
           onChange={(event) => onUpdate('time', event.target.value)}
-          className="w-full bg-[#F8F8F8] border border-[#EAEAEA] rounded-2xl px-3 py-3 text-xs font-bold outline-none"
+          className="w-full bg-white/60 border border-white/80 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none transition-all rounded-2xl px-3 py-3 text-xs font-bold"
         />
       </Field>
     </div>
 
     <button
       type="submit"
-      className="w-full bg-[#E1FA6C] border border-[#1A1A1A]/10 rounded-2xl py-3 text-xs font-black flex items-center justify-center gap-2"
+      className="w-full btn-primary rounded-2xl py-3 text-xs font-black flex items-center justify-center gap-2"
     >
       <Video className="w-4 h-4" /> Start Jitsi Meeting
     </button>
@@ -474,10 +474,10 @@ const MeetingCreator = ({
 );
 
 const ClassMeetingPanel = ({ meetings, selectedClass, onEnter, onEnd }) => (
-  <div className="bg-white border border-[#C8C8C8] rounded-3xl p-5 space-y-3">
+  <div className="glass-card rounded-3xl p-5 space-y-3">
     <div className="flex items-center justify-between gap-3">
       <h3 className="text-sm font-black">{selectedClass} Live Room</h3>
-      <span className="text-[10px] font-black text-[#555555]">{meetings.length} ongoing</span>
+      <span className="text-[10px] font-black text-slate-500">{meetings.length} ongoing</span>
     </div>
 
     {meetings.length ? (
@@ -490,7 +490,7 @@ const ClassMeetingPanel = ({ meetings, selectedClass, onEnter, onEnd }) => (
         />
       ))
     ) : (
-      <p className="bg-[#F8F8F8] border border-[#EAEAEA] rounded-2xl p-4 text-xs font-bold text-[#555555]">
+      <p className="glass-soft rounded-2xl p-4 text-xs font-bold text-slate-500">
         No ongoing class meeting. Start one from the form above.
       </p>
     )}
@@ -500,14 +500,14 @@ const ClassMeetingPanel = ({ meetings, selectedClass, onEnter, onEnd }) => (
 const MeetingList = ({ classNames, meetings, role, students, onEnter, onEnd }) => (
   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
     {meetings.length === 0 ? (
-      <div className="lg:col-span-2 bg-white border border-[#C8C8C8] rounded-3xl p-8 text-center text-xs font-bold text-[#555555]">
+      <div className="lg:col-span-2 glass-card rounded-3xl p-8 text-center text-xs font-bold text-slate-500">
         No ongoing meetings found.
       </div>
     ) : (
       meetings.map((meeting) => {
         const counts = getMeetingCounts(meeting, students, classNames);
         return (
-          <article key={meeting.id} className="bg-white border border-[#C8C8C8] rounded-3xl p-5 space-y-4">
+          <article key={meeting.id} className="glass-card rounded-3xl p-5 space-y-4">
             <MeetingHeader meeting={meeting} />
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <Metric label="Present" value={counts.present} tone="text-emerald-700" />
@@ -520,7 +520,7 @@ const MeetingList = ({ classNames, meetings, role, students, onEnter, onEnd }) =
               <button
                 type="button"
                 onClick={() => onEnter(meeting.id)}
-                className="flex-1 bg-[#1A1A1A] text-[#E1FA6C] rounded-2xl py-2.5 text-xs font-black flex items-center justify-center gap-2"
+                className="flex-1 btn-primary rounded-2xl py-2.5 text-xs font-black flex items-center justify-center gap-2"
               >
                 <DoorOpen className="w-4 h-4" /> Enter Meeting
               </button>
@@ -545,19 +545,19 @@ const StudentMeetingDesk = ({ activeMeeting, activeStudent, meetings, onJoin, on
   <section className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
     <div className="xl:col-span-5 space-y-4">
       {meetings.length === 0 ? (
-        <div className="bg-white border border-[#C8C8C8] rounded-3xl p-8 text-center text-xs font-bold text-[#555555]">
+        <div className="glass-card rounded-3xl p-8 text-center text-xs font-bold text-slate-500">
           No meeting notifications for {activeStudent?.displayName || 'this student'}.
         </div>
       ) : (
         meetings.map((meeting) => {
           const status = getStudentMeetingStatus(meeting, activeStudent);
           return (
-            <article key={meeting.id} className="bg-white border border-[#C8C8C8] rounded-3xl p-5 space-y-4">
+            <article key={meeting.id} className="glass-card rounded-3xl p-5 space-y-4">
               <MeetingHeader meeting={meeting} />
-              <div className="bg-[#F8F8F8] border border-[#EAEAEA] rounded-2xl p-4">
-                <p className="text-[10px] font-black uppercase text-[#555555]">Notification</p>
+              <div className="glass-soft rounded-2xl p-4">
+                <p className="text-[10px] font-black uppercase text-slate-500">Notification</p>
                 <h3 className="text-sm font-black mt-1">{meeting.title}</h3>
-                <p className="text-xs font-bold text-[#555555] mt-2">
+                <p className="text-xs font-bold text-slate-500 mt-2">
                   {meeting.description || 'Please review the meeting details before joining.'}
                 </p>
               </div>
@@ -570,7 +570,7 @@ const StudentMeetingDesk = ({ activeMeeting, activeStudent, meetings, onJoin, on
                 <button
                   type="button"
                   onClick={() => onJoin(meeting.id)}
-                  className="flex-1 bg-[#E1FA6C] border border-[#1A1A1A]/10 rounded-2xl py-2.5 text-xs font-black flex items-center justify-center gap-2"
+                  className="flex-1 btn-primary rounded-2xl py-2.5 text-xs font-black flex items-center justify-center gap-2"
                 >
                   <CheckCircle2 className="w-4 h-4" /> Join
                 </button>
@@ -593,10 +593,10 @@ const StudentMeetingDesk = ({ activeMeeting, activeStudent, meetings, onJoin, on
       {activeMeeting ? (
         <JitsiFrame meeting={activeMeeting} session={{ ...activeStudent, displayName: activeStudent?.displayName }} onLeave={onLeave} />
       ) : (
-        <div className="bg-white border border-[#C8C8C8] rounded-3xl p-8 text-center">
+        <div className="glass-card rounded-3xl p-8 text-center">
           <Video className="w-8 h-8 mx-auto" />
           <h3 className="text-base font-black mt-3">Waiting for a meeting</h3>
-          <p className="text-xs font-bold text-[#555555] mt-1">
+          <p className="text-xs font-bold text-slate-500 mt-1">
             Join a notification to open the live Jitsi classroom here.
           </p>
         </div>
@@ -610,18 +610,18 @@ const JitsiFrame = ({ meeting, session, onLeave }) => {
   const roomUrl = `https://meet.jit.si/${encodeURIComponent(meeting.roomName)}#userInfo.displayName="${displayName}"`;
 
   return (
-    <div className="bg-white border border-[#C8C8C8] rounded-3xl p-4 space-y-3">
+    <div className="glass-card rounded-3xl p-4 space-y-3">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <MeetingHeader meeting={meeting} compact />
         <button
           type="button"
           onClick={onLeave}
-          className="bg-[#F8F8F8] border border-[#EAEAEA] rounded-2xl px-4 py-2 text-xs font-black"
+          className="glass-soft rounded-2xl px-4 py-2 text-xs font-black"
         >
           Leave View
         </button>
       </div>
-      <div className="overflow-hidden rounded-2xl border border-[#EAEAEA] bg-black aspect-video">
+      <div className="overflow-hidden rounded-2xl border border-slate-100/80 bg-black aspect-video">
         <iframe
           title={meeting.title}
           src={roomUrl}
@@ -634,20 +634,20 @@ const JitsiFrame = ({ meeting, session, onLeave }) => {
 };
 
 const MeetingSummaryCard = ({ meeting, onEnter, onEnd }) => (
-  <div className="bg-[#F8F8F8] border border-[#EAEAEA] rounded-2xl p-4 space-y-3">
+  <div className="glass-soft rounded-2xl p-4 space-y-3">
     <MeetingHeader meeting={meeting} compact />
     <div className="flex gap-2">
       <button
         type="button"
         onClick={onEnter}
-        className="flex-1 bg-[#1A1A1A] text-[#E1FA6C] rounded-2xl py-2 text-xs font-black"
+        className="flex-1 btn-primary rounded-2xl py-2 text-xs font-black"
       >
         Enter
       </button>
       <button
         type="button"
         onClick={onEnd}
-        className="flex-1 bg-white border border-red-100 text-red-700 rounded-2xl py-2 text-xs font-black"
+        className="flex-1 bg-white/60 border border-red-100 text-red-700 rounded-2xl py-2 text-xs font-black"
       >
         End
       </button>
@@ -658,9 +658,9 @@ const MeetingSummaryCard = ({ meeting, onEnter, onEnd }) => (
 const MeetingHeader = ({ meeting, compact = false }) => (
   <div className="flex items-start justify-between gap-3">
     <div>
-      <p className="text-[10px] font-black uppercase text-[#555555]">{getMeetingAudienceLabel(meeting)}</p>
+      <p className="text-[10px] font-black uppercase text-slate-500">{getMeetingAudienceLabel(meeting)}</p>
       <h3 className={`${compact ? 'text-sm' : 'text-base'} font-black mt-1 leading-tight`}>{meeting.title}</h3>
-      <p className="text-xs font-bold text-[#555555] mt-1">
+      <p className="text-xs font-bold text-slate-500 mt-1">
         Hosted by {meeting.hostName} | {formatMeetingDateTime(meeting)}
       </p>
     </div>
@@ -675,7 +675,7 @@ const AttendanceTable = ({ meeting, students, classNames }) => {
 
   if (!roster.length) {
     return (
-      <div className="bg-[#F8F8F8] border border-[#EAEAEA] rounded-2xl p-3 flex items-center gap-2 text-xs font-bold text-[#555555]">
+      <div className="glass-soft rounded-2xl p-3 flex items-center gap-2 text-xs font-bold text-slate-500">
         <Users className="w-4 h-4" />
         <span>{meeting.scopeType === 'staff' ? 'Staff attendance is tracked in the live room.' : 'No student roster found.'}</span>
       </div>
@@ -683,9 +683,9 @@ const AttendanceTable = ({ meeting, students, classNames }) => {
   }
 
   return (
-    <div className="max-h-52 overflow-auto border border-[#EAEAEA] rounded-2xl">
+    <div className="max-h-52 overflow-auto border border-slate-100/80 rounded-2xl">
       <table className="w-full text-xs">
-        <thead className="bg-[#F8F8F8] text-[#555555] sticky top-0">
+        <thead className="bg-indigo-50/60 text-slate-500 sticky top-0">
           <tr>
             <th className="text-left px-3 py-2 font-black">Class</th>
             <th className="text-left px-3 py-2 font-black">Student</th>
@@ -696,7 +696,7 @@ const AttendanceTable = ({ meeting, students, classNames }) => {
           {roster.map((student) => {
             const status = getStudentMeetingStatus(meeting, student);
             return (
-              <tr key={student.id} className="border-t border-[#EAEAEA]">
+              <tr key={student.id} className="border-t border-slate-100/80">
                 <td className="px-3 py-2 font-bold">{student.className}-{student.section || 'A'}</td>
                 <td className="px-3 py-2 font-bold">{student.displayName}</td>
                 <td className="px-3 py-2">
@@ -717,16 +717,16 @@ const statusTone = (status) => {
   return 'text-amber-700';
 };
 
-const Metric = ({ label, value, tone = 'text-[#1A1A1A]' }) => (
-  <div className="bg-[#F8F8F8] border border-[#EAEAEA] rounded-2xl p-3 min-h-16">
-    <p className="text-[10px] font-black uppercase text-[#555555]">{label}</p>
+const Metric = ({ label, value, tone = 'text-slate-900' }) => (
+  <div className="glass-soft rounded-2xl p-3 min-h-16">
+    <p className="text-[10px] font-black uppercase text-slate-500">{label}</p>
     <p className={`mt-1 text-xs font-black capitalize ${tone}`}>{value}</p>
   </div>
 );
 
 const Field = ({ label, children }) => (
   <label className="block space-y-1">
-    <span className="text-[10px] font-black uppercase text-[#555555]">{label}</span>
+    <span className="text-[10px] font-black uppercase text-slate-500">{label}</span>
     {children}
   </label>
 );

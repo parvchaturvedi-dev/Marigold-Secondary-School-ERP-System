@@ -36,13 +36,13 @@ const ProfilePhotoUploader = ({ session, label = 'EDIT PIC', className = '' }) =
 
   return (
     <div className={`relative group w-28 h-28 mx-auto ${className}`}>
-      <div className="w-full h-full bg-[#EAEAEA] border-2 border-[#1A1A1A] rounded-3xl flex items-center justify-center text-3xl font-black text-[#1A1A1A] overflow-hidden shadow-inner">
+      <div className="w-full h-full bg-white/50 border-2 border-white/80 rounded-3xl flex items-center justify-center text-3xl font-black text-slate-900 overflow-hidden shadow-inner">
         {photoUrl ? (
           <img src={photoUrl} alt={displayName} className="w-full h-full object-cover select-none" />
         ) : initials ? (
           <span>{initials}</span>
         ) : (
-          <UserRound className="w-14 h-14 text-[#555555]" />
+          <UserRound className="w-14 h-14 text-slate-500" />
         )}
       </div>
 
@@ -50,10 +50,10 @@ const ProfilePhotoUploader = ({ session, label = 'EDIT PIC', className = '' }) =
         type="button"
         onClick={() => fileInputRef.current?.click()}
         disabled={isSaving}
-        className="absolute inset-0 bg-black/60 rounded-3xl flex flex-col items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200 cursor-pointer text-[10px] font-black disabled:opacity-60"
+        className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm rounded-3xl flex flex-col items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200 cursor-pointer text-[10px] font-black disabled:opacity-60"
         title="Upload profile picture"
       >
-        <Camera className="w-5 h-5 text-[#E1FA6C] mb-0.5" />
+        <Camera className="w-5 h-5 text-indigo-300 mb-0.5" />
         <span>{isSaving ? 'SAVING' : label}</span>
       </button>
 

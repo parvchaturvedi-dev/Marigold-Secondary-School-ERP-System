@@ -1,7 +1,11 @@
 import express from 'express';
 import Notification from '../models/Notification.js';
+import User from '../models/User.js';
 import { isMongoConnected } from '../db.js';
 import { emitRealtimeEvent } from '../realtime.js';
+import { resolveDisplayName } from '../utils/nameLookup.js';
+import { createNotification } from '../utils/notify.js';
+import { requireRole } from '../middleware/auth.js';
 
 export const NOTIFICATIONS_UPDATED_EVENT = 'mgps-erp-notifications-updated';
 
@@ -18,22 +22,34 @@ const ensureMongo = (_request, response, next) => {
   next();
 };
 
-const toPayload = (notification, username = '') => ({
-  id: notification._id.toString(),
-  title: notification.title,
-  description: notification.description,
-  text: notification.description || notification.title,
-  type: notification.type,
-  linkPage: notification.linkPage,
-  meetingId: notification.meetingId?.toString() || '',
-  recipientRole: notification.recipientRole,
-  recipientUsername: notification.recipientUsername,
-  recipientStudentId: notification.recipientStudentId,
-  recipientClassName: notification.recipientClassName,
-  unread: !notification.readBy?.includes(username),
-  time: notification.createdAt?.toISOString(),
-  createdAt: notification.createdAt?.toISOString(),
-});
+const toPayload = async (notification, username = '') => {
+  // Resolve the sender (createdByUsername) to a human name so "sent by TCH-983"
+  // renders as "sent by <name>". Falls back to the username string if unresolved.
+  const authorName = notification.createdByUsername
+    ? await resolveDisplayName(notification.createdByUsername)
+    : '';
+
+  return {
+    id: notification._id.toString(),
+    title: notification.title,
+    description: notification.description,
+    text: notification.description || notification.title,
+    type: notification.type,
+    linkPage: notification.linkPage,
+    meetingId: notification.meetingId?.toString() || '',
+    recipientRole: notification.recipientRole,
+    recipientUsername: notification.recipientUsername,
+    recipientStudentId: notification.recipientStudentId,
+    recipientClassName: notification.recipientClassName,
+    createdByRole: notification.createdByRole,
+    createdByUsername: notification.createdByUsername,
+    createdByName: authorName,
+    authorName,
+    unread: !notification.readBy?.includes(username),
+    time: notification.createdAt?.toISOString(),
+    createdAt: notification.createdAt?.toISOString(),
+  };
+};
 
 const getRecipientQuery = ({ role, username, className, studentId }) => {
   const filters = [{ recipientRole: role, recipientUsername: username }];
@@ -66,7 +82,7 @@ router.get('/', ensureMongo, async (request, response) => {
     .sort({ createdAt: -1 })
     .limit(80);
 
-  response.json(notifications.map((item) => toPayload(item, username)));
+  response.json(await Promise.all(notifications.map((item) => toPayload(item, username))));
 });
 
 router.patch('/read', ensureMongo, async (request, response) => {
@@ -85,6 +101,66 @@ router.patch('/read', ensureMongo, async (request, response) => {
 
   emitRealtimeEvent(NOTIFICATIONS_UPDATED_EVENT);
   response.json({ updated: result.modifiedCount || 0 });
+});
+
+// Register an Expo push token for the authenticated user.
+router.post('/register-token', ensureMongo, async (request, response) => {
+  const token = typeof request.body?.token === 'string' ? request.body.token.trim() : '';
+  const username = request.auth?.username || '';
+
+  if (!token || !username) {
+    response.status(400).json({ message: 'A token and authenticated user are required.' });
+    return;
+  }
+
+  await User.updateOne({ username }, { $addToSet: { pushTokens: token } });
+  response.json({ ok: true });
+});
+
+// Remove an Expo push token for the authenticated user (e.g. on logout).
+router.post('/unregister-token', ensureMongo, async (request, response) => {
+  const token = typeof request.body?.token === 'string' ? request.body.token.trim() : '';
+  const username = request.auth?.username || '';
+
+  if (!token || !username) {
+    response.status(400).json({ message: 'A token and authenticated user are required.' });
+    return;
+  }
+
+  await User.updateOne({ username }, { $pull: { pushTokens: token } });
+  response.json({ ok: true });
+});
+
+// Create a notification (admin/clerk/teacher). Fans out an Expo push via createNotification.
+router.post('/', ensureMongo, requireRole('admin', 'clerk', 'teacher'), async (request, response) => {
+  const {
+    title = '',
+    description = '',
+    type = 'general',
+    linkPage = '',
+    recipientRole = '',
+    recipientUsername = '',
+    recipientClassName = '',
+    recipientStudentId = '',
+  } = request.body || {};
+
+  if (!title) {
+    response.status(400).json({ message: 'A notification title is required.' });
+    return;
+  }
+
+  const notification = await createNotification({
+    title,
+    description,
+    type,
+    linkPage,
+    recipientRole,
+    recipientUsername,
+    recipientClassName,
+    recipientStudentId,
+  });
+
+  response.status(201).json(await toPayload(notification, request.auth?.username || ''));
 });
 
 export default router;

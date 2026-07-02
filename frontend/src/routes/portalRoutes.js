@@ -1,6 +1,6 @@
 import { lazy } from 'react';
 
-const pageLoaders = import.meta.glob('../pages/{Admin,Clerk,Student,Teacher}/**/*.jsx');
+const pageLoaders = import.meta.glob('../pages/{Admin,Clerk,Student,Teacher,common}/**/*.jsx');
 
 const resolvePageLoader = (path) => {
   const loader = pageLoaders[`${path}.jsx`] || pageLoaders[path];
@@ -27,7 +27,6 @@ export const portalRoutes = {
       'Class Management': lazyPage('../pages/Admin/ClassManagement'),
       'Clerk Management': lazyPage('../pages/Admin/ClerkManagement'),
       'Clerk Profile': lazyPage('../pages/Admin/ClerkProfile'),
-      Communication: lazyPage('../pages/Admin/Communication'),
       'Documents Management': lazyPage('../pages/Admin/DocumentsManagement'),
       Events: lazyPage('../pages/Admin/Events'),
       Examinations: lazyPage('../pages/Admin/Examinations'),
@@ -39,6 +38,7 @@ export const portalRoutes = {
       'Marks Management': lazyPage('../pages/Admin/Examinations'),
       'Feature Page': lazyPage('../pages/Admin/FeaturePage'),
       Finance: lazyPage('../pages/Admin/Finance'),
+      Payroll: lazyPage('../pages/Admin/Payroll'),
       'Id Card': lazyPage('../pages/Admin/IdCard'),
       'Leave Requests': lazyPage('../pages/Admin/LeaveRequests'),
       Meetings: lazyPage('../pages/Admin/Meetings'),
@@ -73,7 +73,6 @@ export const portalRoutes = {
       'Biometric Attendance': lazyPage('../pages/Clerk/BiometricAttendance'),
       'Class Management': lazyPage('../pages/Clerk/ClassManagement'),
       'Class Preferences': lazyPage('../pages/Clerk/ClassPreferences'),
-      Communication: lazyPage('../pages/Clerk/Communication'),
       'Documents Management': lazyPage('../pages/Clerk/DocumentsManagement'),
       Events: lazyPage('../pages/Clerk/Events'),
       Examinations: lazyPage('../pages/Clerk/Examinations'),
@@ -87,6 +86,7 @@ export const portalRoutes = {
       Meetings: lazyPage('../pages/Clerk/Meetings'),
       Notices: lazyPage('../pages/Clerk/Notices'),
       Profile: lazyPage('../pages/Clerk/Profile'),
+      'My Salary': lazyPage('../pages/common/MySalary'),
       Settings: lazyPage('../pages/Clerk/Settings'),
       'Sibling Assigning': lazyPage('../pages/Clerk/SiblingAssigning'),
       'Student Assigning': lazyPage('../pages/Clerk/StudentAssigning'),
@@ -110,7 +110,6 @@ export const portalRoutes = {
       Application: lazyPage('../pages/Student/Application'),
       Assignment: lazyPage('../pages/Student/Assignment'),
       Attendance: lazyPage('../pages/Student/Attendance'),
-      Communication: lazyPage('../pages/Student/Communication'),
       Events: lazyPage('../pages/Student/Events'),
       Examinations: lazyPage('../pages/Student/Examinations'),
       Fees: lazyPage('../pages/Student/Fees'),
@@ -133,7 +132,6 @@ export const portalRoutes = {
       Application: lazyPage('../pages/Teacher/Application'),
       Assignment: lazyPage('../pages/Teacher/Assignment'),
       Attendance: lazyPage('../pages/Teacher/Attendance'),
-      Communication: lazyPage('../pages/Teacher/Communication'),
       Events: lazyPage('../pages/Teacher/Events'),
       Examinations: lazyPage('../pages/Teacher/Examinations'),
       'Paper Analysis': lazyPage('../pages/Teacher/Examinations'),
@@ -143,6 +141,7 @@ export const portalRoutes = {
       Meetings: lazyPage('../pages/Teacher/Meetings'),
       Notices: lazyPage('../pages/Teacher/Notices'),
       Profile: lazyPage('../pages/Teacher/Profile'),
+      'My Salary': lazyPage('../pages/common/MySalary'),
       Settings: lazyPage('../pages/Teacher/Settings'),
       Vault: lazyPage('../pages/Teacher/Vault'),
     },

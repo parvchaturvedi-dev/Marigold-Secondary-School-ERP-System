@@ -1,17 +1,17 @@
 import React from "react";
 import { View, Text } from "react-native";
 import { colors } from "../../theme/colors";
+import { glassStyles } from "../../shared/theme/glass";
 
 export default function StatCard({ label, value }) {
   return (
     <View
       style={{
-        backgroundColor: colors.card,
+        ...glassStyles.card,
         borderRadius: 18,
         padding: 18,
         width: "48%",
-        marginBottom: 14,
-        elevation: 2
+        marginBottom: 14
       }}
     >
       <Text style={{ color: colors.muted, fontSize: 13 }}>{label}</Text>

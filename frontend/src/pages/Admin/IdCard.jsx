@@ -65,15 +65,15 @@ const IdCard = () => {
   const fileBase = `mgps-${role}-${classFilter === 'all' ? 'all' : classFilter.toLowerCase().replace(/\s+/g, '-')}-id-cards`;
 
   return (
-    <div className="space-y-6 p-6 font-sans text-[#1A1A1A]">
+    <div className="space-y-6 p-6 font-sans text-slate-900">
       <IdCardStyles />
-      <section className="no-print bg-white border border-[#C8C8C8] rounded-2xl p-5 shadow-sm">
+      <section className="no-print glass-card rounded-2xl p-5 animate-fadeInUp">
         <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
           <div>
             <h2 className="text-xl font-black uppercase tracking-widest flex items-center gap-2">
-              <IdCardIcon className="w-5 h-5 text-blue-700" /> ID Card Generation
+              <IdCardIcon className="w-5 h-5 text-indigo-500" /> ID Card Generation
             </h2>
-            <p className="text-xs text-[#555555] font-semibold mt-1">
+            <p className="text-xs text-slate-500 font-semibold mt-1">
               One-click student, teacher, clerk, and admin ID cards from live ERP records. Principal signature is removed.
             </p>
           </div>
@@ -82,7 +82,7 @@ const IdCard = () => {
               type="button"
               onClick={() => exportIdCardsPdf(activeRecord ? [activeRecord] : [], `${activeRecord?.id || 'single'}-id-card.pdf`)}
               disabled={!activeRecord}
-              className="inline-flex items-center gap-2 rounded-lg border border-[#1A1A1A] bg-white px-4 py-2 text-xs font-black disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg btn-ghost px-4 py-2 text-xs font-black disabled:opacity-50"
             >
               <Download className="w-4 h-4" /> Export Selected PDF
             </button>
@@ -90,7 +90,7 @@ const IdCard = () => {
               type="button"
               onClick={() => exportIdCardsPdf(visibleRecords, `${fileBase}.pdf`)}
               disabled={!visibleRecords.length}
-              className="inline-flex items-center gap-2 rounded-lg bg-[#1A1A1A] px-4 py-2 text-xs font-black text-white disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg btn-primary px-4 py-2 text-xs font-black disabled:opacity-50"
             >
               <Printer className="w-4 h-4" /> Generate All Visible
             </button>
@@ -99,9 +99,9 @@ const IdCard = () => {
       </section>
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-5">
-        <aside className="no-print xl:col-span-4 bg-white border border-[#C8C8C8] rounded-2xl shadow-sm overflow-hidden">
-          <div className="p-4 border-b border-[#EAEAEA] space-y-3">
-            <div className="flex bg-[#F8F8F8] border border-[#EAEAEA] rounded-xl p-1">
+        <aside className="no-print xl:col-span-4 glass-card rounded-2xl overflow-hidden">
+          <div className="p-4 border-b border-slate-100/80 space-y-3">
+            <div className="flex glass-soft rounded-xl p-1">
               {roleTabs.map(([id, label]) => (
                 <button
                   key={id}
@@ -112,7 +112,7 @@ const IdCard = () => {
                     setSelectedId('');
                   }}
                   className={`flex-1 px-3 py-2 rounded-lg text-[11px] font-black transition ${
-                    role === id ? 'bg-[#1A1A1A] text-white' : 'text-[#555555]'
+                    role === id ? 'btn-primary' : 'text-slate-500 hover:bg-white/60'
                   }`}
                 >
                   {label}
@@ -126,7 +126,7 @@ const IdCard = () => {
                   setClassFilter(event.target.value);
                   setSelectedId('');
                 }}
-                className="w-full rounded-xl border border-[#D9D9D9] bg-[#F8F8F8] px-3 py-2 text-xs font-bold outline-none"
+                className="w-full rounded-xl bg-white/60 border border-white/80 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none transition-all px-3 py-2 text-xs font-bold"
               >
                 <option value="all">All Classes</option>
                 {classNames.map((className) => (
@@ -134,8 +134,8 @@ const IdCard = () => {
                 ))}
               </select>
             )}
-            <div className="relative bg-[#F8F8F8] rounded-xl border border-[#D9D9D9] flex items-center px-3 py-2">
-              <Search className="w-4 h-4 text-[#555555] mr-2" />
+            <div className="relative bg-white/60 rounded-xl border border-white/80 focus-within:border-indigo-400 focus-within:ring-4 focus-within:ring-indigo-100 transition-all flex items-center px-3 py-2">
+              <Search className="w-4 h-4 text-slate-500 mr-2" />
               <input
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
@@ -145,22 +145,22 @@ const IdCard = () => {
             </div>
           </div>
 
-          <div className="max-h-[68vh] overflow-y-auto divide-y divide-[#EAEAEA]">
+          <div className="max-h-[68vh] overflow-y-auto divide-y divide-slate-100/80">
             {visibleRecords.map((record) => (
               <button
                 key={record.id}
                 type="button"
                 onClick={() => setSelectedId(record.id)}
                 className={`w-full text-left p-4 transition flex items-center gap-3 ${
-                  activeRecord?.id === record.id ? 'bg-[#F8F8F8]' : 'hover:bg-[#F8F8F8]'
+                  activeRecord?.id === record.id ? 'bg-indigo-50/70' : 'hover:bg-white/60'
                 }`}
               >
-                <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-700 border border-blue-100 flex items-center justify-center shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-md shadow-indigo-500/25 flex items-center justify-center shrink-0">
                   <UsersRound className="w-5 h-5" />
                 </div>
                 <div className="min-w-0">
                   <p className="text-xs font-black truncate">{record.displayName}</p>
-                  <p className="text-[10px] text-[#555555] font-semibold truncate">
+                  <p className="text-[10px] text-slate-500 font-semibold truncate">
                     {record.id} - {record.primaryLine || record.roleLabel}
                   </p>
                 </div>
@@ -174,7 +174,7 @@ const IdCard = () => {
           </div>
         </aside>
 
-        <main className="xl:col-span-8 bg-white border border-[#C8C8C8] rounded-2xl shadow-sm p-6">
+        <main className="xl:col-span-8 glass-card rounded-2xl p-6">
           {activeRecord ? (
             <div className="id-print-area flex justify-center pb-2">
               <ResponsiveIdCardPair record={activeRecord} />

@@ -54,10 +54,12 @@ const getYearlyFee = (student) => {
     getFirstAmount(student, ['pendingFees', 'feePending', 'balanceFees', 'unpaidFees']);
 };
 
+const CHART_COLORS = ['#6366f1', '#8b5cf6', '#0ea5e9', '#10b981', '#f59e0b', '#f43f5e'];
+
 const getClassColor = (className) => {
   let hash = 0;
   for (const char of String(className)) hash = (hash * 31 + char.charCodeAt(0)) % 360;
-  return `hsl(${hash}, 72%, 45%)`;
+  return CHART_COLORS[hash % CHART_COLORS.length];
 };
 
 const getMonthIndex = (entry) => {
@@ -152,8 +154,8 @@ const FinanceTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
 
   return (
-    <div className="bg-white border border-[#EAEAEA] rounded-2xl shadow-lg p-3 text-xs min-w-56">
-      <p className="font-black text-[#1A1A1A] mb-2">{label}</p>
+    <div className="glass-strong rounded-2xl shadow-lg p-3 text-xs min-w-56">
+      <p className="font-black text-slate-900 mb-2">{label}</p>
       <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
         {payload.map((item) => (
           <div key={item.dataKey} className="space-y-0.5">
@@ -200,10 +202,10 @@ const Dashboard = ({ setActivePage }) => {
   );
 
   const quickActions = [
-    { label: 'Finance', page: 'Finance', icon: Wallet, bg: 'bg-[#FFF8EC]', text: 'text-[#f59e0b]', border: 'border-[#F5E6CC]' },
-    { label: 'Post Notice', page: 'Notices', icon: BellRing, bg: 'bg-[#F5F3FF]', text: 'text-[#8b5cf6]', border: 'border-[#E8E3FF]' },
-    { label: 'Schedule Events', page: 'Events', icon: CalendarDays, bg: 'bg-[#E6FFFA]', text: 'text-[#06b6d4]', border: 'border-[#CCFBF1]' },
-    { label: 'Approve Leaves', page: 'Leave Requests', icon: CheckCircle, bg: 'bg-emerald-50', text: 'text-emerald-600', border: 'border-emerald-200' },
+    { label: 'Finance', page: 'Finance', icon: Wallet, bg: 'bg-amber-50/70', text: 'text-amber-500', border: 'border-amber-200/60' },
+    { label: 'Post Notice', page: 'Notices', icon: BellRing, bg: 'bg-violet-50/70', text: 'text-violet-500', border: 'border-violet-200/60' },
+    { label: 'Schedule Events', page: 'Events', icon: CalendarDays, bg: 'bg-sky-50/70', text: 'text-sky-500', border: 'border-sky-200/60' },
+    { label: 'Approve Leaves', page: 'Leave Requests', icon: CheckCircle, bg: 'bg-emerald-50/70', text: 'text-emerald-600', border: 'border-emerald-200/60' },
   ];
 
   const overviewCards = [
@@ -212,44 +214,44 @@ const Dashboard = ({ setActivePage }) => {
       value: students.length.toLocaleString('en-IN'),
       note: isLoading ? 'Loading database' : 'Student database',
       icon: Users,
-      bg: 'bg-[#FFF8EC]',
-      border: 'border-[#F5E6CC]',
-      iconBg: 'bg-[#FCECD2]',
-      text: 'text-[#f59e0b]',
+      bg: 'bg-amber-50/70',
+      border: 'border-amber-200/60',
+      iconBg: 'bg-amber-100/70',
+      text: 'text-amber-500',
     },
     {
       label: 'Total Teachers',
       value: teachers.length.toLocaleString('en-IN'),
       note: isLoading ? 'Loading database' : 'Faculty database',
       icon: GraduationCap,
-      bg: 'bg-[#F5F3FF]',
-      border: 'border-[#E8E3FF]',
-      iconBg: 'bg-[#EBE5FF]',
-      text: 'text-[#8b5cf6]',
+      bg: 'bg-violet-50/70',
+      border: 'border-violet-200/60',
+      iconBg: 'bg-violet-100/70',
+      text: 'text-violet-500',
     },
     {
       label: 'Finance',
       value: formatCurrency(financeSummary.totalYearlyFees),
       note: `${formatCurrency(financeSummary.totalCollected)} collected`,
       icon: Landmark,
-      bg: 'bg-[#E6FFFA]',
-      border: 'border-[#CCFBF1]',
-      iconBg: 'bg-[#CCFBF1]',
-      text: 'text-[#06b6d4]',
+      bg: 'bg-sky-50/70',
+      border: 'border-sky-200/60',
+      iconBg: 'bg-sky-100/70',
+      text: 'text-sky-500',
     },
   ];
 
   const feeStats = [
-    { label: 'Maximum Fee', value: formatCurrency(financeSummary.maxFee), tone: 'bg-[#FFF8EC] text-[#f59e0b] border-[#F5E6CC]' },
-    { label: 'Minimum Fee', value: formatCurrency(financeSummary.minFee), tone: 'bg-[#F5F3FF] text-[#8b5cf6] border-[#E8E3FF]' },
-    { label: 'Average Fee', value: formatCurrency(financeSummary.averageFee), tone: 'bg-[#E6FFFA] text-[#0891b2] border-[#CCFBF1]' },
+    { label: 'Maximum Fee', value: formatCurrency(financeSummary.maxFee), tone: 'bg-amber-50/70 text-amber-600 border-amber-200/60' },
+    { label: 'Minimum Fee', value: formatCurrency(financeSummary.minFee), tone: 'bg-violet-50/70 text-violet-600 border-violet-200/60' },
+    { label: 'Average Fee', value: formatCurrency(financeSummary.averageFee), tone: 'bg-sky-50/70 text-sky-600 border-sky-200/60' },
   ];
 
   return (
     <div className="space-y-6 pb-8 select-none">
-      <div className="bg-white p-5 rounded-3xl border border-[#EAEAEA] shadow-sm">
-        <h3 className="text-sm font-bold text-[#1A1A1A] mb-3.5">Admin Quick Actions</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="glass-card p-5 rounded-3xl animate-fadeInUp">
+        <h3 className="text-sm font-bold text-slate-900 mb-3.5">Admin Quick Actions</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 stagger">
           {quickActions.map((action) => {
             const Icon = action.icon;
             return (
@@ -259,10 +261,10 @@ const Dashboard = ({ setActivePage }) => {
                 onClick={() => setActivePage?.(action.page)}
                 className={`flex items-center gap-3 p-3.5 rounded-2xl border ${action.bg} ${action.border} hover:scale-[1.02] transition-transform duration-200 text-left`}
               >
-                <div className={`p-2 bg-white rounded-xl ${action.text} shadow-sm shrink-0`}>
+                <div className={`p-2 bg-white/80 rounded-xl ${action.text} shadow-sm shrink-0`}>
                   <Icon className="w-5 h-5" />
                 </div>
-                <span className="text-xs font-bold text-[#1A1A1A] leading-tight">{action.label}</span>
+                <span className="text-xs font-bold text-slate-900 leading-tight">{action.label}</span>
               </button>
             );
           })}
@@ -276,22 +278,22 @@ const Dashboard = ({ setActivePage }) => {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-1 bg-[#EAEAEA] p-4 rounded-3xl flex flex-col gap-4 shadow-sm">
-          <h3 className="text-sm font-bold text-[#1A1A1A] px-2 mb-1">Academic Overview</h3>
+        <div className="lg:col-span-1 glass-card p-4 rounded-3xl flex flex-col gap-4 stagger">
+          <h3 className="text-sm font-bold text-slate-900 px-2 mb-1">Academic Overview</h3>
 
           {overviewCards.map((card) => {
             const Icon = card.icon;
             return (
               <div
                 key={card.label}
-                className={`${card.bg} p-4 rounded-2xl border ${card.border} flex flex-col justify-between h-28 relative overflow-hidden`}
+                className="glass-card glass-hover p-4 rounded-3xl flex flex-col justify-between h-28 relative overflow-hidden"
               >
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <span className="text-2xl font-black text-[#1A1A1A] break-words">{card.value}</span>
-                    <p className="text-xs font-semibold text-[#666666] mt-1">{card.label}</p>
+                    <span className="text-2xl font-black text-slate-900 break-words">{card.value}</span>
+                    <p className="text-xs font-semibold text-slate-400 mt-1">{card.label}</p>
                   </div>
-                  <div className={`p-2.5 ${card.iconBg} rounded-full ${card.text} shrink-0`}>
+                  <div className="p-2.5 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-lg shadow-indigo-500/30 shrink-0">
                     <Icon className="w-5 h-5" />
                   </div>
                 </div>
@@ -304,12 +306,12 @@ const Dashboard = ({ setActivePage }) => {
           })}
         </div>
 
-        <div className="lg:col-span-2 bg-white p-5 rounded-3xl border border-[#EAEAEA] flex flex-col justify-between shadow-sm">
+        <div className="lg:col-span-2 glass-card p-5 rounded-3xl flex flex-col justify-between">
           <div className="flex flex-col gap-4 mb-4">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
               <div>
-                <h3 className="text-sm font-bold text-[#1A1A1A]">Finance Analytics</h3>
-                <p className="text-[11px] text-[#666666]">
+                <h3 className="text-sm font-bold text-slate-900">Finance Analytics</h3>
+                <p className="text-[11px] text-slate-400">
                   Class-wise monthly collections with pending amounts in the tooltip
                 </p>
               </div>
@@ -327,7 +329,7 @@ const Dashboard = ({ setActivePage }) => {
               {feeStats.map((stat) => (
                 <div key={stat.label} className={`rounded-2xl border px-4 py-3 ${stat.tone}`}>
                   <p className="text-[10px] uppercase tracking-wider font-black">{stat.label}</p>
-                  <p className="text-lg font-black text-[#1A1A1A] mt-1">{stat.value}</p>
+                  <p className="text-lg font-black text-slate-900 mt-1">{stat.value}</p>
                 </div>
               ))}
             </div>
@@ -336,10 +338,10 @@ const Dashboard = ({ setActivePage }) => {
           <div className="w-full h-72">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={analytics.chartData} margin={{ top: 10, right: 10, left: -5, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F0" vertical={false} />
-                <XAxis dataKey="month" tick={{ fill: '#888888', fontSize: 11 }} axisLine={false} tickLine={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                <XAxis dataKey="month" tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} />
                 <YAxis
-                  tick={{ fill: '#888888', fontSize: 11 }}
+                  tick={{ fill: '#94a3b8', fontSize: 11 }}
                   tickFormatter={(value) => `${Math.round(value / 1000)}k`}
                   axisLine={false}
                   tickLine={false}
@@ -364,7 +366,7 @@ const Dashboard = ({ setActivePage }) => {
           </div>
 
           {analytics.classes.length === 0 && (
-            <p className="text-center text-xs font-bold text-[#666666] py-4">
+            <p className="text-center text-xs font-bold text-slate-400 py-4">
               Add student finance records to populate class-wise fee analytics.
             </p>
           )}

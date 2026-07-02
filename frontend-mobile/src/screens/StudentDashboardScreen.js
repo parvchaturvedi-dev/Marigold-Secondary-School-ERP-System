@@ -16,6 +16,10 @@ import { studentModules, bottomTabs } from "../data/modules";
 import ModuleCard from "../components/cards/ModuleCard";
 import OverviewCard from "../components/cards/OverviewCard";
 import { getActiveStudentProfile } from "../shared/profile";
+import { colors } from "../shared/theme/colors";
+import { gradients, glassColors, glassStyles } from "../shared/theme/glass";
+import AuroraBackground from "../shared/components/AuroraBackground";
+import GlassCard from "../shared/components/GlassCard";
 
 const logo = require("../../assets/images/logo.png");
 const width = Dimensions.get("window").width;
@@ -48,9 +52,10 @@ export default function StudentDashboardScreen() {
   const noticeCount = summary?.stats?.find((item) => item.title === "Notices")?.value || "0";
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#F8FAFF" }}>
+    <View style={{ flex: 1 }}>
+      <AuroraBackground />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
-        <LinearGradient colors={["#F8FAFF", "#FFFFFF"]} style={{ paddingTop: 50, paddingHorizontal: 18, minHeight: 180 }}>
+        <View style={{ paddingTop: 50, paddingHorizontal: 18, minHeight: 180 }}>
           <Header onMenu={() => setDrawerOpen(true)} onNotices={() => openModule("Notifications")} noticeCount={noticeCount} />
 
           {activeTab === "home" && (
@@ -65,7 +70,7 @@ export default function StudentDashboardScreen() {
               logout={logout}
             />
           )}
-        </LinearGradient>
+        </View>
       </ScrollView>
 
       <BottomTabs activeTab={activeTab} setActiveTab={setActiveTab} openModule={openModule} />
@@ -108,7 +113,7 @@ function Header({ onMenu, onNotices, noticeCount }) {
               minWidth: 20,
               height: 20,
               borderRadius: 10,
-              backgroundColor: "#EF4444",
+              backgroundColor: glassColors.danger,
               alignItems: "center",
               justifyContent: "center",
               paddingHorizontal: 5,
@@ -145,9 +150,14 @@ function HomeContent({ user, summary, loading, error, openModule }) {
           </Text>
         </View>
 
-        <View style={{ width: 86, height: 86, borderRadius: 43, backgroundColor: "#DBE4FF", alignItems: "center", justifyContent: "center" }}>
-          <Ionicons name="person" size={48} color="#4F46E5" />
-        </View>
+        <LinearGradient
+          colors={gradients.chip}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{ width: 86, height: 86, borderRadius: 43, alignItems: "center", justifyContent: "center" }}
+        >
+          <Ionicons name="person" size={48} color="#fff" />
+        </LinearGradient>
       </View>
 
       <ActionCard
@@ -180,24 +190,22 @@ function ActionCard({ icon, label, title, subtitle, button, onPress }) {
   return (
     <View
       style={{
-        backgroundColor: "#fff",
+        ...glassStyles.card,
         borderRadius: 18,
         padding: 18,
         flexDirection: "row",
         alignItems: "center",
-        elevation: 3,
-        shadowColor: "#1E293B",
-        shadowOpacity: 0.08,
-        shadowRadius: 16,
-        shadowOffset: { width: 0, height: 8 },
-        borderWidth: 1,
-        borderColor: "#EEF2F7",
         marginBottom: 26,
       }}
     >
-      <View style={{ width: 54, height: 54, borderRadius: 17, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center", marginRight: 16 }}>
-        <Ionicons name={icon} size={30} color="#4F46E5" />
-      </View>
+      <LinearGradient
+        colors={gradients.chip}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{ width: 54, height: 54, borderRadius: 17, alignItems: "center", justifyContent: "center", marginRight: 16 }}
+      >
+        <Ionicons name={icon} size={30} color="#fff" />
+      </LinearGradient>
 
       <View style={{ flex: 1 }}>
         <Text style={{ color: "#0F172A", fontSize: 15, fontWeight: "800" }}>{label}</Text>
@@ -205,8 +213,8 @@ function ActionCard({ icon, label, title, subtitle, button, onPress }) {
         <Text style={{ color: "#64748B", marginTop: 6, fontSize: 15 }}>{subtitle}</Text>
       </View>
 
-      <TouchableOpacity onPress={onPress} style={{ backgroundColor: "#F4F6FF", paddingVertical: 12, paddingHorizontal: 14, borderRadius: 14 }}>
-        <Text style={{ color: "#3949FF", fontWeight: "800" }}>{button}</Text>
+      <TouchableOpacity onPress={onPress} style={{ backgroundColor: "rgba(99,102,241,0.12)", paddingVertical: 12, paddingHorizontal: 14, borderRadius: 14 }}>
+        <Text style={{ color: colors.primary, fontWeight: "800" }}>{button}</Text>
       </TouchableOpacity>
     </View>
   );
@@ -223,8 +231,8 @@ function SectionTitle({ title }) {
 function SimpleTabPage({ title, icon, text, profile, logout }) {
   return (
     <View style={{ marginTop: 60 }}>
-      <View style={{ backgroundColor: "#fff", borderRadius: 24, padding: 28, alignItems: "center", elevation: 3, borderWidth: 1, borderColor: "#EEF2F7" }}>
-        <Ionicons name={icon} size={70} color="#4F46E5" />
+      <GlassCard style={{ borderRadius: 24, padding: 28, alignItems: "center" }}>
+        <Ionicons name={icon} size={70} color={colors.primaryDark} />
         <Text style={{ marginTop: 20, fontSize: 28, fontWeight: "900", color: "#0F172A" }}>{title}</Text>
         {profile ? (
           <View style={{ alignSelf: "stretch", marginTop: 16 }}>
@@ -243,18 +251,18 @@ function SimpleTabPage({ title, icon, text, profile, logout }) {
         )}
 
         {logout && (
-          <TouchableOpacity onPress={logout} style={{ marginTop: 24, backgroundColor: "#EF4444", paddingHorizontal: 24, paddingVertical: 14, borderRadius: 14 }}>
+          <TouchableOpacity onPress={logout} style={{ marginTop: 24, backgroundColor: glassColors.danger, paddingHorizontal: 24, paddingVertical: 14, borderRadius: 14 }}>
             <Text style={{ color: "#fff", fontWeight: "900" }}>Logout</Text>
           </TouchableOpacity>
         )}
-      </View>
+      </GlassCard>
     </View>
   );
 }
 
 function ProfileRow({ label, value }) {
   return (
-    <View style={{ paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#EEF2F7" }}>
+    <View style={{ paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "rgba(148,163,184,0.25)" }}>
       <Text style={{ color: "#64748B", fontSize: 12, fontWeight: "800" }}>{label}</Text>
       <Text style={{ color: "#0F172A", fontSize: 15, fontWeight: "900", marginTop: 3 }}>{value || "Not updated"}</Text>
     </View>

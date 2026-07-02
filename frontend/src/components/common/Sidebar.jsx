@@ -1,26 +1,26 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  LayoutGrid, 
-  Calendar, 
-  FileText, 
+import {
+  LayoutGrid,
+  Calendar,
+  FileText,
   Lock,
-  ClipboardList, 
-  CheckSquare, 
-  Layers, 
-  UserCheck, 
-  Contact, 
-  MessageSquare, 
-  PartyPopper, 
-  GraduationCap, 
-  Sparkles, 
-  Wallet, 
+  ClipboardList,
+  CheckSquare,
+  Layers,
+  UserCheck,
+  Contact,
+  MessageSquare,
+  PartyPopper,
+  GraduationCap,
+  Sparkles,
+  Wallet,
   CalendarClock,
-  IdCard, 
-  LogOut, 
-  Video, 
-  Bell, 
-  User, 
-  Settings, 
+  IdCard,
+  LogOut,
+  Video,
+  Bell,
+  User,
+  Settings,
   Computer,
   BookOpen,
   BarChart3,
@@ -34,6 +34,7 @@ import {
   Search,
   UserPlus
 } from 'lucide-react';
+import Logo from '../../assets/logo.png';
 
 // --- Typing Animation Component ---
 const TypingLogo = () => {
@@ -59,7 +60,7 @@ const TypingLogo = () => {
   useEffect(() => {
     const handleTyping = () => {
       const fullWord = words[currentWordIndex];
-      
+
       if (!isDeleting) {
         // Character type karna
         setCurrentText(fullWord.substring(0, currentText.length + 1));
@@ -89,9 +90,9 @@ const TypingLogo = () => {
   }, [currentText, isDeleting, currentWordIndex, typingSpeed, words]);
 
   return (
-    <span className="inline-flex items-center text-md font-bold tracking-wider text-[#1A1A1A] whitespace-nowrap">
+    <span className="inline-flex items-center text-md font-bold tracking-wider text-slate-800 whitespace-nowrap">
       {currentText}
-      <span className="w-[2px] h-5 bg-[#1A1A1A] ml-0.5 animate-pulse"></span>
+      <span className="w-[2px] h-5 bg-indigo-500 ml-0.5 animate-pulse"></span>
     </span>
   );
 };
@@ -143,24 +144,23 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
     { name: 'Attendance', icon: CheckSquare },
     { name: 'Admin Management', icon: UserCheck },
     { name: 'Biometric Attendance', icon: Contact },
-    { 
-      name: 'Class Desk', 
-      icon: Layers, 
+    {
+      name: 'Class Desk',
+      icon: Layers,
       hasSub: true,
       subItems: [
         { name: 'Class Management', icon: Settings },
         { name: 'Class Preferences', icon: GitCommit },
       ]
     },
-    { 
-      name: 'Clerk Desk', 
-      icon: Computer, 
+    {
+      name: 'Clerk Desk',
+      icon: Computer,
       hasSub: true,
       subItems: [
         { name: 'Clerk Management', icon: UserCheck },
       ]
     },
-    { name: 'Communication', icon: MessageSquare },
     { name: 'Documents Management', icon: FileText },
     { name: 'Events', icon: PartyPopper },
     {
@@ -178,6 +178,7 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
     },
     { name: 'Feature Page', icon: Sparkles },
     { name: 'Finance', icon: Wallet },
+    { name: 'Payroll', icon: Wallet },
     { name: 'Timetable', icon: CalendarClock },
     {
       name: 'Faculty Desk',
@@ -244,7 +245,6 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
         { name: 'Sibling Assigning', icon: GitCommit },
       ],
     },
-    { name: 'Communication', icon: MessageSquare },
     { name: 'Documents Management', icon: FileText },
     { name: 'Events', icon: PartyPopper },
     {
@@ -265,6 +265,7 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
     { name: 'Timetable', icon: CalendarClock },
     { name: 'Notices', icon: Bell },
     { name: 'Profile', icon: User },
+    { name: 'My Salary', icon: Wallet },
     { name: 'Vault', icon: Lock },
     { name: 'Subject Management', icon: BookOpen },
     { name: 'Settings', icon: Settings },
@@ -278,7 +279,6 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
     { name: 'Application', icon: FileText },
     { name: 'Assignment', icon: ClipboardList },
     { name: 'Attendance', icon: CheckSquare },
-    { name: 'Communication', icon: MessageSquare },
     { name: 'Events', icon: PartyPopper },
     { name: 'Examinations', icon: GraduationCap },
     { name: 'Fees', icon: Wallet },
@@ -299,7 +299,6 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
     { name: 'Application', icon: FileText },
     { name: 'Assignment', icon: ClipboardList },
     { name: 'Attendance', icon: CheckSquare },
-    { name: 'Communication', icon: MessageSquare },
     { name: 'Events', icon: PartyPopper },
     {
       name: 'Examination Desk',
@@ -315,6 +314,7 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
     { name: 'Meetings', icon: Video },
     { name: 'Notices', icon: Bell },
     { name: 'Profile', icon: User },
+    { name: 'My Salary', icon: Wallet },
     { name: 'Vault', icon: Lock },
     { name: 'Settings', icon: Settings },
   ];
@@ -350,21 +350,21 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
             }
           }}
           className={`
-            flex items-center justify-between px-5 py-2.5 rounded-full transition-all duration-200 text-left w-full font-medium text-[14px]
-            ${isActive 
-              ? 'bg-[#E1FA6C] text-[#1A1A1A] shadow-sm font-semibold' 
-              : isSubChild 
-                ? 'bg-transparent text-[#555555] hover:bg-[#E2E2E2]/60 hover:text-[#1A1A1A]'
-                : 'bg-[#EAEAEA] text-[#555555] hover:bg-[#E2E2E2] hover:text-[#1A1A1A]'
+            flex items-center justify-between px-4 py-2.5 rounded-2xl transition-all duration-200 text-left w-full font-medium text-[13.5px]
+            ${isActive
+              ? 'btn-primary font-semibold'
+              : isSubChild
+                ? 'bg-transparent text-slate-500 hover:bg-white/60 hover:text-slate-900'
+                : 'text-slate-600 hover:bg-white/70 hover:text-slate-900 hover:shadow-sm'
             }
           `}
         >
-          <div className="flex items-center gap-4 truncate">
-            <IconComponent 
-              className={`w-4.5 h-4.5 shrink-0 ${isActive ? 'text-[#1A1A1A]' : 'text-[#666666]'}`} 
+          <div className="flex items-center gap-3.5 truncate">
+            <IconComponent
+              className={`w-4.5 h-4.5 shrink-0 transition-colors ${isActive ? 'text-white' : 'text-slate-400 group-hover/item:text-indigo-500'}`}
               strokeWidth={2}
             />
-            <span className={`truncate transition-opacity duration-200 
+            <span className={`truncate transition-opacity duration-200
               ${isCollapsed ? 'opacity-0 lg:group-hover/sidebar:opacity-100' : 'opacity-100'}
             `}>
               {item.name}
@@ -372,7 +372,8 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
           </div>
 
           {item.hasSub && (
-            <ChevronDown className={`w-4 h-4 text-[#666666] transition-transform duration-200 shrink-0
+            <ChevronDown className={`w-4 h-4 transition-transform duration-200 shrink-0
+              ${isActive ? 'text-white/80' : 'text-slate-400'}
               ${isDropdownOpen ? 'rotate-180' : ''}
               ${isCollapsed ? 'opacity-0 lg:group-hover/sidebar:opacity-100' : 'opacity-100'}
             `} />
@@ -380,16 +381,16 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
         </button>
 
         {isCollapsed && windowWidth > 500 && (
-          <div className="absolute left-full top-1/2 -translate-y-1/2 ml-4 px-3 py-1.5 bg-[#1A1A1A] text-white text-[12px] font-bold rounded-lg opacity-0 invisible -translate-x-2 group-hover/item:opacity-100 group-hover/item:visible group-hover/item:translate-x-0 transition-all shadow-md pointer-events-none z-50 whitespace-nowrap">
+          <div className="absolute left-full top-1/2 -translate-y-1/2 ml-4 px-3 py-1.5 bg-slate-900/90 backdrop-blur-md text-white text-[12px] font-bold rounded-lg opacity-0 invisible -translate-x-2 group-hover/item:opacity-100 group-hover/item:visible group-hover/item:translate-x-0 transition-all shadow-xl pointer-events-none z-50 whitespace-nowrap">
             {item.name}
           </div>
         )}
 
         {item.hasSub && (
-          <div 
+          <div
             className={`overflow-hidden transition-all duration-300 ease-in-out pl-4 flex flex-col gap-1 mt-1
-              ${isCollapsed 
-                ? 'max-h-0 lg:group-hover/sidebar:max-h-[360px]' 
+              ${isCollapsed
+                ? 'max-h-0 lg:group-hover/sidebar:max-h-[360px]'
                 : (isDropdownOpen ? 'max-h-[360px]' : 'max-h-0')
               }
             `}
@@ -403,29 +404,12 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
 
   return (
     <>
-      <style>{`
-        .no-scrollbar::-webkit-scrollbar {
-          display: none;
-        }
-        .no-scrollbar {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
-        }
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0; }
-        }
-        .animate-pulse {
-          animation: pulse 1s infinite;
-        }
-      `}</style>
-
       {/* FIXED FLOATING HAMBURGER TRIGGER SWITCH FOR SMALL SCREENS (< 500px) */}
       {windowWidth <= 500 && (
         <div className="fixed top-4 left-4 z-50">
-          <button 
+          <button
             onClick={() => setIsMobileOpen(!isMobileOpen)}
-            className="p-2 bg-[#D9D9D9] border border-[#C8C8C8] text-[#1A1A1A] rounded-xl shadow-md focus:outline-none"
+            className="p-2.5 glass-strong text-slate-800 rounded-xl focus:outline-none active:scale-95 transition-transform"
           >
             {isMobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
@@ -434,25 +418,27 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
 
       {/* SEMI-TRANSLUCENT SCREEN BACKDROP OVERLAY */}
       {windowWidth <= 500 && isMobileOpen && (
-        <div 
+        <div
           onClick={() => setIsMobileOpen(false)}
-          className="fixed inset-0 bg-black/30 z-40 transition-opacity"
+          className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm z-40 transition-opacity animate-fadeIn"
         />
       )}
 
       {/* MASTER FLEX CONTROL SIDEBAR PANEL LAYER */}
-      <div className={`h-screen bg-[#D9D9D9] flex flex-col px-4 font-sans select-none overflow-y-auto no-scrollbar shrink-0 border-r border-[#C8C8C8] z-40 transition-all duration-300 ease-in-out
-        ${windowWidth <= 500 
-          ? (isMobileOpen ? 'fixed top-0 left-0 w-72 translate-x-0' : 'fixed top-0 left-0 w-72 -translate-x-full') 
+      <div className={`h-screen bg-white/55 backdrop-blur-2xl flex flex-col px-4 font-sans select-none overflow-y-auto no-scrollbar shrink-0 border-r border-white/60 shadow-[4px_0_24px_rgba(79,70,229,0.05)] z-40 transition-all duration-300 ease-in-out
+        ${windowWidth <= 500
+          ? (isMobileOpen ? 'fixed top-0 left-0 w-72 translate-x-0' : 'fixed top-0 left-0 w-72 -translate-x-full')
           : (isCollapsed ? 'w-22 hover:w-72' : 'w-72')
         }
         ${isCollapsed ? 'group/sidebar' : ''}
       `}>
-        
+
         {/* BRAND LOGO FRAME CONTAINER */}
-        <div className="sticky top-0 bg-[#D9D9D9] z-10 flex items-center gap-3 px-3 pt-6 pb-4 mb-2 shrink-0 min-h-[64px]">
-          <img src="/src/assets/logo.png" alt="Logo" className="w-8 h-8 shrink-0" />
-          
+        <div className="sticky top-0 bg-white/10 backdrop-blur-xl z-10 flex items-center gap-3 px-2 pt-6 pb-4 mb-2 shrink-0 min-h-[64px]">
+          <div className="w-9 h-9 shrink-0 rounded-xl bg-gradient-to-br from-indigo-500/10 to-violet-500/10 border border-white/70 shadow-sm flex items-center justify-center p-1">
+            <img src={Logo} alt="Logo" className="w-full h-full object-contain" />
+          </div>
+
           <div className={`transition-opacity duration-200 overflow-hidden
             ${isCollapsed ? 'opacity-0 w-0 lg:group-hover/sidebar:opacity-100 lg:group-hover/sidebar:w-auto' : 'opacity-100 w-auto'}
           `}>
@@ -461,7 +447,7 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
 
           {/* Jab sidebar collapsed ho aur mouse hover na ho tab short text 'MGPS' dikhega */}
           {isCollapsed && (
-            <span className="absolute left-14 text-xl font-bold tracking-wider text-[#1A1A1A] lg:group-hover/sidebar:opacity-0 transition-opacity duration-200">
+            <span className="absolute left-14 text-xl font-bold tracking-wider text-gradient lg:group-hover/sidebar:opacity-0 transition-opacity duration-200">
               MGPS
             </span>
           )}

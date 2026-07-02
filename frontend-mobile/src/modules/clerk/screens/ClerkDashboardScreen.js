@@ -11,6 +11,9 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { colors } from "../../../shared/theme/colors";
+import { gradients, glassColors, glassStyles } from "../../../shared/theme/glass";
+import AuroraBackground from "../../../shared/components/AuroraBackground";
 import { useAuth } from "../../../auth/AuthContext";
 import { useDashboardSummary } from "../../../hooks/useDashboardSummary";
 import { clerkModules, clerkBottomTabs } from "../data/clerkModules";
@@ -57,13 +60,13 @@ export default function ClerkDashboardScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#F8FAFF" }}>
+    <View style={{ flex: 1 }}>
+      <AuroraBackground />
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 100 }}
       >
-        <LinearGradient
-          colors={["#F8FAFF", "#FFFFFF"]}
+        <View
           style={{
             paddingTop: 50,
             paddingHorizontal: 18,
@@ -88,7 +91,7 @@ export default function ClerkDashboardScreen() {
                 resizeMode="contain"
                 style={{ width: 46, height: 46, marginRight: 8 }}
               />
-              <Text style={{ fontSize: 18, fontWeight: "900", color: "#102A83" }}>
+              <Text style={{ fontSize: 18, fontWeight: "900", color: colors.primaryDark }}>
                 Marigold School ERP
               </Text>
             </View>
@@ -104,7 +107,7 @@ export default function ClerkDashboardScreen() {
                     width: 20,
                     height: 20,
                     borderRadius: 10,
-                    backgroundColor: "#EF4444",
+                    backgroundColor: glassColors.danger,
                     alignItems: "center",
                     justifyContent: "center",
                   }}
@@ -132,11 +135,11 @@ export default function ClerkDashboardScreen() {
             <SimpleTabPage
               title="Profile"
               icon="person-circle-outline"
-              text={`${summary?.profile?.designation || "Office Administration"} account signed in as ${user?.username || user?.name || "clerk"}.`}
+              text={`${summary?.profile?.designation || "Office Administration"} account signed in as ${user?.name || user?.displayName || user?.username || "clerk"}.`}
               logout={logout}
             />
           )}
-        </LinearGradient>
+        </View>
       </ScrollView>
 
       {/* Bottom Navigation */}
@@ -247,51 +250,48 @@ function HomeContent({ user, summary, loading, error, onModulePress }) {
           </Text>
         </View>
 
-        <View
+        <LinearGradient
+          colors={gradients.chip}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
           style={{
             width: 86,
             height: 86,
             borderRadius: 43,
-            backgroundColor: "#DBE4FF",
             alignItems: "center",
             justifyContent: "center",
           }}
         >
-          <Ionicons name="briefcase" size={48} color="#4F46E5" />
-        </View>
+          <Ionicons name="briefcase" size={48} color="#fff" />
+        </LinearGradient>
       </View>
 
       {/* Clerk Action Card */}
       <View
         style={{
-          backgroundColor: "#fff",
+          ...glassStyles.card,
           borderRadius: 18,
           padding: 18,
           flexDirection: "row",
           alignItems: "center",
-          elevation: 3,
-          shadowColor: "#1E293B",
-          shadowOpacity: 0.08,
-          shadowRadius: 16,
-          shadowOffset: { width: 0, height: 8 },
-          borderWidth: 1,
-          borderColor: "#EEF2F7",
           marginBottom: 26,
         }}
       >
-        <View
+        <LinearGradient
+          colors={gradients.chip}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
           style={{
             width: 54,
             height: 54,
             borderRadius: 17,
-            backgroundColor: "#EEF2FF",
             alignItems: "center",
             justifyContent: "center",
             marginRight: 16,
           }}
         >
-          <Ionicons name="folder-outline" size={30} color="#4F46E5" />
-        </View>
+          <Ionicons name="folder-outline" size={30} color="#fff" />
+        </LinearGradient>
 
         <View style={{ flex: 1 }}>
           <Text style={{ color: "#0F172A", fontSize: 15, fontWeight: "800" }}>
@@ -315,13 +315,13 @@ function HomeContent({ user, summary, loading, error, onModulePress }) {
         <TouchableOpacity
           onPress={() => onModulePress({ title: "Documents Management" })}
           style={{
-            backgroundColor: "#F4F6FF",
+            backgroundColor: "rgba(99,102,241,0.12)",
             paddingVertical: 12,
             paddingHorizontal: 14,
             borderRadius: 14,
           }}
         >
-          <Text style={{ color: "#3949FF", fontWeight: "800" }}>
+          <Text style={{ color: colors.primary, fontWeight: "800" }}>
             Open Folder
           </Text>
         </TouchableOpacity>
@@ -388,16 +388,13 @@ function SimpleTabPage({ title, icon, text, logout }) {
     <View style={{ marginTop: 60 }}>
       <View
         style={{
-          backgroundColor: "#fff",
+          ...glassStyles.card,
           borderRadius: 24,
           padding: 28,
           alignItems: "center",
-          elevation: 3,
-          borderWidth: 1,
-          borderColor: "#EEF2F7",
         }}
       >
-        <Ionicons name={icon} size={70} color="#4F46E5" />
+        <Ionicons name={icon} size={70} color={colors.primaryDark} />
         <Text
           style={{
             marginTop: 20,
@@ -425,7 +422,7 @@ function SimpleTabPage({ title, icon, text, logout }) {
             onPress={logout}
             style={{
               marginTop: 24,
-              backgroundColor: "#EF4444",
+              backgroundColor: glassColors.danger,
               paddingHorizontal: 24,
               paddingVertical: 14,
               borderRadius: 14,

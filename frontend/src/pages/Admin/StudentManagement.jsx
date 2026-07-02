@@ -272,16 +272,16 @@ const StudentManagement = ({ setActivePage }) => {
   };
 
   return (
-    <div className="flex-1 min-h-screen bg-[#D9D9D9] p-6 font-sans select-none text-[#1A1A1A]">
-      
+    <div className="flex-1 min-h-screen p-6 font-sans select-none text-slate-900">
+
       {/* HEADER CONTROLS BANNER PANEL */}
-      <div className="bg-[#ffffff] p-6 rounded-3xl border border-[#C8C8C8] flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+      <div className="glass-card p-6 rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
           <h3 className="text-xl font-bold flex items-center gap-2">
-            <Users className="w-5 h-5 text-[#1A1A1A]" /> Student Management Console
+            <Users className="w-5 h-5 text-slate-900" /> Student Management Console
           </h3>
-          <p className="text-xs text-[#555555] mt-1">
-            {selectedClassView 
+          <p className="text-xs text-slate-500 mt-1">
+            {selectedClassView
               ? `Live dynamic roster indices for ${selectedClassView}. Alphabetically calculated.`
               : "Access the class cards below to audit metrics, filters, and records."
             }
@@ -289,14 +289,14 @@ const StudentManagement = ({ setActivePage }) => {
         </div>
 
         {selectedClassView && (
-          <button 
+          <button
             onClick={() => {
               setSelectedClassView(null);
               setSearchTerm('');
               setGenderFilter('');
               setCategoryFilter('');
             }}
-            className="flex items-center justify-center gap-1.5 text-xs font-bold text-[#555555] hover:text-black transition-colors px-4 py-2.5 bg-[#EAEAEA] border border-[#C8C8C8] rounded-full"
+            className="flex items-center justify-center gap-1.5 text-xs font-bold text-slate-500 hover:text-black transition-colors px-4 py-2.5 bg-white/50 border border-slate-200/70 rounded-full"
           >
             <ArrowLeft className="w-4 h-4" /> Switch Class Matrix
           </button>
@@ -309,21 +309,21 @@ const StudentManagement = ({ setActivePage }) => {
           {displayedClassCards.map((cls) => {
             const currentCount = studentsDb.filter(s => s.class === cls.name).length;
             return (
-              <div 
+              <div
                 key={cls.name}
                 onClick={() => setSelectedClassView(cls.name)}
-                className="bg-[#ffffff] border border-[#C8C8C8] p-5 rounded-3xl flex flex-col justify-between group hover:border-[#1A1A1A] transition-all cursor-pointer min-h-[130px]"
+                className="glass-card glass-hover rounded-3xl p-5 flex flex-col justify-between group hover:border-indigo-300/70 transition-all cursor-pointer min-h-[130px]"
               >
                 <div className="flex items-center gap-4">
-                  <div className="w-11 h-9 rounded-xl bg-[#EAEAEA] text-[#1A1A1A] flex items-center justify-center font-bold text-sm border border-[#C8C8C8]/40">
+                  <div className="w-11 h-9 rounded-xl bg-indigo-50/60 text-slate-900 flex items-center justify-center font-bold text-sm border border-white/70">
                     {cls.name.replace(/\D/g, "") || cls.name.charAt(0)}
                   </div>
-                  <span className="text-sm font-bold text-[#1A1A1A] group-hover:text-black transition-colors">{cls.name}</span>
+                  <span className="text-sm font-bold text-slate-900 group-hover:text-black transition-colors">{cls.name}</span>
                 </div>
 
-                <div className="text-[11px] font-bold text-[#555555] pt-2 border-t border-[#EAEAEA] mt-4 flex justify-between items-center">
+                <div className="text-[11px] font-bold text-slate-500 pt-2 border-t border-slate-100/80 mt-4 flex justify-between items-center">
                   <span>Active Strength:</span>
-                  <span className="bg-[#E1FA6C] px-2 py-0.5 rounded text-[#1A1A1A] font-mono border border-[#1A1A1A]/10">
+                  <span className="bg-indigo-100 text-indigo-700 border-indigo-200 px-2 py-0.5 rounded font-mono border">
                     {currentCount} Students
                   </span>
                 </div>
@@ -337,16 +337,16 @@ const StudentManagement = ({ setActivePage }) => {
         <div className="space-y-4 animate-fadeIn">
           
           {/* SEARCH METADATA MODIFIERS TOOLBAR */}
-          <div className="bg-[#ffffff] border border-[#C8C8C8] p-4 rounded-3xl flex flex-wrap items-center justify-between gap-3 text-xs font-bold">
-            
-            <div className="flex items-center gap-2 bg-[#EAEAEA] px-3 py-2 rounded-xl border border-[#C8C8C8]/60 w-full sm:w-72">
-              <Search className="w-4 h-4 text-[#555555]" />
-              <input 
+          <div className="glass-card p-4 rounded-3xl flex flex-wrap items-center justify-between gap-3 text-xs font-bold">
+
+            <div className="flex items-center gap-2 bg-white/60 border border-white/80 focus-within:border-indigo-400 focus-within:ring-4 focus-within:ring-indigo-100 outline-none transition-all px-3 py-2 rounded-xl w-full sm:w-72">
+              <Search className="w-4 h-4 text-slate-500" />
+              <input
                 type="text"
                 placeholder="Search Name or Admission Number..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="bg-transparent border-none outline-none w-full text-xs text-[#1A1A1A] font-medium placeholder-[#555555]/60"
+                className="bg-transparent border-none outline-none w-full text-xs text-slate-900 font-medium placeholder-slate-400"
               />
             </div>
 
@@ -354,7 +354,7 @@ const StudentManagement = ({ setActivePage }) => {
               <button
                 type="button"
                 onClick={downloadSampleWorkbook}
-                className="flex items-center gap-1.5 bg-white hover:bg-[#EAEAEA] transition-all px-3 py-1.5 rounded-xl border border-[#C8C8C8]/60"
+                className="flex items-center gap-1.5 bg-white/60 hover:bg-white/70 transition-all px-3 py-1.5 rounded-xl border border-slate-200/70"
                 title="Download sample Excel template"
               >
                 <Download className="w-3.5 h-3.5" />
@@ -364,7 +364,7 @@ const StudentManagement = ({ setActivePage }) => {
               <button
                 type="button"
                 onClick={() => bulkFileInputRef.current?.click()}
-                className="flex items-center gap-1.5 bg-[#E1FA6C] hover:bg-[#d4ee59] transition-all px-3 py-1.5 rounded-xl border border-[#1A1A1A]/10"
+                className="btn-primary flex items-center gap-1.5 transition-all px-3 py-1.5 rounded-xl"
                 title="Add students in bulk from Excel"
               >
                 <Upload className="w-3.5 h-3.5" />
@@ -378,17 +378,17 @@ const StudentManagement = ({ setActivePage }) => {
                 className="hidden"
               />
 
-              <div className="flex items-center gap-1.5 bg-[#EAEAEA]/60 px-2 py-1.5 rounded-xl border border-[#C8C8C8]/40">
-                <SlidersHorizontal className="w-3.5 h-3.5 text-[#555555]" />
-                <select value={genderFilter} onChange={(e) => setGenderFilter(e.target.value)} className="bg-transparent outline-none border-none text-[#1A1A1A] cursor-pointer">
+              <div className="flex items-center gap-1.5 bg-white/50 px-2 py-1.5 rounded-xl border border-slate-200/70">
+                <SlidersHorizontal className="w-3.5 h-3.5 text-slate-500" />
+                <select value={genderFilter} onChange={(e) => setGenderFilter(e.target.value)} className="bg-transparent outline-none border-none text-slate-900 cursor-pointer">
                   <option value="">All Genders</option>
                   <option value="Male">Male</option>
                   <option value="Female">Female</option>
                 </select>
               </div>
 
-              <div className="flex items-center gap-1.5 bg-[#EAEAEA]/60 px-2 py-1.5 rounded-xl border border-[#C8C8C8]/40">
-                <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="bg-transparent outline-none border-none text-[#1A1A1A] cursor-pointer">
+              <div className="flex items-center gap-1.5 bg-white/50 px-2 py-1.5 rounded-xl border border-slate-200/70">
+                <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="bg-transparent outline-none border-none text-slate-900 cursor-pointer">
                   <option value="">All Categories</option>
                   <option value="General">General</option>
                   <option value="OBC">OBC</option>
@@ -397,9 +397,9 @@ const StudentManagement = ({ setActivePage }) => {
                 </select>
               </div>
 
-              <button 
+              <button
                 onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
-                className="flex items-center gap-1.5 bg-[#EAEAEA] hover:bg-[#1A1A1A] hover:text-white transition-all px-3 py-1.5 rounded-xl border border-[#C8C8C8]/60"
+                className="flex items-center gap-1.5 bg-white/50 hover:bg-slate-900 hover:text-white transition-all px-3 py-1.5 rounded-xl border border-slate-200/70"
               >
                 <ArrowUpDown className="w-3.5 h-3.5" />
                 <span>Sort {sortOrder === 'asc' ? 'A-Z' : 'Z-A'}</span>
@@ -408,33 +408,33 @@ const StudentManagement = ({ setActivePage }) => {
           </div>
 
           {/* MAIN ROSTER TRACK SHEET */}
-          <div className="bg-[#ffffff] rounded-3xl p-6 border border-[#C8C8C8] space-y-4">
-            <div className="flex items-center justify-between border-b border-[#EAEAEA] pb-3">
-              <h4 className="text-xs font-black text-[#1A1A1A] flex items-center gap-1.5">
-                <span className="w-1.5 h-3 bg-[#E1FA6C] inline-block rounded-xs"></span> 
+          <div className="glass-card rounded-3xl p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100/80 pb-3">
+              <h4 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+                <span className="w-1.5 h-3 bg-indigo-400 inline-block rounded-xs"></span>
                 Live Grade Roster Record Data
               </h4>
-              <span className="text-[10px] bg-[#EAEAEA] px-2.5 py-1 rounded-md font-bold font-mono">
+              <span className="text-[10px] bg-indigo-50/60 px-2.5 py-1 rounded-md font-bold font-mono">
                 MATCHES: {processedStudentsRoster.length}
               </span>
             </div>
 
-            <div className="bg-[#EAEAEA]/40 border border-[#C8C8C8]/60 rounded-2xl p-3 text-[11px] font-bold text-[#555555] flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 text-[#1A1A1A] shrink-0 mt-0.5" />
+            <div className="glass-soft rounded-2xl p-3 text-[11px] font-bold text-slate-500 flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-slate-900 shrink-0 mt-0.5" />
               <span>
                 Bulk Excel import creates student records without document files. Open any student's workspace profile and use Document Vault to upload, replace, and save files.
               </span>
             </div>
 
             {processedStudentsRoster.length === 0 ? (
-              <div className="text-center py-12 text-[#555555] text-xs font-medium">
+              <div className="text-center py-12 text-slate-500 text-xs font-medium">
                 No active records matching standard filter conditions inside {selectedClassView}.
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs min-w-[900px]">
                   <thead>
-                    <tr className="text-[#555555] font-bold uppercase tracking-wider border-b border-[#EAEAEA]">
+                    <tr className="text-slate-500 font-bold uppercase tracking-wider border-b border-slate-100/80">
                       <th className="pb-3 pl-2 text-center w-20">Roll No</th>
                       <th className="pb-3">Admission Number</th>
                       <th className="pb-3">Student Full Name</th>
@@ -445,23 +445,23 @@ const StudentManagement = ({ setActivePage }) => {
                       <th className="pb-3 text-right pr-2">Action Node</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#EAEAEA] font-bold text-[#1A1A1A]">
+                  <tbody className="divide-y divide-slate-100/80 font-bold text-slate-900">
                     {processedStudentsRoster.map((st) => (
-                      <tr key={st.admissionNumber} className="hover:bg-[#EAEAEA]/30 transition-colors">
-                        
+                      <tr key={st.admissionNumber} className="hover:bg-white/70 transition-colors">
+
                         {/* 1. ROLL NUMBER CELL */}
                         <td className="py-3.5 text-center">
-                          <span className="w-7 h-6 rounded-md bg-[#EAEAEA] text-[#1A1A1A] inline-flex items-center justify-center font-mono font-black text-[11px] border border-[#C8C8C8]/40">
+                          <span className="w-7 h-6 rounded-md bg-indigo-50/60 text-slate-900 inline-flex items-center justify-center font-mono font-black text-[11px] border border-white/70">
                             {st.rollNo}
                           </span>
                         </td>
 
                         {/* 2. ADMISSION NUMBER CELL */}
-                        <td className="py-3.5 font-mono text-xs uppercase tracking-wide text-[#1A1A1A]">{st.admissionNumber}</td>
-                        
+                        <td className="py-3.5 font-mono text-xs uppercase tracking-wide text-slate-900">{st.admissionNumber}</td>
+
                         {/* 3. NAME CELL */}
-                        <td className="py-3.5 text-sm font-black text-[#1A1A1A]">{st.name}</td>
-                        
+                        <td className="py-3.5 text-sm font-black text-slate-900">{st.name}</td>
+
                         {/* 4. GENDER CELL */}
                         <td className="py-3.5 text-center">
                           <span className={`px-2.5 py-0.5 rounded-md text-[10px] ${st.gender === 'Female' ? 'bg-pink-50 text-pink-700' : 'bg-blue-50 text-blue-700'}`}>
@@ -470,19 +470,19 @@ const StudentManagement = ({ setActivePage }) => {
                         </td>
                         
                         {/* 5. CATEGORY CELL */}
-                        <td className="py-3.5 text-center text-[#555555]">{st.category}</td>
-                        
+                        <td className="py-3.5 text-center text-slate-500">{st.category}</td>
+
                         {/* 6. LAST SCHOOL NAME CELL */}
-                        <td className="py-3.5 text-[#555555] font-medium">{st.lastSchoolName || 'N/A'}</td>
-                        
+                        <td className="py-3.5 text-slate-500 font-medium">{st.lastSchoolName || 'N/A'}</td>
+
                         {/* 7. CONTACT CELL */}
-                        <td className="py-3.5 font-mono text-[#555555]">{st.mobile}</td>
-                        
+                        <td className="py-3.5 font-mono text-slate-500">{st.mobile}</td>
+
                         {/* 8. WORKSPACE NAVIGATION ANCHOR */}
                         <td className="py-3.5 text-right pr-2">
-                          <button 
+                          <button
                             onClick={() => handleProfileNavigation(st.admissionNumber)}
-                            className="px-4 py-1.5 bg-[#E1FA6C] hover:bg-[#1A1A1A] hover:text-white rounded-full text-[10px] font-black tracking-wide text-[#1A1A1A] transition-all border border-[#1A1A1A]/10 shadow-xs inline-flex items-center gap-1.5"
+                            className="btn-primary px-4 py-1.5 rounded-full text-[10px] font-black tracking-wide transition-all inline-flex items-center gap-1.5"
                           >
                             <FileSpreadsheet className="w-3.5 h-3.5" /> View Workspace Profile
                           </button>

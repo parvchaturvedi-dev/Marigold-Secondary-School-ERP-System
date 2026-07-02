@@ -41,7 +41,7 @@ import { apiFetch } from '../../services/api';
 
 const SCHOOL_NAME = 'Marigold Secondary School, Behror';
 const AI_ENDPOINT = '/api/ai';
-const CHART_COLORS = ['#111827', '#E1FA6C', '#2563EB', '#DC2626', '#16A34A'];
+const CHART_COLORS = ['#6366f1', '#8b5cf6', '#0ea5e9', '#f43f5e', '#10b981'];
 
 const nowTime = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 const createConversationId = () => `ai-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -217,14 +217,14 @@ const DataTable = ({ element }) => {
 
   if (!rows.length) {
     return (
-      <div className="rounded-xl border border-neutral-200 bg-white p-4 text-xs font-semibold text-neutral-500">
+      <div className="rounded-xl glass-soft p-4 text-xs font-semibold text-neutral-500">
         No table rows available.
       </div>
     );
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-neutral-200 bg-white">
+    <div className="overflow-x-auto rounded-xl glass-soft">
       <table className="w-full text-left text-xs">
         <thead className="bg-neutral-50 text-[10px] uppercase tracking-wide text-neutral-500">
           <tr>
@@ -258,7 +258,7 @@ const ChartElement = ({ element }) => {
   if (!data.length) return null;
 
   return (
-    <div className="rounded-xl border border-neutral-200 bg-white p-3">
+    <div className="rounded-xl glass-soft p-3">
       <div className="mb-2 flex items-center gap-2 text-xs font-black text-neutral-800">
         <BarChart3 className="h-4 w-4" />
         {element.title}
@@ -281,7 +281,7 @@ const ChartElement = ({ element }) => {
               <XAxis dataKey="name" tick={{ fontSize: 10 }} />
               <YAxis tick={{ fontSize: 10 }} />
               <Tooltip formatter={(value) => (Number(value) > 100 ? formatCurrency(value) : value)} />
-              <Bar dataKey="value" radius={[6, 6, 0, 0]} fill="#111827" />
+              <Bar dataKey="value" radius={[6, 6, 0, 0]} fill="#6366f1" />
             </BarChart>
           )}
         </ResponsiveContainer>
@@ -291,7 +291,7 @@ const ChartElement = ({ element }) => {
 };
 
 const StudentCard = ({ student = {} }) => (
-  <div className="rounded-xl border border-neutral-200 bg-white p-4 text-xs">
+  <div className="rounded-xl glass-soft p-4 text-xs">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div>
         <p className="text-[10px] font-black uppercase tracking-wide text-neutral-500">Student Profile</p>
@@ -300,7 +300,7 @@ const StudentCard = ({ student = {} }) => (
           {student.className || student.class} | Admission: {student.admissionNumber}
         </p>
       </div>
-      <span className="rounded-full bg-[#E1FA6C] px-3 py-1 text-[10px] font-black text-neutral-950">
+      <span className="rounded-full bg-indigo-100 text-indigo-700 border border-indigo-200 px-3 py-1 text-[10px] font-black">
         {student.status || 'Active'}
       </span>
     </div>
@@ -341,7 +341,7 @@ const ReceiptCard = ({ receipt, onDownload, onSend }) => {
           <button
             type="button"
             onClick={() => onDownload(receipt)}
-            className="inline-flex items-center gap-1 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-[10px] font-black"
+            className="inline-flex items-center gap-1 rounded-lg bg-white/70 border border-white/80 px-3 py-2 text-[10px] font-black hover:bg-white transition-all"
           >
             <Download className="h-3.5 w-3.5" />
             PDF
@@ -356,7 +356,7 @@ const ReceiptCard = ({ receipt, onDownload, onSend }) => {
           </button>
         </div>
       </div>
-      <div className="mt-3 rounded-lg bg-white p-3">
+      <div className="mt-3 rounded-lg bg-white/70 p-3">
         {(receipt.breakdown || []).map((item) => (
           <div key={item.admissionNumber || item.name} className="flex justify-between gap-3 font-semibold">
             <span>{item.name}</span>
@@ -372,8 +372,8 @@ const ConfirmationModal = ({ pendingAction, onCancel, onConfirm, isWorking }) =>
   if (!pendingAction) return null;
 
   return (
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-md rounded-2xl border border-neutral-200 bg-white p-5 shadow-2xl">
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-900/40 backdrop-blur-md p-4">
+      <div className="w-full max-w-md rounded-2xl glass-strong p-5 shadow-2xl animate-scaleUp">
         <div className="flex items-start gap-3">
           <div className="rounded-xl bg-amber-50 p-2 text-amber-700">
             <AlertTriangle className="h-5 w-5" />
@@ -858,12 +858,12 @@ const FeaturePage = () => {
   };
 
   return (
-    <div className="h-[calc(100vh-73px)] overflow-hidden bg-[#F4F4F2] p-3 text-neutral-950 md:p-6">
+    <div className="h-[calc(100vh-73px)] overflow-hidden p-3 text-neutral-950 md:p-6">
       <div className="mx-auto flex h-full max-w-7xl min-h-0 flex-col gap-4">
-        <section className="shrink-0 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
+        <section className="shrink-0 rounded-2xl glass-card p-4">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-start gap-3">
-              <div className="rounded-2xl bg-neutral-950 p-3 text-[#E1FA6C]">
+              <div className="rounded-2xl btn-primary p-3">
                 <Bot className="h-6 w-6" />
               </div>
               <div>
@@ -888,7 +888,7 @@ const FeaturePage = () => {
               <button
                 type="button"
                 onClick={resetChat}
-                className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-xs font-black text-neutral-700"
+                className="inline-flex items-center gap-2 rounded-xl bg-white/60 border border-white/80 px-3 py-2 text-xs font-black text-neutral-700 hover:bg-white/80 transition-all"
               >
                 <RotateCcw className="h-4 w-4" />
                 Reset
@@ -896,7 +896,7 @@ const FeaturePage = () => {
               <button
                 type="button"
                 onClick={exportChatPdf}
-                className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-xs font-black text-neutral-700"
+                className="inline-flex items-center gap-2 rounded-xl bg-white/60 border border-white/80 px-3 py-2 text-xs font-black text-neutral-700 hover:bg-white/80 transition-all"
               >
                 <FileText className="h-4 w-4" />
                 Export Chat as PDF
@@ -907,7 +907,7 @@ const FeaturePage = () => {
 
         <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
           <aside className="min-h-0 space-y-4 pr-1">
-            <section className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
+            <section className="rounded-2xl glass-card p-4">
               <h2 className="text-sm font-black">Student Search</h2>
               <p className="mt-1 text-xs font-semibold text-neutral-500">
                 Search by admission number, name, father name, class, or mobile.
@@ -917,7 +917,7 @@ const FeaturePage = () => {
                   value={studentQuery}
                   onChange={(event) => setStudentQuery(event.target.value)}
                   placeholder="ADM / name / mobile..."
-                  className="min-w-0 flex-1 rounded-xl border border-neutral-200 px-3 py-2 text-xs font-semibold outline-none focus:border-neutral-950"
+                  className="min-w-0 flex-1 rounded-xl bg-white/60 border border-white/80 px-3 py-2 text-xs font-semibold focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none transition-all"
                 />
                 <button
                   type="submit"
@@ -930,7 +930,7 @@ const FeaturePage = () => {
               </form>
             </section>
 
-            <section className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
+            <section className="rounded-2xl glass-card p-4">
               <h2 className="flex items-center gap-2 text-sm font-black">
                 <ShieldCheck className="h-4 w-4" />
                 Assistant Rules
@@ -944,8 +944,8 @@ const FeaturePage = () => {
             </section>
           </aside>
 
-          <main className="flex min-h-0 flex-col rounded-2xl border border-neutral-200 bg-white shadow-sm">
-            <div className="shrink-0 border-b border-neutral-200 p-4">
+          <main className="flex min-h-0 flex-col rounded-2xl glass-card">
+            <div className="shrink-0 border-b border-slate-100/80 p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h2 className="flex items-center gap-2 text-sm font-black">
@@ -970,13 +970,13 @@ const FeaturePage = () => {
               {error && <p className="mt-2 text-xs font-bold text-red-600">{error}</p>}
             </div>
 
-            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-neutral-50 p-4">
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-white/30 p-4">
               {messages.map((message) => {
                 const isAi = message.sender === 'ai';
                 return (
                   <div key={message.id} className={`flex gap-3 ${isAi ? 'justify-start' : 'justify-end'}`}>
                     {isAi && (
-                      <div className="h-9 w-9 shrink-0 rounded-xl bg-neutral-950 p-2 text-[#E1FA6C]">
+                      <div className="h-9 w-9 shrink-0 rounded-xl btn-primary p-2">
                         <Bot className="h-5 w-5" />
                       </div>
                     )}
@@ -984,7 +984,7 @@ const FeaturePage = () => {
                       <div
                         className={`rounded-2xl border p-3 text-sm font-semibold leading-relaxed ${
                           isAi
-                            ? 'border-neutral-200 bg-white text-neutral-800'
+                            ? 'border-white/70 bg-white/70 text-neutral-800'
                             : 'border-neutral-950 bg-neutral-950 text-white'
                         }`}
                       >
@@ -1008,7 +1008,7 @@ const FeaturePage = () => {
                               key={action.id || action.label}
                               type="button"
                               onClick={() => openConfirmation(action)}
-                              className="inline-flex items-center gap-2 rounded-xl bg-[#E1FA6C] px-3 py-2 text-xs font-black text-neutral-950"
+                              className="inline-flex items-center gap-2 rounded-xl btn-primary px-3 py-2 text-xs font-black"
                             >
                               {action.type === 'undo_last_ai_action' ? (
                                 <Undo2 className="h-4 w-4" />
@@ -1025,7 +1025,7 @@ const FeaturePage = () => {
                       </span>
                     </div>
                     {!isAi && (
-                      <div className="h-9 w-9 shrink-0 rounded-xl bg-[#E1FA6C] p-2 text-neutral-950">
+                      <div className="h-9 w-9 shrink-0 rounded-xl btn-primary p-2">
                         <User className="h-5 w-5" />
                       </div>
                     )}
@@ -1042,14 +1042,14 @@ const FeaturePage = () => {
               <div ref={chatEndRef} />
             </div>
 
-            <form onSubmit={(event) => { event.preventDefault(); submitPrompt(); }} className="shrink-0 border-t border-neutral-200 p-3">
-              <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-neutral-200 bg-neutral-50 p-2">
+            <form onSubmit={(event) => { event.preventDefault(); submitPrompt(); }} className="shrink-0 border-t border-slate-100/80 p-3">
+              <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-white/50 border border-white/70 p-2">
                 <button
                   type="button"
                   onClick={toggleListening}
                   disabled={!speechSupported || isCallActive}
                   className={`rounded-xl p-2.5 ${
-                    isListening ? 'bg-red-100 text-red-700' : 'bg-white text-neutral-800'
+                    isListening ? 'bg-red-100 text-red-700' : 'bg-white/70 text-neutral-800'
                   } disabled:opacity-40`}
                   title="Use microphone"
                 >
@@ -1069,7 +1069,7 @@ const FeaturePage = () => {
                   className={`inline-flex min-w-[154px] items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-black transition ${
                     isCallActive
                       ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-200'
-                      : 'border border-neutral-200 bg-white text-neutral-800'
+                      : 'border border-white/70 bg-white/70 text-neutral-800'
                   } disabled:opacity-40`}
                   title="Toggle calling assistant"
                 >
@@ -1080,7 +1080,7 @@ const FeaturePage = () => {
                 <button
                   type="button"
                   onClick={() => setIsMuted((value) => !value)}
-                  className="rounded-xl border border-neutral-200 bg-white p-2.5 text-neutral-800"
+                  className="rounded-xl border border-white/70 bg-white/70 p-2.5 text-neutral-800"
                   title={isMuted ? 'Unmute replies' : 'Mute replies'}
                 >
                   {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
@@ -1089,7 +1089,7 @@ const FeaturePage = () => {
                   type="button"
                   onClick={stopSpeaking}
                   disabled={!isSpeaking}
-                  className="rounded-xl border border-neutral-200 bg-white p-2.5 text-neutral-800 disabled:opacity-40"
+                  className="rounded-xl border border-white/70 bg-white/70 p-2.5 text-neutral-800 disabled:opacity-40"
                   title="Pause speaking"
                 >
                   <PauseCircle className="h-4 w-4" />
@@ -1097,7 +1097,7 @@ const FeaturePage = () => {
                 <button
                   type="submit"
                   disabled={!input.trim() || isLoading}
-                  className="rounded-xl bg-neutral-950 p-3 text-white disabled:opacity-40"
+                  className="rounded-xl btn-primary p-3 disabled:opacity-40"
                   title="Send message"
                 >
                   <Send className="h-4 w-4" />

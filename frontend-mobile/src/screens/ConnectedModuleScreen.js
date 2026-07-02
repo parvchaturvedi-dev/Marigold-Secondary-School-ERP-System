@@ -11,11 +11,16 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system";
 
 import { useAuth } from "../auth/AuthContext";
 import PageHeader from "../components/cards/PageHeader";
+import AuroraBackground from "../shared/components/AuroraBackground";
+import GlassCard from "../shared/components/GlassCard";
+import { gradients, glassColors } from "../shared/theme/glass";
+import { colors } from "../shared/theme/colors";
 import {
   adminActionApplication,
   adminActionLeaveRequest,
@@ -34,6 +39,9 @@ import {
   voteOnApplication,
 } from "../api/moduleApi";
 import { getActiveStudentProfile, getStaffProfile, getTeacherProfile } from "../shared/profile";
+import FeesScreen from "./modules/fees/FeesScreen";
+import ExaminationsScreen from "./modules/examinations/ExaminationsScreen";
+import MeetingsScreen from "./modules/meetings/MeetingsScreen";
 
 const hiddenKeys = new Set([
   "_id",
@@ -45,6 +53,17 @@ const hiddenKeys = new Set([
   "participants",
   "votes",
   "attendance",
+  // Raw usernames / role-ids: never surface these in the generic detail rows.
+  // The human name (createdByName / authorName / senderName) is shown instead.
+  "createdByUsername",
+  "senderUsername",
+  "recipientUsername",
+  "adminUsername",
+  "actorUsername",
+  "applicantUsername",
+  "teacherUsername",
+  "senderIdentityId",
+  "recipientStudentId",
 ]);
 
 const titleKeys = [
@@ -489,41 +508,53 @@ export default function ConnectedModuleScreen() {
     (canManage(user) && title === "Teacher Assignment") ||
     (canManage(user) && (title === "Events" || title === "Notices"));
 
+  if (title === "Fees") {
+    return <FeesScreen user={user} />;
+  }
+  if (title === "Examinations" || title === "Marks Management") {
+    return <ExaminationsScreen user={user} />;
+  }
+  if (title === "Meetings") {
+    return <MeetingsScreen user={user} />;
+  }
+
   return (
-    <View style={{ flex: 1, backgroundColor: "#F8FAFF" }}>
+    <View style={{ flex: 1 }}>
+      <AuroraBackground />
       <PageHeader title={title} />
       <ScrollView
-        refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}
+        refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={glassColors.accent} />}
         contentContainerStyle={{ padding: 16, paddingBottom: 34 }}
       >
-        <View style={styles.heroCard}>
-          <View style={styles.heroIcon}>
-            <Ionicons name={title === "Notifications" ? "notifications-outline" : "apps-outline"} size={28} color="#4F46E5" />
+        <GlassCard style={styles.heroCard}>
+          <View style={styles.heroCardInner}>
+            <LinearGradient colors={gradients.chip} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.heroIcon}>
+              <Ionicons name={title === "Notifications" ? "notifications-outline" : "apps-outline"} size={28} color="#fff" />
+            </LinearGradient>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.heroTitle}>{getCountLabel(title, rows)}</Text>
+              <Text style={styles.heroText}>Review and manage the latest records for your account.</Text>
+            </View>
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.heroTitle}>{getCountLabel(title, rows)}</Text>
-            <Text style={styles.heroText}>Review and manage the latest records for your account.</Text>
-          </View>
-        </View>
+        </GlassCard>
 
         {showForm && (
           <ActionForm title={title} form={form} updateForm={updateForm} onSubmit={submitForm} acting={acting} user={user} />
         )}
 
         {title === "Notifications" && unreadIds.length > 0 && (
-          <TouchableOpacity style={styles.primaryButton} onPress={handleMarkRead} disabled={acting}>
-            <Ionicons name="checkmark-done-outline" size={20} color="#fff" />
-            <Text style={styles.primaryButtonText}>Mark All Read</Text>
-          </TouchableOpacity>
+          <PrimaryButton icon="checkmark-done-outline" label="Mark All Read" onPress={handleMarkRead} disabled={acting} />
         )}
 
         {error ? (
           <StateCard icon="warning-outline" title="Unable to load module" text={error} />
         ) : loading && !rows.length ? (
-          <View style={styles.loadingCard}>
-            <ActivityIndicator color="#4F46E5" size="large" />
-            <Text style={styles.loadingText}>Loading records...</Text>
-          </View>
+          <GlassCard style={styles.loadingCard}>
+            <View style={styles.loadingCardInner}>
+              <ActivityIndicator color={glassColors.accent} size="large" />
+              <Text style={styles.loadingText}>Loading records...</Text>
+            </View>
+          </GlassCard>
         ) : title === "Profile" ? (
           <ProfileCard user={user} />
         ) : title === "ID Card" || title === "Id Card" ? (
@@ -557,6 +588,17 @@ export default function ConnectedModuleScreen() {
   );
 }
 
+function PrimaryButton({ icon, label, onPress, disabled }) {
+  return (
+    <TouchableOpacity onPress={onPress} disabled={disabled} activeOpacity={0.85} style={[styles.primaryButtonWrap, disabled && { opacity: 0.6 }]}>
+      <LinearGradient colors={gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.primaryButton}>
+        <Ionicons name={icon} size={20} color="#fff" />
+        <Text style={styles.primaryButtonText}>{label}</Text>
+      </LinearGradient>
+    </TouchableOpacity>
+  );
+}
+
 function DataCard({ row, index, title, onParticipate, onRowAction, acting, user }) {
   const details = getDetails(row);
   const canParticipate = title === "Events" && row.participationEnabled && row.id;
@@ -572,7 +614,8 @@ function DataCard({ row, index, title, onParticipate, onRowAction, acting, user 
   const canApplicationVote = title === "Application" && row.status === "collecting_consensus";
 
   return (
-    <View style={styles.card}>
+    <GlassCard style={styles.card}>
+      <View style={styles.cardInner}>
       {title === "Events" && (
         <EventContent row={row} expanded={expanded} setExpanded={setExpanded} />
       )}
@@ -606,7 +649,7 @@ function DataCard({ row, index, title, onParticipate, onRowAction, acting, user 
 
       {canParticipate && (
         <TouchableOpacity style={styles.secondaryButton} onPress={() => onParticipate(row)} disabled={acting}>
-          <Ionicons name="person-add-outline" size={18} color="#4F46E5" />
+          <Ionicons name="person-add-outline" size={18} color={colors.primary} />
           <Text style={styles.secondaryButtonText}>Participate</Text>
         </TouchableOpacity>
       )}
@@ -637,12 +680,13 @@ function DataCard({ row, index, title, onParticipate, onRowAction, acting, user 
       )}
 
       {canDelete && (
-        <TouchableOpacity style={[styles.secondaryButton, { backgroundColor: "#FEF2F2" }]} onPress={() => onRowAction(row, "delete")} disabled={acting}>
-          <Ionicons name="trash-outline" size={18} color="#DC2626" />
-          <Text style={[styles.secondaryButtonText, { color: "#DC2626" }]}>Delete</Text>
+        <TouchableOpacity style={[styles.secondaryButton, { backgroundColor: `${glassColors.danger}14` }]} onPress={() => onRowAction(row, "delete")} disabled={acting}>
+          <Ionicons name="trash-outline" size={18} color={glassColors.danger} />
+          <Text style={[styles.secondaryButtonText, { color: glassColors.danger }]}>Delete</Text>
         </TouchableOpacity>
       )}
-    </View>
+      </View>
+    </GlassCard>
   );
 }
 
@@ -697,7 +741,8 @@ function ActionForm({ title, form, updateForm, onSubmit, acting, user }) {
 
   if (title === "Teacher Assignment") {
     return (
-      <View style={styles.formCard}>
+      <GlassCard style={styles.formCard}>
+        <View style={styles.formCardInner}>
         <Text style={styles.formTitle}>Teacher Registration</Text>
         <TextInput style={styles.input} value={form.name} onChangeText={(value) => updateForm("name", value)} placeholder="Teacher full name" />
         <TextInput style={styles.input} value={form.email} onChangeText={(value) => updateForm("email", value)} placeholder="Official email" />
@@ -714,22 +759,21 @@ function ActionForm({ title, form, updateForm, onSubmit, acting, user }) {
         </View>
         <SmallButton label={form.isClassTeacher ? "Class Teacher: Yes" : "Class Teacher: No"} icon="school-outline" active={form.isClassTeacher} onPress={() => updateForm("isClassTeacher", !form.isClassTeacher)} />
         <TouchableOpacity style={styles.secondaryButton} onPress={pickTeacherDocument}>
-          <Ionicons name="cloud-upload-outline" size={18} color="#4F46E5" />
+          <Ionicons name="cloud-upload-outline" size={18} color={colors.primary} />
           <Text style={styles.secondaryButtonText}>Upload Document</Text>
         </TouchableOpacity>
         {(form.documentsAttached || []).map((doc) => (
           <Text key={doc.uploadedAt} style={styles.cardSubtitle}>{doc.file}</Text>
         ))}
-        <TouchableOpacity style={[styles.primaryButton, disabled && { opacity: 0.45 }]} onPress={onSubmit} disabled={disabled || acting}>
-          <Ionicons name="save-outline" size={20} color="#fff" />
-          <Text style={styles.primaryButtonText}>Save Teacher</Text>
-        </TouchableOpacity>
-      </View>
+        <PrimaryButton icon="save-outline" label="Save Teacher" onPress={onSubmit} disabled={disabled || acting} />
+        </View>
+      </GlassCard>
     );
   }
 
   return (
-    <View style={styles.formCard}>
+    <GlassCard style={styles.formCard}>
+      <View style={styles.formCardInner}>
       <Text style={styles.formTitle}>
         {title === "Application" ? "New Application" : title === "Leave Requests" ? "New Leave Request" : title === "Events" ? "Create Event" : title === "Assignment" || title === "Assignments" ? "Issue Assignment" : "Publish Notice"}
       </Text>
@@ -767,7 +811,7 @@ function ActionForm({ title, form, updateForm, onSubmit, acting, user }) {
           <TextInput style={styles.input} value={form.targetClasses} onChangeText={(value) => updateForm("targetClasses", value)} placeholder="Target classes e.g. Class 8, Class 9" />
           <TextInput style={styles.input} value={form.checkingDate} onChangeText={(value) => updateForm("checkingDate", value)} placeholder="Checking date YYYY-MM-DD" />
           <TouchableOpacity style={styles.secondaryButton} onPress={pickAssignmentAttachment}>
-            <Ionicons name="attach-outline" size={18} color="#4F46E5" />
+            <Ionicons name="attach-outline" size={18} color={colors.primary} />
             <Text style={styles.secondaryButtonText}>{form.attachment?.name ? form.attachment.name : "Attach Image / Video / PDF"}</Text>
           </TouchableOpacity>
         </>
@@ -783,11 +827,9 @@ function ActionForm({ title, form, updateForm, onSubmit, acting, user }) {
       {title === "Notices" && (
         <TextInput style={styles.input} value={form.targetClasses} onChangeText={(value) => updateForm("targetClasses", value)} placeholder="ALL CLASSES or Class 1, Class 2" />
       )}
-      <TouchableOpacity style={[styles.primaryButton, disabled && { opacity: 0.45 }]} onPress={onSubmit} disabled={disabled || acting}>
-        <Ionicons name="save-outline" size={20} color="#fff" />
-        <Text style={styles.primaryButtonText}>Save</Text>
-      </TouchableOpacity>
-    </View>
+      <PrimaryButton icon="save-outline" label="Save" onPress={onSubmit} disabled={disabled || acting} />
+      </View>
+    </GlassCard>
   );
 }
 
@@ -873,13 +915,14 @@ function ProfileCard({ user }) {
       ];
 
   return (
-    <View style={styles.card}>
+    <GlassCard style={styles.card}>
+      <View style={styles.cardInner}>
       <View style={styles.profileHeader}>
         <View style={styles.profilePhoto}>
           {profile.photoDataUrl ? (
             <Image source={{ uri: profile.photoDataUrl }} style={styles.profilePhotoImage} />
           ) : (
-            <Ionicons name="person" size={42} color="#4F46E5" />
+            <Ionicons name="person" size={42} color={colors.primary} />
           )}
         </View>
         <View style={{ flex: 1 }}>
@@ -889,7 +932,7 @@ function ProfileCard({ user }) {
       </View>
       {user?.role === "student" && (
         <TouchableOpacity style={styles.secondaryButton} onPress={uploadPhoto}>
-          <Ionicons name="camera-outline" size={18} color="#4F46E5" />
+          <Ionicons name="camera-outline" size={18} color={colors.primary} />
           <Text style={styles.secondaryButtonText}>Update Profile Photo</Text>
         </TouchableOpacity>
       )}
@@ -906,7 +949,7 @@ function ProfileCard({ user }) {
           <View style={styles.sectionHeader}>
             <Text style={styles.formTitle}>Documents</Text>
             <TouchableOpacity onPress={() => uploadDocument()} style={styles.iconButton}>
-              <Ionicons name="add-outline" size={20} color="#4F46E5" />
+              <Ionicons name="add-outline" size={20} color={colors.primary} />
             </TouchableOpacity>
           </View>
           {documents.length ? documents.map((doc) => (
@@ -916,10 +959,10 @@ function ProfileCard({ user }) {
                 <Text style={styles.cardSubtitle}>{doc.status || "Uploaded"} | {doc.file || "File saved"}</Text>
               </View>
               <TouchableOpacity onPress={() => uploadDocument(doc.name)} style={styles.iconButton}>
-                <Ionicons name="cloud-upload-outline" size={18} color="#4F46E5" />
+                <Ionicons name="cloud-upload-outline" size={18} color={colors.primary} />
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => deleteDocument(doc.name)} style={[styles.iconButton, { backgroundColor: "#FEF2F2" }]}>
-                <Ionicons name="trash-outline" size={18} color="#DC2626" />
+              <TouchableOpacity onPress={() => deleteDocument(doc.name)} style={[styles.iconButton, { backgroundColor: `${glassColors.danger}14` }]}>
+                <Ionicons name="trash-outline" size={18} color={glassColors.danger} />
               </TouchableOpacity>
             </View>
           )) : (
@@ -927,7 +970,8 @@ function ProfileCard({ user }) {
           )}
         </View>
       )}
-    </View>
+      </View>
+    </GlassCard>
   );
 }
 
@@ -990,8 +1034,8 @@ function IdCards({ user, rows = [] }) {
 
 function SmallButton({ label, icon, onPress, disabled, active }) {
   return (
-    <TouchableOpacity onPress={onPress} disabled={disabled} style={[styles.smallButton, active && { backgroundColor: "#4F46E5" }]}>
-      <Ionicons name={icon} size={16} color={active ? "#fff" : "#4F46E5"} />
+    <TouchableOpacity onPress={onPress} disabled={disabled} style={[styles.smallButton, active && { backgroundColor: colors.primaryDark }]}>
+      <Ionicons name={icon} size={16} color={active ? "#fff" : colors.primary} />
       <Text style={[styles.smallButtonText, active && { color: "#fff" }]}>{label}</Text>
     </TouchableOpacity>
   );
@@ -1001,40 +1045,41 @@ function UsageCard({ usage }) {
   const usedMb = (Number(usage.totalBytes || 0) / (1024 * 1024)).toFixed(2);
   const limitMb = (Number(usage.storageLimitBytes || 0) / (1024 * 1024)).toFixed(0);
   return (
-    <View style={styles.card}>
-      <Text style={styles.cardTitle}>Vault Storage</Text>
-      <Text style={styles.cardSubtitle}>{usedMb} MB used of {limitMb} MB</Text>
-    </View>
+    <GlassCard style={styles.card}>
+      <View style={styles.cardInner}>
+        <Text style={styles.cardTitle}>Vault Storage</Text>
+        <Text style={styles.cardSubtitle}>{usedMb} MB used of {limitMb} MB</Text>
+      </View>
+    </GlassCard>
   );
 }
 
 function StateCard({ icon, title, text }) {
   return (
-    <View style={styles.stateCard}>
-      <Ionicons name={icon} size={58} color="#4F46E5" />
-      <Text style={styles.stateTitle}>{title}</Text>
-      <Text style={styles.stateText}>{text}</Text>
-    </View>
+    <GlassCard style={styles.stateCard}>
+      <View style={styles.stateCardInner}>
+        <Ionicons name={icon} size={58} color={colors.primary} />
+        <Text style={styles.stateTitle}>{title}</Text>
+        <Text style={styles.stateText}>{text}</Text>
+      </View>
+    </GlassCard>
   );
 }
 
 const styles = {
   heroCard: {
-    backgroundColor: "#fff",
     borderRadius: 20,
-    padding: 16,
     marginBottom: 14,
-    borderWidth: 1,
-    borderColor: "#EEF2F7",
+  },
+  heroCardInner: {
+    padding: 16,
     flexDirection: "row",
     alignItems: "center",
-    elevation: 2,
   },
   heroIcon: {
     width: 54,
     height: 54,
     borderRadius: 17,
-    backgroundColor: "#EEF2FF",
     alignItems: "center",
     justifyContent: "center",
     marginRight: 14,
@@ -1050,13 +1095,11 @@ const styles = {
     marginTop: 4,
   },
   card: {
-    backgroundColor: "#fff",
     borderRadius: 20,
-    padding: 16,
     marginBottom: 14,
-    borderWidth: 1,
-    borderColor: "#EEF2F7",
-    elevation: 2,
+  },
+  cardInner: {
+    padding: 16,
   },
   indexBadge: {
     width: 42,
@@ -1130,15 +1173,18 @@ const styles = {
     fontWeight: "700",
     textAlign: "right",
   },
+  primaryButtonWrap: {
+    borderRadius: 16,
+    overflow: "hidden",
+    marginBottom: 14,
+  },
   primaryButton: {
     minHeight: 50,
     borderRadius: 16,
-    backgroundColor: "#4F46E5",
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
     gap: 8,
-    marginBottom: 14,
   },
   primaryButtonText: {
     color: "#fff",
@@ -1147,7 +1193,7 @@ const styles = {
   secondaryButton: {
     minHeight: 46,
     borderRadius: 14,
-    backgroundColor: "#EEF2FF",
+    backgroundColor: "rgba(99,102,241,0.12)",
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
@@ -1155,17 +1201,15 @@ const styles = {
     marginTop: 12,
   },
   secondaryButtonText: {
-    color: "#4F46E5",
+    color: colors.primaryDark,
     fontWeight: "900",
   },
   formCard: {
-    backgroundColor: "#fff",
     borderRadius: 20,
-    padding: 16,
     marginBottom: 14,
-    borderWidth: 1,
-    borderColor: "#EEF2F7",
-    elevation: 2,
+  },
+  formCardInner: {
+    padding: 16,
   },
   formTitle: {
     color: "#0F172A",
@@ -1177,12 +1221,12 @@ const styles = {
     minHeight: 48,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: glassColors.cardBorder,
     paddingHorizontal: 12,
     marginBottom: 10,
     color: "#0F172A",
     fontWeight: "800",
-    backgroundColor: "#F8FAFF",
+    backgroundColor: "rgba(255,255,255,0.6)",
   },
   textArea: {
     minHeight: 96,
@@ -1304,13 +1348,14 @@ const styles = {
   webIdBackValue: { color: "#111827", fontSize: 10, fontWeight: "900", marginTop: 2 },
   webIdBackNote: { position: "absolute", left: 0, right: 0, bottom: 0, backgroundColor: "#08285f", color: "#fff", textAlign: "center", padding: 8, fontWeight: "800", fontSize: 9 },
   loadingCard: {
-    backgroundColor: "#fff",
     borderRadius: 22,
+    minHeight: 180,
+  },
+  loadingCardInner: {
+    flex: 1,
     minHeight: 180,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#EEF2F7",
   },
   loadingText: {
     color: "#64748B",
@@ -1318,13 +1363,11 @@ const styles = {
     fontWeight: "800",
   },
   stateCard: {
-    backgroundColor: "#fff",
     borderRadius: 24,
+  },
+  stateCardInner: {
     padding: 28,
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#EEF2F7",
-    elevation: 2,
   },
   stateTitle: {
     marginTop: 18,

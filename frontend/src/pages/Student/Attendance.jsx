@@ -69,13 +69,13 @@ const Attendance = ({ session }) => {
     .sort((a, b) => a.attendanceDate.localeCompare(b.attendanceDate));
 
   return (
-    <div className="space-y-6 pb-8 select-none font-sans text-[#1A1A1A]">
-      <section className="bg-white border border-[#C8C8C8] rounded-3xl p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+    <div className="space-y-6 pb-8 select-none font-sans text-slate-900 animate-fadeIn">
+      <section className="glass-card rounded-3xl p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-black flex items-center gap-2">
             <CalendarCheck className="w-5 h-5" /> Attendance Ledger
           </h2>
-          <p className="text-xs font-bold text-[#555555] mt-1">
+          <p className="text-xs font-bold text-slate-500 mt-1">
             {student.displayName} | {getClassLabel(student)} | {student.admissionNumber}
           </p>
         </div>
@@ -93,12 +93,12 @@ const Attendance = ({ session }) => {
       </section>
 
       <section className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-        <div className="xl:col-span-7 bg-white border border-[#C8C8C8] rounded-3xl p-5">
-          <div className="flex items-center justify-between border-b border-[#EAEAEA] pb-3 mb-4">
+        <div className="xl:col-span-7 glass-card rounded-3xl p-5">
+          <div className="flex items-center justify-between border-b border-slate-100/80 pb-3 mb-4">
             <h3 className="text-sm font-black">{monthLabel(today)}</h3>
-            <span className="text-[10px] font-black text-[#555555]">Read-only calendar</span>
+            <span className="text-[10px] font-black text-slate-500">Read-only calendar</span>
           </div>
-          <div className="grid grid-cols-7 gap-2 text-center text-[10px] font-black uppercase text-[#555555]">
+          <div className="grid grid-cols-7 gap-2 text-center text-[10px] font-black uppercase text-slate-500">
             {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => <span key={day}>{day}</span>)}
           </div>
           <div className="mt-2 grid grid-cols-7 gap-2">
@@ -106,14 +106,14 @@ const Attendance = ({ session }) => {
               day.blank ? (
                 <span key={day.id} className="aspect-square" />
               ) : (
-                <div key={day.id} className="aspect-square rounded-2xl border border-[#EAEAEA] bg-[#F8F8F8] grid place-items-center">
+                <div key={day.id} className="aspect-square rounded-2xl glass-soft grid place-items-center">
                   <span
                     className={`grid h-10 w-10 place-items-center rounded-full text-xs font-black ${
                       day.status === 'present'
                         ? 'bg-emerald-600 text-white'
                         : day.status === 'absent'
                           ? 'bg-rose-600 text-white'
-                          : 'bg-neutral-300 text-neutral-700'
+                          : 'bg-slate-200 text-slate-700'
                     }`}
                   >
                     {day.day}
@@ -124,20 +124,20 @@ const Attendance = ({ session }) => {
           </div>
         </div>
 
-        <div className="xl:col-span-5 bg-white border border-[#C8C8C8] rounded-3xl p-5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#EAEAEA] pb-3 mb-4">
+        <div className="xl:col-span-5 glass-card rounded-3xl p-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100/80 pb-3 mb-4">
             <h3 className="text-sm font-black">Historical Log</h3>
             <div className="flex flex-wrap gap-2">
-              <input type="date" value={range.from} onChange={(event) => setRange((current) => ({ ...current, from: event.target.value }))} className="h-10 rounded-2xl border border-[#EAEAEA] bg-[#F8F8F8] px-3 text-xs font-bold outline-none" />
-              <input type="date" value={range.to} onChange={(event) => setRange((current) => ({ ...current, to: event.target.value }))} className="h-10 rounded-2xl border border-[#EAEAEA] bg-[#F8F8F8] px-3 text-xs font-bold outline-none" />
+              <input type="date" value={range.from} onChange={(event) => setRange((current) => ({ ...current, from: event.target.value }))} className="h-10 rounded-2xl bg-white/60 border border-white/80 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none transition-all px-3 text-xs font-bold" />
+              <input type="date" value={range.to} onChange={(event) => setRange((current) => ({ ...current, to: event.target.value }))} className="h-10 rounded-2xl bg-white/60 border border-white/80 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none transition-all px-3 text-xs font-bold" />
             </div>
           </div>
           <div className="space-y-2 max-h-[520px] overflow-y-auto pr-1">
             {rangedLogs.map((log) => (
-              <div key={log._id || log.attendanceDate} className="rounded-2xl border border-[#EAEAEA] bg-[#F8F8F8] p-3 flex items-center justify-between gap-3">
+              <div key={log._id || log.attendanceDate} className="rounded-2xl glass-soft p-3 flex items-center justify-between gap-3">
                 <div>
                   <p className="text-xs font-black">{log.attendanceDate}</p>
-                  <p className="text-[10px] font-bold text-[#555555]">{log.source || 'manual'} | {log.recordedBy || 'School'}</p>
+                  <p className="text-[10px] font-bold text-slate-500">{log.source || 'manual'} | {log.recordedBy || 'School'}</p>
                 </div>
                 <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase ${log.status === 'absent' ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
                   {log.status === 'absent' ? 'Absent' : 'Present'}
@@ -145,7 +145,7 @@ const Attendance = ({ session }) => {
               </div>
             ))}
             {!rangedLogs.length && (
-              <p className="py-10 text-center text-[10px] font-black uppercase tracking-widest text-neutral-400">
+              <p className="py-10 text-center text-[10px] font-black uppercase tracking-widest text-slate-400">
                 No attendance records in this date range.
               </p>
             )}

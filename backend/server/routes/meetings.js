@@ -4,6 +4,7 @@ import Notification from '../models/Notification.js';
 import { isMongoConnected } from '../db.js';
 import { emitRealtimeEvent } from '../realtime.js';
 import { NOTIFICATIONS_UPDATED_EVENT } from './notifications.js';
+import { notifyMany } from '../utils/notify.js';
 
 const router = express.Router();
 const MEETINGS_UPDATED_EVENT = 'mgps-erp-meetings-updated';
@@ -93,6 +94,26 @@ const createMeetingNotifications = async (meeting, request) => {
     await Notification.insertMany(notifications);
     emitRealtimeEvent(NOTIFICATIONS_UPDATED_EVENT);
   }
+
+  // The insertMany above only persists notification docs; it does not send Expo
+  // push. Fire a best-effort push for the same recipient set via createNotification
+  // (routed through notifyMany). This writes duplicate notification docs — an
+  // accepted trade-off to guarantee a push goes out without refactoring the
+  // existing meetingId/createdBy* persistence above.
+  try {
+    await notifyMany(
+      notifications.map((entry) => ({
+        title: entry.title,
+        description: entry.description,
+        type: entry.type,
+        linkPage: entry.linkPage,
+        recipientRole: entry.recipientRole,
+        recipientClassName: entry.recipientClassName || '',
+      }))
+    );
+  } catch (error) {
+    console.error('[meetings] push notify failed:', error?.message || error);
+  }
 };
 
 const canSeeMeeting = (meeting, { role, username, className, allottedClasses }) => {
@@ -121,8 +142,18 @@ const canCreateMeeting = ({ actorRole, actorUsername, targetClasses, allottedCla
 router.get('/', ensureMongo, async (request, response) => {
   const role = request.query.role || request.auth?.role || '';
   const username = request.query.username || request.auth?.username || '';
-  const className = request.query.className || '';
-  const allottedClasses = parseCsv(request.query.allottedClasses);
+  // Fall back to the authenticated identity so clients that omit these params
+  // (e.g. the mobile app) still get class-scoped meetings.
+  const authClassName =
+    request.auth?.activeStudent?.className ||
+    (Array.isArray(request.auth?.studentProfiles) ? request.auth.studentProfiles[0]?.className : '') ||
+    '';
+  const className = request.query.className || authClassName || '';
+  const allottedClasses = request.query.allottedClasses
+    ? parseCsv(request.query.allottedClasses)
+    : Array.isArray(request.auth?.allottedClasses)
+      ? request.auth.allottedClasses
+      : [];
   const status = request.query.status;
   const query = status ? { status } : {};
   const meetings = await Meeting.find(query).sort({ createdAt: -1 }).limit(100);
@@ -138,7 +169,12 @@ router.post('/', ensureMongo, async (request, response) => {
   const targetClasses = Array.isArray(request.body.targetClasses) ? request.body.targetClasses : [];
   const actorRole = request.auth?.role;
   const actorUsername = request.auth?.username;
-  const allottedClasses = Array.isArray(request.body.allottedClasses) ? request.body.allottedClasses : [];
+  // Trust the server-side identity for host authorization, not client-supplied classes.
+  const allottedClasses = Array.isArray(request.auth?.allottedClasses)
+    ? request.auth.allottedClasses
+    : Array.isArray(request.body.allottedClasses)
+      ? request.body.allottedClasses
+      : [];
 
   if (!request.body.title || !request.body.date || !request.body.time || !request.body.roomName) {
     response.status(400).json({ message: 'Title, date, time, and Jitsi room are required.' });
