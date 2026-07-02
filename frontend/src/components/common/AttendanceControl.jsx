@@ -421,7 +421,7 @@ const AttendanceControl = ({ role = 'admin' }) => {
         </div>
       </section>
 
-      <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-white/70 bg-white/70 px-6 py-3 backdrop-blur-xl">
+      <div className="fixed -bottom-full left-0 right-0 z-30 border-t border-white/70 bg-white/70 px-6 py-3 backdrop-blur-xl">
         <div className="mx-auto flex max-w-5xl justify-end gap-2">
           <button type="button" onClick={resetDraft} className="h-11 px-4 rounded-2xl btn-ghost text-xs font-black inline-flex items-center gap-2">
             <X className="w-4 h-4" /> Cancel
