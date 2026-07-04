@@ -46,18 +46,44 @@ const getProfileClassName = (student = {}) =>
   student.className || student.class || student.targetClass || student.rawProfile?.targetClass || '';
 
 const deriveClassHistory = (student = {}) => {
+  // Merge classes from every signal we have — explicit classHistory, feeLedger
+  // entries (every class the student ever paid fees for), previousClass, and
+  // the current class. Dedupe + sort by natural class order. Bug fix: earlier
+  // versions only returned the current class when classHistory[] was empty, so
+  // the dropdown appeared frozen on today's class.
+  const collected = new Set();
+  const push = (raw) => {
+    const name = String(raw || '').trim();
+    if (name) collected.add(name);
+  };
+
   const explicitHistory = Array.isArray(student.classHistory) ? student.classHistory : [];
-  if (explicitHistory.length) return sortClassNames(explicitHistory.map((entry) => entry.className || entry.class || entry));
+  explicitHistory.forEach((entry) => push(entry.className || entry.class || entry));
+
+  const feeLedger = Array.isArray(student.feeLedger) ? student.feeLedger : [];
+  feeLedger.forEach((entry) => push(entry.className));
+
+  push(student.previousClass);
+  push(student.rawProfile?.previousClass);
+  push(student.admissionClass);
+  push(student.rawProfile?.admissionClass);
+  push(student.rawProfile?.joiningClass);
+  push(getProfileClassName(student));
 
   const currentClass = getProfileClassName(student);
   const currentIndex = DEFAULT_CLASS_NAMES.indexOf(currentClass);
   if (currentIndex >= 0) {
-    const startClass = student.admissionClass || student.rawProfile?.admissionClass || student.rawProfile?.joiningClass || currentClass;
-    const startIndex = DEFAULT_CLASS_NAMES.indexOf(startClass);
-    return DEFAULT_CLASS_NAMES.slice(Math.max(0, startIndex >= 0 ? startIndex : currentIndex), currentIndex + 1);
+    // If we still only know the current class, backfill from the roster the
+    // student joined at up to today so the dropdown has real options.
+    if (collected.size <= 1) {
+      const startClass = student.admissionClass || student.rawProfile?.admissionClass || student.rawProfile?.joiningClass || currentClass;
+      const startIndex = DEFAULT_CLASS_NAMES.indexOf(startClass);
+      const from = Math.max(0, startIndex >= 0 ? startIndex : currentIndex);
+      DEFAULT_CLASS_NAMES.slice(from, currentIndex + 1).forEach(push);
+    }
   }
 
-  return currentClass ? [currentClass] : [];
+  return sortClassNames(Array.from(collected));
 };
 
 const getClassSnapshot = (student = {}, className = '') =>
@@ -90,7 +116,10 @@ const StudentProfile = ({ studentContext, onBack }) => {
     ) ||
     {};
   const classHistory = deriveClassHistory(matchedStudent);
-  const [selectedClassName, setSelectedClassName] = useState(classHistory[0] || '');
+  // Default to the CURRENT class (last in natural order), not the earliest.
+  const [selectedClassName, setSelectedClassName] = useState(
+    getProfileClassName(matchedStudent) || classHistory[classHistory.length - 1] || ''
+  );
   const profileData = {
     ...(matchedStudent.rawProfile || {}),
     admissionNumber: matchedStudent.admissionNumber || matchedStudent.id || studentAdmissionId,
