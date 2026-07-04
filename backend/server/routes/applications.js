@@ -154,7 +154,7 @@ router.post('/', ensureMongo, async (request, response) => {
     ? [
         {
           username: payload.senderUsername,
-          name: payload.senderName,
+          name: request.auth.displayName || payload.senderName || payload.senderUsername,
           decision: 'in',
         },
       ]
@@ -197,6 +197,16 @@ router.patch('/:id/vote', ensureMongo, async (request, response) => {
   if (application.status !== 'collecting_consensus') {
     response.status(409).json({ message: 'Class consensus has already closed.' });
     return;
+  }
+
+  // Only students in the target class may vote — prevents cross-class ballot
+  // stuffing that would otherwise skew the consensus percentage.
+  if (application.audienceMode === 'all-class') {
+    const voterClass = request.auth?.activeStudent?.className || '';
+    if (request.auth?.role !== 'student' || (application.targetClassName && voterClass !== application.targetClassName)) {
+      response.status(403).json({ message: 'Only students in this class can vote on the request.' });
+      return;
+    }
   }
 
   application.votes = application.votes.filter((vote) => vote.username !== username);
@@ -285,7 +295,7 @@ router.patch('/:id/reply-read', ensureMongo, async (request, response) => {
     return;
   }
 
-  const username = request.session?.auth?.username || request.body?.username;
+  const username = request.auth?.username || request.session?.auth?.username || request.body?.username;
   if (username && username !== application.senderUsername) {
     response.status(403).json({ message: 'Only the application recipient can mark this reply as read.' });
     return;

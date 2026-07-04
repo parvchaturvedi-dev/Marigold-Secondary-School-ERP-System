@@ -35,7 +35,7 @@ function StudentPickRow({ student, selected, onToggle }) {
     <TouchableOpacity
       activeOpacity={0.85}
       onPress={() => onToggle(student)}
-      style={[styles.pickRow, selected && styles.pickRowOn]}
+      style={[styles.pickRow, { backgroundColor: palette.tile, borderColor: palette.cardBorder }, selected && styles.pickRowOn]}
     >
       <View style={{ flex: 1 }}>
         <Text style={[styles.pickName, { color: palette.ink }, selected && { color: "#fff" }]}>{student.name || "Unnamed"}</Text>

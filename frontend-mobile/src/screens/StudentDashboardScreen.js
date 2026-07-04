@@ -17,7 +17,7 @@ import ModuleCard from "../components/cards/ModuleCard";
 import OverviewCard from "../components/cards/OverviewCard";
 import { getActiveStudentProfile } from "../shared/profile";
 import { colors } from "../shared/theme/colors";
-import { gradients, glassColors, glassStyles } from "../shared/theme/glass";
+import { gradients, glassColors } from "../shared/theme/glass";
 import { useTheme } from "../theme/ThemeContext";
 import AuroraBackground from "../shared/components/AuroraBackground";
 import GlassCard from "../shared/components/GlassCard";

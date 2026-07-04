@@ -865,14 +865,14 @@ function ClassDetailView({
         <SectionTitle right={<Text style={[styles.countPill, { color: palette.inkSoft, backgroundColor: palette.tile }]}>{subjectTeacherRows.length} subjects</Text>}>
           Faculty Assignments
         </SectionTitle>
-        <View style={styles.assignBox}>
+        <View style={[styles.assignBox, { backgroundColor: palette.tile, borderColor: palette.cardBorder }]}>
           <Text style={[styles.assignLabel, { color: palette.inkFaint }]}>CLASS TEACHER</Text>
           <Text style={[styles.name, { color: palette.ink }]}>{currentClassTeacher.name || "N/A"}</Text>
           <Text style={[styles.subSmall, { color: palette.inkFaint }]}>{currentClassTeacher.id || "Teacher ID not assigned"}</Text>
         </View>
         {subjectTeacherRows.length ? (
           subjectTeacherRows.map((row) => (
-            <View key={`${row.teacherId}-${row.subject}`} style={styles.assignBoxSoft}>
+            <View key={`${row.teacherId}-${row.subject}`} style={[styles.assignBoxSoft, { backgroundColor: palette.cardSoft, borderColor: palette.cardBorder }]}>
               <Text style={[styles.assignLabel, { color: palette.inkFaint }]}>{row.subject}</Text>
               <Text style={[styles.name, { color: palette.ink }]}>{row.teacherName}</Text>
               <Text style={[styles.subSmall, { color: palette.inkFaint }]}>{row.teacherId}</Text>

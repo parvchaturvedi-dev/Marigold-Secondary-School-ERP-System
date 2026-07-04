@@ -12,6 +12,7 @@ import {
   ToggleRight,
 } from 'lucide-react';
 import { getClerkProfile } from './clerkPortalData';
+import { apiFetch } from '../../components/common/api';
 
 const Settings = ({ session }) => {
   const profile = getClerkProfile(session);
@@ -20,6 +21,8 @@ const Settings = ({ session }) => {
     newPassword: '',
     confirmPassword: '',
   });
+  const [passwordFeedback, setPasswordFeedback] = useState({ type: '', text: '' });
+  const [savingPassword, setSavingPassword] = useState(false);
   const [showPassword, setShowPassword] = useState({
     current: false,
     next: false,
@@ -41,21 +44,43 @@ const Settings = ({ session }) => {
     setPasswordForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handlePasswordSubmit = (event) => {
+  const handlePasswordSubmit = async (event) => {
     event.preventDefault();
+    setPasswordFeedback({ type: '', text: '' });
+
+    if (!passwordForm.currentPassword) {
+      setPasswordFeedback({ type: 'error', text: 'Current password is required.' });
+      return;
+    }
 
     if (passwordForm.newPassword.length < 6) {
-      alert('New password must contain at least 6 characters.');
+      setPasswordFeedback({ type: 'error', text: 'New password must contain at least 6 characters.' });
       return;
     }
 
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      alert('New password and confirmation do not match.');
+      setPasswordFeedback({ type: 'error', text: 'New password and confirmation do not match.' });
       return;
     }
 
-    alert('Clerk password preferences saved.');
-    setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    setSavingPassword(true);
+    try {
+      await apiFetch('/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentPassword: passwordForm.currentPassword,
+          newPassword: passwordForm.newPassword,
+          confirmPassword: passwordForm.confirmPassword,
+        }),
+      });
+      setPasswordFeedback({ type: 'success', text: 'Password changed successfully.' });
+      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    } catch (error) {
+      setPasswordFeedback({ type: 'error', text: error?.message || 'Unable to change password right now.' });
+    } finally {
+      setSavingPassword(false);
+    }
   };
 
   return (
@@ -144,11 +169,24 @@ const Settings = ({ session }) => {
               onToggle={() => setShowPassword((prev) => ({ ...prev, confirm: !prev.confirm }))}
             />
 
+            {passwordFeedback.text && (
+              <div
+                className={`text-xs font-bold px-3 py-2.5 rounded-2xl border ${
+                  passwordFeedback.type === 'success'
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                    : 'bg-rose-50 text-rose-700 border-rose-100'
+                }`}
+              >
+                {passwordFeedback.text}
+              </div>
+            )}
+
             <button
               type="submit"
-              className="w-full btn-primary rounded-2xl py-3 text-xs font-black flex items-center justify-center gap-2"
+              disabled={savingPassword}
+              className="w-full btn-primary rounded-2xl py-3 text-xs font-black flex items-center justify-center gap-2 disabled:opacity-50"
             >
-              <Save className="w-4 h-4" /> Save Password
+              <Save className="w-4 h-4" /> {savingPassword ? 'Saving...' : 'Save Password'}
             </button>
           </form>
 

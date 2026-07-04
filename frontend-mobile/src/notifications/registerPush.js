@@ -2,6 +2,19 @@ import * as Notifications from "expo-notifications";
 import Constants from "expo-constants";
 import { Platform } from "react-native";
 
+// The last Expo push token we handed to the backend. Cached so logout can
+// unregister the exact same token instead of leaving it attached to a signed-out
+// account (which would leak this user's notifications to the next login on the device).
+let lastRegisteredToken = null;
+
+export function getLastRegisteredToken() {
+  return lastRegisteredToken;
+}
+
+export function clearLastRegisteredToken() {
+  lastRegisteredToken = null;
+}
+
 export function setupNotificationHandler() {
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
@@ -47,6 +60,7 @@ export async function registerForPushNotifications() {
     }
 
     const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+    lastRegisteredToken = token || lastRegisteredToken;
     return token;
   } catch (error) {
     console.warn("registerForPushNotifications failed:", error?.message || error);

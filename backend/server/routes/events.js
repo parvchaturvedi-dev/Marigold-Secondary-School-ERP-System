@@ -112,6 +112,11 @@ router.get('/', ensureMongo, async (_request, response) => {
 });
 
 router.post('/', ensureMongo, requireRole('admin', 'clerk'), upload.single('image'), async (request, response) => {
+  if (request.file && !String(request.file.mimetype || '').startsWith('image/')) {
+    response.status(400).json({ message: 'Only image files are allowed.' });
+    return;
+  }
+
   const event = new Event({
     ...buildEventFields(request.body),
     participants: [],
@@ -140,6 +145,11 @@ router.post('/', ensureMongo, requireRole('admin', 'clerk'), upload.single('imag
 });
 
 router.patch('/:id', ensureMongo, requireRole('admin', 'clerk'), upload.single('image'), async (request, response) => {
+  if (request.file && !String(request.file.mimetype || '').startsWith('image/')) {
+    response.status(400).json({ message: 'Only image files are allowed.' });
+    return;
+  }
+
   const event = await Event.findById(request.params.id);
 
   if (!event) {
@@ -176,6 +186,7 @@ router.patch('/:id/participate', ensureMongo, async (request, response) => {
     const s = request.auth.activeStudent || {};
     request.body.admissionNumber = s.admissionNumber || request.auth.username;
     request.body.name = s.displayName || request.auth.displayName || request.auth.username;
+    request.body.fatherName = s.fatherName || request.body.fatherName || '';
     request.body.className = s.className || '';
     request.body.username = request.auth.username;
   }

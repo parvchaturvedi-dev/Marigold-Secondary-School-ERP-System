@@ -100,12 +100,16 @@ const sortedSalaryHistory = (staff = {}) => {
 // Effective salary rate for a given month (latest history entry whose fromMonth <= month).
 export const salaryRateForMonth = (staff = {}, month) => {
   const history = sortedSalaryHistory(staff);
+  // No history at all → legacy record with only a flat monthlySalary.
+  if (!history.length) return parseAmount(staff.monthlySalary);
+  // With history present, months before the earliest entry owe nothing — never
+  // fall back to monthlySalary (which may hold a future-dated raise and would
+  // otherwise retroactively reprice earlier months).
   let rate = 0;
   for (const entry of history) {
     if (entry.fromMonth <= month) rate = entry.amount;
     else break;
   }
-  if (!rate) rate = parseAmount(staff.monthlySalary);
   return rate;
 };
 
@@ -174,11 +178,17 @@ export const setStaffSalary = (staff = {}, amount, effectiveMonth = nextMonthKey
   const history = sortedSalaryHistory(staff).filter((entry) => entry.fromMonth !== effectiveMonth);
   history.push({ fromMonth: effectiveMonth, amount: value });
   history.sort((a, b) => a.fromMonth.localeCompare(b.fromMonth));
-  return applyPayrollMirrors({
+  const withHistory = {
     ...staff,
-    monthlySalary: value,
     salaryHistory: history,
     joinMonth: staff.joinMonth || getStaffJoinMonth(staff),
+  };
+  // Keep the monthlySalary mirror aligned with the rate effective THIS month so
+  // legacy readers (and the salaryRateForMonth fallback) see the correct current
+  // rate rather than a future-dated raise.
+  return applyPayrollMirrors({
+    ...withHistory,
+    monthlySalary: salaryRateForMonth(withHistory, currentMonthKey()),
   });
 };
 

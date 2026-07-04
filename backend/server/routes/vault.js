@@ -65,6 +65,11 @@ const validatePayload = (body = {}) => {
   if (!encryption.salt || !encryption.iv) return 'Encryption salt and IV are required.';
   if (!Number.isFinite(sizeBytes) || sizeBytes < 0) return 'Invalid item size.';
   if (sizeBytes > MAX_SINGLE_ITEM_BYTES) return 'A single vault item cannot exceed 2 MB.';
+  // Guard against a client under-declaring sizeBytes to smuggle an oversized
+  // payload past the per-item and storage caps: enforce the actual payload bytes.
+  if (Buffer.byteLength(encryptedPayload, 'utf8') > MAX_SINGLE_ITEM_BYTES) {
+    return 'A single vault item cannot exceed 2 MB.';
+  }
   if (kind === 'pdf' && body.mimeType !== 'application/pdf') return 'Only PDF files are allowed in PDF slots.';
   if (kind === 'image' && !String(body.mimeType || '').startsWith('image/')) {
     return 'Only image files are allowed in image slots.';

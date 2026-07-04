@@ -6,6 +6,8 @@ import { getActiveStudentProfile, getTeacherProfile } from "../shared/profile";
 import {
   registerForPushNotifications,
   setupNotificationHandler,
+  getLastRegisteredToken,
+  clearLastRegisteredToken,
 } from "../notifications/registerPush";
 import { connectRealtime, disconnectRealtime } from "../notifications/realtime";
 
@@ -158,6 +160,22 @@ export function AuthProvider({ children }) {
   }
 
   async function logout() {
+    // Detach this device's push token from the account BEFORE clearing the
+    // session, so the next person to sign in on this device doesn't inherit the
+    // previous user's push notifications. apiRequest reads the bearer token from
+    // the still-present session, so this must run first.
+    const pushToken = getLastRegisteredToken();
+    if (pushToken) {
+      try {
+        await apiRequest("/notifications/unregister-token", {
+          method: "POST",
+          body: JSON.stringify({ token: pushToken }),
+        });
+      } catch (unregisterError) {
+        console.warn("Push token unregister failed:", unregisterError?.message || unregisterError);
+      }
+      clearLastRegisteredToken();
+    }
     try {
       await AsyncStorage.removeItem(SESSION_KEY);
     } catch (e) {

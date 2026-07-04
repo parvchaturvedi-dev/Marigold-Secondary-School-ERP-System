@@ -44,7 +44,6 @@ import {
   parseAmount,
   getStudentAdmissionNumber,
   getStudentDisplayName,
-  getStudentClassName,
   getClassOrder,
   ensureFeeLedger,
   entryPending,
@@ -58,12 +57,6 @@ import {
   collectFamilyPayment,
   buildClassWiseReceipt,
 } from '../../components/common/financeData';
-
-const getClassColor = (className) => {
-  let hash = 0;
-  for (const char of String(className)) hash = (hash * 31 + char.charCodeAt(0)) % 360;
-  return `hsl(${hash}, 72%, 45%)`;
-};
 
 const buildFeeReminderMessage = (student) => ({
   to: student.guardianEmail,
@@ -454,7 +447,7 @@ const Finance = ({ setActivePage }) => {
       const receipt = buildClassWiseReceipt({
         payerName: getStudentDisplayName(result.student),
         admissionNumber: getStudentAdmissionNumber(result.student),
-        amount,
+        amount: amount - result.remaining,
         breakdown: result.breakdown,
         mode: 'individual',
         contact: result.student.guardianPhone,
@@ -501,7 +494,7 @@ const Finance = ({ setActivePage }) => {
       const receipt = buildClassWiseReceipt({
         payerName: getStudentDisplayName(result.student),
         admissionNumber: getStudentAdmissionNumber(result.student),
-        amount,
+        amount: amount - result.remaining,
         breakdown: result.breakdown,
         mode: 'individual',
         contact: familyLedger.contact,
@@ -541,7 +534,7 @@ const Finance = ({ setActivePage }) => {
     const receipt = buildClassWiseReceipt({
       payerName: familyLedger.fatherName || familyLedger.motherName || 'Guardian',
       admissionNumber: familyLedger.selectedStudent?.admissionNumber || '',
-      amount,
+      amount: amount - result.remaining,
       breakdown: result.breakdown,
       mode: 'family',
       contact: familyLedger.contact,

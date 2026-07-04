@@ -23,14 +23,15 @@ const resolveRecipientUsers = async ({
   }
 
   // Next most specific: a student targeted by admission number / studentId.
-  // Look up their user account so only that student (and no one else) is paged.
+  // Look up their user account (solo or parent/family account whose linked
+  // studentProfiles include this student) so only they — and no one else — are paged.
   if (recipientStudentId) {
     const matched = await User.find({
       $or: [
         { username: recipientStudentId },
-        { 'profile.admissionNumber': recipientStudentId },
-        { 'profile.studentId': recipientStudentId },
-        { 'profile.linkedStudents.admissionNumber': recipientStudentId },
+        { 'profile.studentProfiles.admissionNumber': recipientStudentId },
+        { 'profile.studentProfiles.id': recipientStudentId },
+        { 'profile.sourceAdmissionNumbers': recipientStudentId },
       ],
     }).lean();
     if (matched.length) return matched;

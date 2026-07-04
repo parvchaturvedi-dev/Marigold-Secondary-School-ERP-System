@@ -14,6 +14,8 @@ const STUDENT_BLOCKED_NAMESPACES = new Set([
   'admin-teacher-management-list',
   'admin-clerk-management-list',
   'admin-finance-class-ledgers',
+  'admin-finance-alumni-pending',
+  'admin-communication-messages',
 ]);
 
 const ensureMongo = (_request, response, next) => {

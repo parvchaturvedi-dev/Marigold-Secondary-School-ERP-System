@@ -85,10 +85,10 @@ const Settings = ({ onLogout } = {}) => {
   const handlePasswordSubmit = (e) => {
     e.preventDefault();
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      alert("Validation Framework Error: New password and confirmation parameters mismatch.");
+      alert("New password and confirmation do not match.");
       return;
     }
-    alert("Security matrix verified. Master login password has been modified successfully across all nodes.");
+    alert("Password updated successfully.");
     setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
   };
 
@@ -98,10 +98,10 @@ const Settings = ({ onLogout } = {}) => {
       {/* SETTINGS CONTROL TERMINAL HEADER */}
       <div className="glass-card p-6 rounded-3xl mb-6">
         <h3 className="text-xl font-bold flex items-center gap-2">
-          <SettingsIcon className="w-5 h-5 text-slate-900" /> Core Control & Preferences Terminal
+          <SettingsIcon className="w-5 h-5 text-slate-900" /> Settings & Preferences
         </h3>
         <p className="text-xs text-slate-500 mt-1">
-          Configure security protocols, change master passcodes, and control global institution system overrides.
+          Manage security options, change your password, and control institution-wide system settings.
         </p>
       </div>
 
@@ -113,11 +113,11 @@ const Settings = ({ onLogout } = {}) => {
           {/* USERNAME LOCK MECHANISM NOTICE BOX */}
           <div className="glass-card rounded-3xl p-5 space-y-4 shadow-2xs">
             <span className="text-[10px] text-slate-500 uppercase block font-black tracking-wider">
-              1. Base Credentials Integrity
+              1. Account Username
             </span>
-            
+
             <div className="text-xs font-bold space-y-1.5">
-              <label className="text-slate-500">Institutional System Username</label>
+              <label className="text-slate-500">System Username</label>
               <div className="relative">
                 <input 
                   type="text" 
@@ -127,7 +127,7 @@ const Settings = ({ onLogout } = {}) => {
                 />
               </div>
               <p className="text-[10px] text-red-600 flex items-center gap-1 font-semibold pt-1">
-                <ShieldAlert className="w-3.5 h-3.5 flex-shrink-0" /> Username modification restricted by root system protocol hierarchy.
+                <ShieldAlert className="w-3.5 h-3.5 flex-shrink-0" /> The username cannot be changed.
               </p>
             </div>
           </div>
@@ -135,14 +135,14 @@ const Settings = ({ onLogout } = {}) => {
           {/* ADDED UTILITY 1: COMPREHENSIVE SECURITY HOOKS */}
           <div className="glass-card rounded-3xl p-5 space-y-3 shadow-2xs text-xs font-bold">
             <span className="text-[10px] text-slate-500 uppercase block font-black tracking-wider">
-              2. Extra Security Overrides
+              2. Security Options
             </span>
 
             {/* Toggle Row 1: Two Factor Auth */}
             <div className="flex items-center justify-between p-2.5 bg-white/50 border border-slate-100/80 rounded-xl">
               <div>
                 <p className="text-slate-900 font-black">Two-Factor Authentication (2FA)</p>
-                <span className="text-[10px] text-slate-500 font-medium">Require OTP verification token on master sign-ins.</span>
+                <span className="text-[10px] text-slate-500 font-medium">Require an OTP code when signing in as admin.</span>
               </div>
               <button type="button" onClick={() => setTwoFactor(!twoFactor)} className="text-slate-900 transition-colors">
                 {twoFactor ? <ToggleRight className="w-9 h-9 text-emerald-600" /> : <ToggleLeft className="w-9 h-9 text-neutral-400" />}
@@ -152,8 +152,8 @@ const Settings = ({ onLogout } = {}) => {
             {/* Toggle Row 2: Maintenance Mode */}
             <div className="flex items-center justify-between p-2.5 bg-white/50 border border-slate-100/80 rounded-xl">
               <div>
-                <p className="text-slate-900 font-black">Global ERP Maintenance Freeze</p>
-                <span className="text-[10px] text-slate-500 font-medium">Lock student/clerk terminal nodes during sync schedules.</span>
+                <p className="text-slate-900 font-black">Maintenance Mode</p>
+                <span className="text-[10px] text-slate-500 font-medium">Temporarily lock student and clerk portals during updates.</span>
               </div>
               <button type="button" onClick={() => setMaintenanceMode(!maintenanceMode)} className="text-slate-900 transition-colors">
                 {maintenanceMode ? <ToggleRight className="w-9 h-9 text-red-600 animate-pulse" /> : <ToggleLeft className="w-9 h-9 text-neutral-400" />}
@@ -169,14 +169,14 @@ const Settings = ({ onLogout } = {}) => {
           {/* PASSWORD RESET MODULE */}
           <div className="glass-card rounded-3xl p-5 space-y-4 shadow-2xs">
             <span className="text-[10px] text-slate-500 uppercase block font-black tracking-wider flex items-center gap-1">
-              <KeyRound className="w-3.5 h-3.5" /> 3. Cryptographic Passcode Modification Router
+              <KeyRound className="w-3.5 h-3.5" /> 3. Change Password
             </span>
 
             <form onSubmit={handlePasswordSubmit} className="space-y-3 text-xs font-bold text-slate-900">
               
               {/* Field 1: Current Password */}
               <div className="flex flex-col gap-1.5 relative">
-                <label className="text-slate-500">Current Encryption Password</label>
+                <label className="text-slate-500">Current Password</label>
                 <div className="relative flex items-center">
                   <input 
                     type={showPass.current ? 'text' : 'password'} 
@@ -194,7 +194,7 @@ const Settings = ({ onLogout } = {}) => {
 
               {/* Field 2: New Password */}
               <div className="flex flex-col gap-1.5 relative">
-                <label className="text-slate-500">New Security Password</label>
+                <label className="text-slate-500">New Password</label>
                 <div className="relative flex items-center">
                   <input 
                     type={showPass.new ? 'text' : 'password'} 
@@ -212,7 +212,7 @@ const Settings = ({ onLogout } = {}) => {
 
               {/* Field 3: Confirm Password */}
               <div className="flex flex-col gap-1.5 relative">
-                <label className="text-slate-500">Confirm New Security Password</label>
+                <label className="text-slate-500">Confirm New Password</label>
                 <div className="relative flex items-center">
                   <input 
                     type={showPass.confirm ? 'text' : 'password'} 
@@ -234,7 +234,7 @@ const Settings = ({ onLogout } = {}) => {
                   type="submit" 
                   className="w-full py-3 btn-primary rounded-xl font-black text-[11px] uppercase tracking-wider "
                 >
-                  Commit Passcode Transformation
+                  Update Password
                 </button>
               </div>
 
@@ -244,12 +244,12 @@ const Settings = ({ onLogout } = {}) => {
           {/* ADDED UTILITY 2: SYSTEM ALERT PREFERENCES */}
           <div className="glass-card rounded-3xl p-5 space-y-3 shadow-2xs text-xs font-bold">
             <span className="text-[10px] text-slate-500 uppercase block font-black tracking-wider flex items-center gap-1">
-              <BellRing className="w-3.5 h-3.5" /> 4. Automated Notification Matrices
+              <BellRing className="w-3.5 h-3.5" /> 4. Notification Preferences
             </span>
             <div className="flex items-center justify-between p-2.5 bg-white/50 border border-slate-100/80 rounded-xl">
               <div>
-                <p className="text-slate-900 font-black">System Logs & Leave Triggers Email Routing</p>
-                <span className="text-[10px] text-slate-500 font-medium">Forward high-priority clerk/teacher leave logs instantly to admin inbox.</span>
+                <p className="text-slate-900 font-black">Email Alerts for Leave Requests</p>
+                <span className="text-[10px] text-slate-500 font-medium">Send clerk and teacher leave requests to the admin inbox.</span>
               </div>
               <button type="button" onClick={() => setEmailAlerts(!emailAlerts)} className="text-slate-900">
                 {emailAlerts ? <ToggleRight className="w-9 h-9 text-emerald-600" /> : <ToggleLeft className="w-9 h-9 text-neutral-400" />}

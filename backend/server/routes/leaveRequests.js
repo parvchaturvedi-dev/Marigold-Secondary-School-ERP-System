@@ -83,10 +83,14 @@ router.get('/', ensureMongo, async (request, response) => {
   const query = {};
 
   if (role === 'teacher') {
+    // A teacher may only see class-wide requests for a class they are allotted;
+    // ignore an arbitrary ?className to prevent cross-class scope leakage.
+    const allotted = Array.isArray(request.auth?.allottedClasses) ? request.auth.allottedClasses : [];
+    const teacherClass = className && allotted.includes(className) ? className : '';
     query.$or = [
       { applicantUsername: username },
       { classTeacherUsername: username },
-      ...(className ? [{ className }] : []),
+      ...(teacherClass ? [{ className: teacherClass }] : []),
     ];
   } else if (role === 'student') {
     query.applicantUsername = username;
@@ -107,6 +111,10 @@ router.get('/', ensureMongo, async (request, response) => {
 
 router.post('/', ensureMongo, async (request, response) => {
   const payload = request.body;
+  // Force applicant identity from the authenticated session so a user cannot
+  // spoof another username or escalate their role to reroute the approval flow.
+  payload.applicantRole = request.auth.role;
+  payload.applicantUsername = request.auth.username;
   const isStudent = payload.applicantRole === 'student';
 
   if (!payload.title || !payload.description || !payload.startDate) {

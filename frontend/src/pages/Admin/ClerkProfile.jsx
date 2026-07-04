@@ -68,7 +68,7 @@ const ClerkProfile = ({ clerk, onBack }) => {
           {/* SECTION BLOCK 1: BIOMETRIC & COMMUNICATIONS */}
           <div className="space-y-3">
             <h5 className="text-[10px] uppercase tracking-wider text-slate-500 flex items-center gap-1.5 border-b border-slate-100/80 pb-1.5 font-black">
-              <User className="w-3.5 h-3.5 text-indigo-500" /> Biometric Demographics & Connection Fields
+              <User className="w-3.5 h-3.5 text-indigo-500" /> Contact & Communication Details
             </h5>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="glass-soft p-3 rounded-xl">
@@ -123,13 +123,13 @@ const ClerkProfile = ({ clerk, onBack }) => {
                       <FileText className="w-4 h-4 text-neutral-500 flex-shrink-0" />
                       <span className="font-mono text-[11px] text-slate-900 truncate">{file}</span>
                     </div>
-                    <span 
+                    <button
                       type="button"
-                      onClick={() => alert(`Opening binary stream link for decryption pipeline: ${file}`)}
+                      onClick={() => alert(`Opening document preview for: ${file}`)}
                       className="text-[9px] text-slate-500 font-black underline cursor-pointer hover:text-indigo-600 tracking-tight"
                     >
                       Inspect File
-                    </span>
+                    </button>
                   </div>
                 ))}
               </div>

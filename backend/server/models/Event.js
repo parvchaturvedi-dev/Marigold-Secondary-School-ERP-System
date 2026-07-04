@@ -14,18 +14,18 @@ const participantSchema = new mongoose.Schema(
     },
     fatherName: {
       type: String,
-      required: true,
       trim: true,
+      default: '',
     },
     className: {
       type: String,
-      required: true,
       trim: true,
+      default: '',
     },
     username: {
       type: String,
-      required: true,
       trim: true,
+      default: '',
     },
     joinedAt: {
       type: Date,

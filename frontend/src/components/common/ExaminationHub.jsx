@@ -83,6 +83,40 @@ import { sendGmailMessages } from './gmail';
 import { useMasterData } from './masterData';
 import { API_BASE_URL, getAuthToken } from './api';
 
+// Paper content is authored in a contentEditable editor and stored as raw HTML in
+// shared module state, so it must be sanitized before it is rendered back with
+// dangerouslySetInnerHTML — otherwise a malicious author can land a stored XSS on
+// every viewer (students included). Strips <script>/<style>, on* handlers, and
+// javascript:/data: URLs while preserving the rich formatting the editor emits.
+const escapeHtmlText = (value = '') =>
+  String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+const sanitizeRichHtml = (html = '') => {
+  if (typeof window === 'undefined' || !window.DOMParser) return '';
+  const doc = new DOMParser().parseFromString(String(html), 'text/html');
+  doc.querySelectorAll('script, style, iframe, object, embed, link, meta').forEach((node) => node.remove());
+  doc.querySelectorAll('*').forEach((el) => {
+    [...el.attributes].forEach((attr) => {
+      const name = attr.name.toLowerCase();
+      const value = String(attr.value || '').replace(/\s+/g, '').toLowerCase();
+      if (name.startsWith('on')) {
+        el.removeAttribute(attr.name);
+      } else if (
+        (name === 'href' || name === 'src' || name === 'xlink:href') &&
+        (value.startsWith('javascript:') || value.startsWith('data:text/html'))
+      ) {
+        el.removeAttribute(attr.name);
+      }
+    });
+  });
+  return doc.body.innerHTML;
+};
+
 // Board Result PDFs upload as multipart/form-data. authFetch is JSON-only,
 // so the raw fetch is used here — token pulled from the same session store.
 const boardResultsApi = {
@@ -1394,7 +1428,7 @@ const PaperSelectedSection = ({ state }) => {
     }
 
     const body = selectedPapers
-      .map((paper) => `<div class="page"><h2>${paper.title}</h2>${paper.content}</div>`)
+      .map((paper) => `<div class="page"><h2>${escapeHtmlText(paper.title)}</h2>${sanitizeRichHtml(paper.content)}</div>`)
       .join('');
     openPrintWindow(`${getExamLabel(selectedExam)} ${className} Papers`, body);
   };
@@ -2567,7 +2601,7 @@ const PaperPreviewModal = ({ paper, onClose }) => (
       <div className="bg-white/40 p-4 overflow-y-auto max-h-[80vh]">
         <div
           className="mx-auto max-w-[794px] min-h-[900px] bg-white border border-white/70 p-8 sm:p-12 text-sm leading-7 shadow-xl"
-          dangerouslySetInnerHTML={{ __html: paper.content }}
+          dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(paper.content) }}
         />
       </div>
     </div>

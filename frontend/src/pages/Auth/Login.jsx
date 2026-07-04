@@ -18,6 +18,8 @@ const Login = ({ onLoginSuccess }) => {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [resetError, setResetError] = useState('');
+  const [forgotNotice, setForgotNotice] = useState('');
 
   const detectedRole = detectRoleFromUsername(username);
 
@@ -25,6 +27,7 @@ const Login = ({ onLoginSuccess }) => {
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
     setErrorMessage('');
+    setForgotNotice('');
 
     const targetUser = username.trim();
     const targetPass = password.trim();
@@ -62,12 +65,13 @@ const Login = ({ onLoginSuccess }) => {
   // EXTENDED FORCE PASSWORD CHANGEOVER HANDLER
   const handleForcedPasswordReset = async (e) => {
     e.preventDefault();
+    setResetError('');
     if (newPassword.length < 6) {
-      alert('Password must be at least 6 characters long.');
+      setResetError('New password must be at least 6 characters long.');
       return;
     }
     if (newPassword !== confirmPassword) {
-      alert('Verification Error: Password parameters do not match.');
+      setResetError('New password and confirmation do not match.');
       return;
     }
 
@@ -83,11 +87,12 @@ const Login = ({ onLoginSuccess }) => {
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
+      setResetError('');
       if (typeof onLoginSuccess === 'function') {
         onLoginSuccess(nextSession);
       }
     } catch (error) {
-      alert(error.message);
+      setResetError(error.message);
     }
   };
 
@@ -220,6 +225,21 @@ const Login = ({ onLoginSuccess }) => {
             </div>
           )}
 
+          {/* FORGOT PASSWORD INLINE NOTICE */}
+          {forgotNotice && (
+            <div className="bg-indigo-50/80 backdrop-blur-sm border border-indigo-200 text-indigo-800 text-xs font-semibold px-4 py-3 rounded-xl flex items-start justify-between gap-2.5 shadow-sm">
+              <span>{forgotNotice}</span>
+              <button
+                type="button"
+                onClick={() => setForgotNotice('')}
+                className="text-indigo-500 hover:text-indigo-700 font-bold shrink-0"
+                aria-label="Dismiss notice"
+              >
+                ×
+              </button>
+            </div>
+          )}
+
           {/* CREDENTIAL FORM LAYER */}
           <form onSubmit={handleLoginSubmit} className="space-y-5">
 
@@ -248,7 +268,7 @@ const Login = ({ onLoginSuccess }) => {
                 </label>
                 <button
                   type="button"
-                  onClick={() => alert("Please contact the computer department or system admin desk to manage encryption resets.")}
+                  onClick={() => setForgotNotice('To reset your password, please contact the school computer department or system admin desk.')}
                   className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 hover:underline transition-all"
                 >
                   Forgot Password?
@@ -328,6 +348,13 @@ const Login = ({ onLoginSuccess }) => {
             </div>
 
             <form onSubmit={handleForcedPasswordReset} className="space-y-4 pt-1">
+
+              {resetError && (
+                <div className="bg-rose-50/80 border border-rose-200 text-rose-800 text-xs font-semibold px-3 py-2.5 rounded-xl flex items-start gap-2">
+                  <ShieldAlert className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
+                  <span>{resetError}</span>
+                </div>
+              )}
 
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-700 ml-0.5 block">Current Temporary Password</label>

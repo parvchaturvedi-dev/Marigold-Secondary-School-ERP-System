@@ -148,6 +148,9 @@ const StudentManagement = ({ setActivePage }) => {
 
   // Updated Roster Pool matching Student Assigning parameters exactly
   const [studentsDb, setStudentsDb] = useMongoState('admin-student-management-students', []);
+  // Alumni/pending bucket: admission numbers parked here (passed-out / left with
+  // dues) are still "in use" and must not be silently re-created by a bulk import.
+  const [alumniPending] = useMongoState('admin-finance-alumni-pending', []);
   const bulkFileInputRef = useRef(null);
 
   // Operational Filters State Layout
@@ -228,8 +231,15 @@ const StudentManagement = ({ setActivePage }) => {
         return;
       }
 
-      const validStudents = [];
+      const validByAdmission = new Map();
       const skippedRows = [];
+      const duplicateRows = [];
+      const alumniRows = [];
+      const alumniIds = new Set(
+        (Array.isArray(alumniPending) ? alumniPending : [])
+          .map((student) => String(student.admissionNumber || student.id || '').trim().toUpperCase())
+          .filter(Boolean)
+      );
 
       rows.forEach((row, index) => {
         const student = buildStudentRecord(row, selectedClassView);
@@ -237,8 +247,23 @@ const StudentManagement = ({ setActivePage }) => {
           skippedRows.push(index + 2);
           return;
         }
-        validStudents.push(student);
+        // Guard against admission numbers still held in the alumni/pending bucket
+        // so a passed-out student's dues can't be orphaned by a re-import.
+        if (alumniIds.has(student.admissionNumber)) {
+          alumniRows.push(index + 2);
+          return;
+        }
+        // Guard duplicate admission numbers within the sheet itself: keep the
+        // first occurrence and flag the later rows instead of silently adding
+        // two records that share the same primary key.
+        if (validByAdmission.has(student.admissionNumber)) {
+          duplicateRows.push(index + 2);
+          return;
+        }
+        validByAdmission.set(student.admissionNumber, student);
       });
+
+      const validStudents = [...validByAdmission.values()];
 
       if (validStudents.length === 0) {
         alert('No valid students found. Admission number, student name, and class are required.');
@@ -255,7 +280,11 @@ const StudentManagement = ({ setActivePage }) => {
 
       alert(
         `Bulk import complete.\nAdded/updated: ${validStudents.length} students${
-          skippedRows.length ? `\nSkipped rows: ${skippedRows.join(', ')}` : ''
+          skippedRows.length ? `\nSkipped rows (missing required fields): ${skippedRows.join(', ')}` : ''
+        }${
+          duplicateRows.length ? `\nSkipped rows (duplicate admission number in file): ${duplicateRows.join(', ')}` : ''
+        }${
+          alumniRows.length ? `\nSkipped rows (admission number held in alumni/pending dues): ${alumniRows.join(', ')}` : ''
         }\n\nDocuments can be uploaded later from each student's profile > Document Vault.`
       );
     } catch (error) {
