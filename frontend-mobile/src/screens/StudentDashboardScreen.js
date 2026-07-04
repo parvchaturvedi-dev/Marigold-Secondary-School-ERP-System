@@ -18,6 +18,7 @@ import OverviewCard from "../components/cards/OverviewCard";
 import { getActiveStudentProfile } from "../shared/profile";
 import { colors } from "../shared/theme/colors";
 import { gradients, glassColors, glassStyles } from "../shared/theme/glass";
+import { useTheme } from "../theme/ThemeContext";
 import AuroraBackground from "../shared/components/AuroraBackground";
 import GlassCard from "../shared/components/GlassCard";
 
@@ -187,10 +188,18 @@ function HomeContent({ user, summary, loading, error, openModule }) {
 }
 
 function ActionCard({ icon, label, title, subtitle, button, onPress }) {
+  const { palette } = useTheme();
   return (
     <View
       style={{
-        ...glassStyles.card,
+        backgroundColor: palette.card,
+        borderWidth: 1,
+        borderColor: palette.cardBorder,
+        shadowColor: palette.shadow,
+        shadowOpacity: palette.shadowOpacity,
+        shadowRadius: 10,
+        shadowOffset: { width: 0, height: 4 },
+        elevation: 3,
         borderRadius: 18,
         padding: 18,
         flexDirection: "row",

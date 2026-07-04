@@ -1,20 +1,28 @@
 import React from "react";
 import { View, Text } from "react-native";
-import { glassStyles } from "../../shared/theme/glass";
+import { useTheme } from "../../theme/ThemeContext";
 
 export default function OverviewCard({ title, value, subtitle, color }) {
+  const { palette } = useTheme();
   return (
     <View
       style={{
-        ...glassStyles.card,
         flex: 1,
         borderRadius: 16,
         paddingVertical: 18,
         alignItems: "center",
         marginHorizontal: 5,
+        backgroundColor: palette.card,
+        borderWidth: 1,
+        borderColor: palette.cardBorder,
+        shadowColor: palette.shadow,
+        shadowOpacity: palette.shadowOpacity,
+        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 3 },
+        elevation: 2,
       }}
     >
-      <Text style={{ fontSize: 14, color: "#475569", fontWeight: "700" }}>
+      <Text style={{ fontSize: 14, color: palette.inkSoft, fontWeight: "700" }}>
         {title}
       </Text>
 

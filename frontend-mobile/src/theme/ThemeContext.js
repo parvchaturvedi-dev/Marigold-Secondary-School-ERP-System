@@ -10,8 +10,10 @@ const PALETTES = {
   light: {
     mode: "light",
     statusBar: "dark",
-    // Plain page background + solid white cards
-    bg: "#f3f4f7",
+    // Aurora gradient background + solid white cards
+    bg: "#eef2ff",
+    aurora: ["#eef2ff", "#eff6ff", "#faf5ff"],
+    blobs: ["rgba(129,140,248,0.22)", "rgba(125,211,252,0.20)", "rgba(240,171,252,0.18)"],
     card: "#ffffff",
     cardBorder: "#e6e8ee",
     cardSoft: "#f7f8fa",
@@ -37,6 +39,8 @@ const PALETTES = {
     mode: "dark",
     statusBar: "light",
     bg: "#0b1020",
+    aurora: ["#0b1020", "#131a2e", "#1e1b4b"],
+    blobs: ["rgba(99,102,241,0.32)", "rgba(56,189,248,0.18)", "rgba(168,85,247,0.22)"],
     card: "#161d2e",
     cardBorder: "#273248",
     cardSoft: "#1b2334",
