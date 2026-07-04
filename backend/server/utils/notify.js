@@ -15,10 +15,27 @@ const resolveRecipientUsers = async ({
   recipientUsername,
   recipientRole,
   recipientClassName,
+  recipientStudentId,
 }) => {
   // Most specific: a single named user.
   if (recipientUsername) {
     return User.find({ username: recipientUsername }).lean();
+  }
+
+  // Next most specific: a student targeted by admission number / studentId.
+  // Look up their user account so only that student (and no one else) is paged.
+  if (recipientStudentId) {
+    const matched = await User.find({
+      $or: [
+        { username: recipientStudentId },
+        { 'profile.admissionNumber': recipientStudentId },
+        { 'profile.studentId': recipientStudentId },
+        { 'profile.linkedStudents.admissionNumber': recipientStudentId },
+      ],
+    }).lean();
+    if (matched.length) return matched;
+    // Fall through only if we couldn't find anyone — no silent broadcast.
+    return [];
   }
 
   // No role means we cannot safely target anyone.
@@ -84,6 +101,7 @@ export async function createNotification({
       recipientUsername,
       recipientRole,
       recipientClassName,
+      recipientStudentId,
     });
     const tokens = collectTokens(users);
 

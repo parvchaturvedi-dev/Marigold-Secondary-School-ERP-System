@@ -3,6 +3,7 @@ import Application from '../models/Application.js';
 import { isMongoConnected } from '../db.js';
 import { emitRealtimeEvent, isUserActiveOnErp } from '../realtime.js';
 import { resolveDisplayName } from '../utils/nameLookup.js';
+import { createNotification } from '../utils/notify.js';
 
 const router = express.Router();
 const CLASS_APPROVAL_THRESHOLD = 80;
@@ -247,6 +248,19 @@ router.patch('/:id/admin-action', ensureMongo, async (request, response) => {
   await application.save();
 
   emitRealtimeEvent('mgps-erp-applications-updated');
+
+  // Notify the applicant (only them) about the admin decision.
+  if (application.senderUsername) {
+    const verbMap = { approved: 'approved', rejected: 'rejected', replied: 'replied to' };
+    createNotification({
+      title: `Application ${action}`,
+      description: `Your application "${application.title || 'Application'}" was ${verbMap[action]}${reply ? `: ${reply}` : ''}.`,
+      type: 'application',
+      linkPage: 'Application',
+      recipientUsername: application.senderUsername,
+    }).catch(() => {});
+  }
+
   response.json(await normalizeApplication(application));
 });
 
