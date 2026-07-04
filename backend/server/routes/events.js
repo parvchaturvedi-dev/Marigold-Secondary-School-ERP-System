@@ -40,6 +40,9 @@ const toEventPayload = async (event) => {
   fromDate: event.fromDate,
   toDate: event.toDate,
   participationEnabled: event.participationEnabled,
+  participationOpensAt: event.participationOpensAt,
+  participationClosesAt: event.participationClosesAt,
+  participationOpenNow: isParticipationOpenNow(event),
   imageName: event.imageName,
   imageType: event.imageType,
   imageSize: event.imageSize,
@@ -65,9 +68,34 @@ const buildEventFields = (body) => ({
   fromDate: body.durationType === 'multiple' ? body.fromDate || '' : '',
   toDate: body.durationType === 'multiple' ? body.toDate || '' : '',
   participationEnabled: toBoolean(body.participationEnabled),
+  participationOpensAt: (body.participationOpensAt || '').trim(),
+  participationClosesAt: (body.participationClosesAt || '').trim(),
   createdByRole: body.createdByRole,
   createdByUsername: body.createdByUsername,
 });
+
+const parseDate = (value) => {
+  if (!value) return null;
+  const iso = String(value).length <= 10 ? `${value}T00:00:00` : value;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+
+// Effective participation gate: manual toggle AND (if provided) time window.
+const isParticipationOpenNow = (event) => {
+  if (!event?.participationEnabled) return false;
+  const now = new Date();
+  const opens = parseDate(event.participationOpensAt);
+  if (opens && now < opens) return false;
+  const closes = parseDate(event.participationClosesAt);
+  if (closes) {
+    // If a plain YYYY-MM-DD close date is given, treat it as inclusive
+    // (end of that day) so the day itself still counts as open.
+    if (String(event.participationClosesAt).length <= 10) closes.setHours(23, 59, 59, 999);
+    if (now > closes) return false;
+  }
+  return true;
+};
 
 const applyImageFields = (event, file) => {
   if (!file) return;
@@ -149,15 +177,19 @@ router.patch('/:id/participate', ensureMongo, async (request, response) => {
     return;
   }
 
-  if (!event.participationEnabled) {
-    response.status(409).json({ message: 'Participation is not enabled for this event.' });
+  if (!isParticipationOpenNow(event)) {
+    response.status(409).json({ message: 'Participation is currently closed for this event.' });
     return;
   }
 
   const participant = request.body;
-  event.participants = event.participants.filter(
-    (entry) => entry.admissionNumber !== participant.admissionNumber
+  const already = (event.participants || []).some(
+    (entry) => (entry.admissionNumber || '') === (participant.admissionNumber || '')
   );
+  if (already) {
+    response.status(409).json({ message: 'Already participated.' });
+    return;
+  }
   event.participants.push({
     admissionNumber: participant.admissionNumber,
     name: participant.name,

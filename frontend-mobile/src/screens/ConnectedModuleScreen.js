@@ -39,7 +39,7 @@ import {
   voteOnApplication,
 } from "../api/moduleApi";
 import { apiRequest } from "../api/apiClient";
-import { DateField, MultiSelect } from "./modules/shared/formKit";
+import { DateField, MultiSelect, Toggle } from "./modules/shared/formKit";
 import { getActiveStudentProfile, getStaffProfile, getTeacherProfile } from "../shared/profile";
 import FeesScreen from "./modules/fees/FeesScreen";
 import ExaminationsScreen from "./modules/examinations/ExaminationsScreen";
@@ -250,7 +250,17 @@ function initialForm(title, user = {}) {
     return { title: "", description: "", subject: "", targetClasses: getDefaultAssignmentTargets(user), checkingDate: todayIsoDate(), attachment: null };
   }
   if (title === "Events") {
-    return { title: "", description: "", durationType: "single", date: todayIsoDate(), fromDate: todayIsoDate(), toDate: todayIsoDate(), participationEnabled: false };
+    return {
+      title: "",
+      description: "",
+      durationType: "single",
+      date: todayIsoDate(),
+      fromDate: todayIsoDate(),
+      toDate: todayIsoDate(),
+      participationEnabled: false,
+      participationOpensAt: "",
+      participationClosesAt: "",
+    };
   }
   if (title === "Notices") {
     return { title: "", description: "", category: "General", targetClasses: "ALL CLASSES" };
@@ -406,6 +416,8 @@ export default function ConnectedModuleScreen() {
           fromDate: form.fromDate,
           toDate: form.toDate,
           participationEnabled: form.participationEnabled,
+          participationOpensAt: form.participationOpensAt || "",
+          participationClosesAt: form.participationClosesAt || "",
           createdByRole: user.role,
           createdByUsername: user.username,
         });
@@ -611,7 +623,17 @@ function PrimaryButton({ icon, label, onPress, disabled }) {
 
 function DataCard({ row, index, title, onParticipate, onRowAction, acting, user }) {
   const details = getDetails(row);
-  const canParticipate = title === "Events" && row.participationEnabled && row.id;
+  const student = title === "Events" ? (getActiveStudentProfile(user) || {}) : {};
+  const myAdmission = String(student.admissionNumber || student.id || user?.username || "").toLowerCase();
+  const hasParticipated =
+    title === "Events" &&
+    Array.isArray(row.participants) &&
+    row.participants.some((p) => String(p?.admissionNumber || p?.username || "").toLowerCase() === myAdmission);
+  // Server sends participationOpenNow when the schedule window is active. Fall
+  // back to the legacy participationEnabled flag if the server hasn't upgraded.
+  const participationOpen =
+    row.participationOpenNow !== undefined ? Boolean(row.participationOpenNow) : Boolean(row.participationEnabled);
+  const canParticipate = title === "Events" && participationOpen && row.id && !hasParticipated;
   const [expanded, setExpanded] = useState(false);
   const isAdmin = user?.role === "admin";
   const isTeacher = user?.role === "teacher";
@@ -657,6 +679,18 @@ function DataCard({ row, index, title, onParticipate, onRowAction, acting, user 
         </>
       )}
 
+      {title === "Events" && hasParticipated && (
+        <View style={[styles.secondaryButton, { backgroundColor: "rgba(16,185,129,0.14)" }]}>
+          <Ionicons name="checkmark-circle" size={18} color="#059669" />
+          <Text style={[styles.secondaryButtonText, { color: "#047857" }]}>Participated</Text>
+        </View>
+      )}
+      {title === "Events" && !participationOpen && !hasParticipated && (
+        <View style={[styles.secondaryButton, { backgroundColor: "rgba(148,163,184,0.18)" }]}>
+          <Ionicons name="lock-closed-outline" size={18} color="#475569" />
+          <Text style={[styles.secondaryButtonText, { color: "#475569" }]}>Participation closed</Text>
+        </View>
+      )}
       {canParticipate && (
         <TouchableOpacity style={styles.secondaryButton} onPress={() => onParticipate(row)} disabled={acting}>
           <Ionicons name="person-add-outline" size={18} color={colors.primary} />
@@ -885,9 +919,21 @@ function ActionForm({ title, form, updateForm, onSubmit, acting, user }) {
           ) : (
             <DateField label="Event Date" value={form.date} onChange={(value) => updateForm("date", value)} />
           )}
-          <View style={styles.actionRow}>
-            <SmallButton label={form.participationEnabled ? "Participation On" : "Participation Off"} icon="person-add-outline" active={form.participationEnabled} onPress={() => updateForm("participationEnabled", !form.participationEnabled)} />
-          </View>
+          <Toggle
+            label={form.participationEnabled ? "Participation OPEN" : "Participation CLOSED"}
+            value={form.participationEnabled}
+            onValueChange={(value) => updateForm("participationEnabled", value)}
+          />
+          {form.participationEnabled && (
+            <View style={styles.actionRow}>
+              <View style={{ flex: 1 }}>
+                <DateField label="Opens on (optional)" value={form.participationOpensAt} onChange={(v) => updateForm("participationOpensAt", v)} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <DateField label="Closes on (optional)" value={form.participationClosesAt} onChange={(v) => updateForm("participationClosesAt", v)} />
+              </View>
+            </View>
+          )}
         </>
       )}
       {title === "Notices" && (

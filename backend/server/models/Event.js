@@ -72,6 +72,18 @@ const eventSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // Optional auto-open / auto-close window. If left blank, only the manual
+    // participationEnabled flag decides whether the participate button is live.
+    participationOpensAt: {
+      type: String, // ISO datetime or YYYY-MM-DD
+      trim: true,
+      default: '',
+    },
+    participationClosesAt: {
+      type: String,
+      trim: true,
+      default: '',
+    },
     imageName: {
       type: String,
       trim: true,

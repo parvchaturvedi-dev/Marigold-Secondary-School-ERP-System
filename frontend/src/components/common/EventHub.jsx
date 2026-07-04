@@ -34,6 +34,8 @@ const emptyForm = {
   fromDate: '',
   toDate: '',
   participationEnabled: false,
+  participationOpensAt: '',
+  participationClosesAt: '',
   imageFile: null,
   imageName: '',
   removeImage: false,
@@ -315,6 +317,8 @@ const EventHub = ({ role, session }) => {
       fromDate: event.fromDate || '',
       toDate: event.toDate || '',
       participationEnabled: Boolean(event.participationEnabled),
+      participationOpensAt: event.participationOpensAt || '',
+      participationClosesAt: event.participationClosesAt || '',
       imageFile: null,
       imageName: event.imageName || '',
       removeImage: false,
@@ -594,8 +598,12 @@ const EventHub = ({ role, session }) => {
                         </p>
                       </div>
                       {hasJoined(selectedEvent) ? (
-                        <span className="px-4 py-2 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100 text-xs font-black text-center">
-                          Participating
+                        <span className="px-4 py-2 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100 text-xs font-black text-center inline-flex items-center gap-1">
+                          <CheckCircle2 className="w-4 h-4" /> Participated
+                        </span>
+                      ) : selectedEvent.participationOpenNow === false ? (
+                        <span className="px-4 py-2 rounded-full bg-slate-100 text-slate-500 border border-slate-200 text-xs font-black text-center">
+                          Participation closed
                         </span>
                       ) : (
                         <button
@@ -896,6 +904,32 @@ const EventFormModal = ({
             <div className="w-10 h-6 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-slate-200 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-500"></div>
           </label>
         </div>
+
+        {eventForm.participationEnabled && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3 bg-slate-50 border border-slate-100 rounded-2xl">
+            <label className="block">
+              <span className="text-[11px] font-black text-slate-600 block mb-1">Opens on (optional)</span>
+              <input
+                type="date"
+                value={eventForm.participationOpensAt || ''}
+                onChange={(e) => onFieldChange('participationOpensAt', e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-bold"
+              />
+            </label>
+            <label className="block">
+              <span className="text-[11px] font-black text-slate-600 block mb-1">Closes on (optional)</span>
+              <input
+                type="date"
+                value={eventForm.participationClosesAt || ''}
+                onChange={(e) => onFieldChange('participationClosesAt', e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-bold"
+              />
+            </label>
+            <p className="col-span-full text-[10px] text-slate-500 font-semibold">
+              Leave blank to keep the toggle above as the only control. Any student who has already participated will see a locked "Participated" button.
+            </p>
+          </div>
+        )}
 
         <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100/80">
           <button
