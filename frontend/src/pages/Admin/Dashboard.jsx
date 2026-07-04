@@ -142,6 +142,19 @@ const buildFinanceAnalytics = (students = [], classNames = []) => {
     ]);
   });
 
+  // Roll up class-wise numbers into a single Total Collected / Total Pending
+  // pair per month, so the chart stays legible instead of showing N tangled lines.
+  chartData.forEach((row) => {
+    let collected = 0;
+    let pending = 0;
+    classes.forEach((className) => {
+      collected += Number(row[className] || 0);
+      pending += Number(row[`${className} Pending`] || 0);
+    });
+    row.Collected = collected;
+    row.Pending = pending;
+  });
+
   return {
     classes,
     chartData,
@@ -348,19 +361,27 @@ const Dashboard = ({ setActivePage }) => {
                 />
                 <Tooltip content={<FinanceTooltip />} />
                 <Legend wrapperStyle={{ fontSize: 11, fontWeight: 700 }} />
-                {analytics.classes.map((className) => (
-                  <Line
-                    key={className}
-                    type="monotone"
-                    dataKey={className}
-                    name={className}
-                    stroke={getClassColor(className)}
-                    strokeWidth={3}
-                    dot={{ r: 3 }}
-                    activeDot={{ r: 5 }}
-                    connectNulls
-                  />
-                ))}
+                <Line
+                  type="monotone"
+                  dataKey="Collected"
+                  name="Total Collected"
+                  stroke="#10b981"
+                  strokeWidth={3}
+                  dot={{ r: 4, fill: '#10b981' }}
+                  activeDot={{ r: 6 }}
+                  connectNulls
+                />
+                <Line
+                  type="monotone"
+                  dataKey="Pending"
+                  name="Total Pending"
+                  stroke="#ef4444"
+                  strokeWidth={3}
+                  dot={{ r: 4, fill: '#ef4444' }}
+                  activeDot={{ r: 6 }}
+                  connectNulls
+                />
+                {/* Per-class series stay in the underlying rows so the tooltip still shows the class-wise breakdown. */}
               </LineChart>
             </ResponsiveContainer>
           </div>

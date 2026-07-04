@@ -635,16 +635,27 @@ const Finance = ({ setActivePage }) => {
                   <YAxis stroke="#6B7280" />
                   <Tooltip content={<FinanceTooltip />} />
                   <Legend />
-                  {analytics.classes.map((className) => (
-                    <Line
-                      key={className}
-                      type="monotone"
-                      dataKey={className}
-                      stroke={getClassColor(className)}
-                      strokeWidth={2}
-                      dot={false}
-                    />
-                  ))}
+                  <Line
+                    type="monotone"
+                    dataKey="Collected"
+                    name="Total Collected"
+                    stroke="#10b981"
+                    strokeWidth={3}
+                    dot={{ r: 4, fill: '#10b981' }}
+                    activeDot={{ r: 6 }}
+                    connectNulls
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="Pending"
+                    name="Total Pending"
+                    stroke="#ef4444"
+                    strokeWidth={3}
+                    dot={{ r: 4, fill: '#ef4444' }}
+                    activeDot={{ r: 6 }}
+                    connectNulls
+                  />
+                  {/* Class-wise numbers stay in each row so the tooltip still shows per-class breakdown. */}
                 </LineChart>
               </ResponsiveContainer>
             </div>

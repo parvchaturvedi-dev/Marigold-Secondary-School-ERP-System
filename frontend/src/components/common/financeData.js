@@ -147,6 +147,19 @@ export const buildFinanceAnalytics = (students = [], classNames = []) => {
     chartData[currentMonthIndex][`${student.className} Pending`] += student.pendingFees;
   });
 
+  // Roll up per-class numbers into single Total Collected / Total Pending
+  // series per month so charts stay readable (tooltips can still break down by class).
+  chartData.forEach((row) => {
+    let collected = 0;
+    let pending = 0;
+    classes.forEach((className) => {
+      collected += Number(row[className] || 0);
+      pending += Number(row[`${className} Pending`] || 0);
+    });
+    row.Collected = collected;
+    row.Pending = pending;
+  });
+
   return { classes, chartData, normalizedStudents };
 };
 
