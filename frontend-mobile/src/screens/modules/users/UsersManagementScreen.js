@@ -41,11 +41,13 @@ export default function UsersManagementScreen() {
   const [state, setState] = useState({}); // username -> {otpOpen, otp, password, editOpen, edit}
 
   const load = useCallback(async () => {
-    setLoading(true);
+    // If we already have cached users, refresh in the background (no spinner).
+    if (!globalThis.__mgpsUsersCache) setLoading(true);
     try {
-      // Render's free tier cold-starts — bump timeout tolerance.
       const payload = await apiRequest("/auth/users");
-      setUsers(Array.isArray(payload) ? payload : payload?.users || []);
+      const list = Array.isArray(payload) ? payload : payload?.users || [];
+      globalThis.__mgpsUsersCache = list;
+      setUsers(list);
     } catch (err) {
       banner.showError(err);
     } finally {
@@ -53,25 +55,15 @@ export default function UsersManagementScreen() {
     }
   }, [banner]);
 
-  // Show cached users instantly on subsequent opens.
+  // Show cached users instantly on the very first render.
   useEffect(() => {
-    let cached = false;
-    try {
-      const raw = globalThis.__mgpsUsersCache;
-      if (Array.isArray(raw) && raw.length) {
-        setUsers(raw);
-        setLoading(false);
-        cached = true;
-      }
-    } catch { /* noop */ }
-    if (!cached) load();
-    // Background refresh either way
-    if (cached) load();
+    const cached = globalThis.__mgpsUsersCache;
+    if (Array.isArray(cached) && cached.length) {
+      setUsers(cached);
+      setLoading(false);
+    }
+    load();
   }, [load]);
-
-  useEffect(() => {
-    if (users.length) globalThis.__mgpsUsersCache = users;
-  }, [users]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();

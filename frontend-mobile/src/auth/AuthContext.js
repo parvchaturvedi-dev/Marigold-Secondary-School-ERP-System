@@ -70,29 +70,31 @@ export function AuthProvider({ children }) {
           return;
         }
 
-        // Validate session with backend
-        try {
-          const serverSession = await apiRequest("/auth/session");
+        // OPTIMISTIC: trust the cached session and go straight to the dashboard.
+        // The backend validation runs in the background — if it fails we log out.
+        const cachedUser = hydrateUser(session);
+        setUser(cachedUser);
+        setScreen(`${session.role}-dashboard`);
+        registerPushToken();
+        connectRealtime(session.token);
 
-          if (serverSession && serverSession.role && serverSession.username) {
-            // Session is valid - auto-login
-            const userData = hydrateUser(serverSession);
-            setUser(userData);
-            setScreen(`${serverSession.role}-dashboard`);
-
-            // Update stored session with fresh data from server
-            await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(serverSession));
-            registerPushToken();
-            connectRealtime(serverSession.token || session.token);
-            return;
-          }
-        } catch (validationError) {
-          console.log("Session validation failed:", validationError.message);
-        }
-
-        // Validation failed or server unreachable - clear session, show login
-        await AsyncStorage.removeItem(SESSION_KEY);
-        setScreen("login");
+        // Fire-and-forget refresh (doesn't block the dashboard from rendering).
+        apiRequest("/auth/session")
+          .then(async (serverSession) => {
+            if (serverSession && serverSession.role && serverSession.username) {
+              setUser(hydrateUser(serverSession));
+              await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(serverSession));
+            } else {
+              // Server explicitly rejected — clear + go to login.
+              await AsyncStorage.removeItem(SESSION_KEY);
+              setUser(null);
+              setScreen("login");
+            }
+          })
+          .catch((validationError) => {
+            // Network hiccup — keep the cached session; the user can retry.
+            console.log("Session validation failed:", validationError?.message || validationError);
+          });
       } catch (e) {
         console.error("Failed to load session:", e);
         await AsyncStorage.removeItem(SESSION_KEY).catch(() => {});
@@ -162,6 +164,7 @@ export function AuthProvider({ children }) {
       console.error("Failed to clear session:", e);
     }
     disconnectRealtime();
+    try { globalThis.__mgpsUsersCache = null; } catch { /* noop */ }
     setUser(null);
     setSelectedModule(null);
     setScreen("login");

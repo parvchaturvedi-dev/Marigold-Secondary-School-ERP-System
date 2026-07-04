@@ -513,19 +513,27 @@ export function useBanner() {
   return { error, success, showError, showSuccess, clear };
 }
 
+// In-memory cache shared across all useModuleState instances so hopping
+// between screens is instant instead of refetching every namespace each time.
+const moduleStateCache = new Map();
+
 // Load & persist a module-state array namespace (admin/clerk write access).
 export function useModuleState(namespace) {
-  const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const cached = moduleStateCache.get(namespace);
+  const [items, setItems] = useState(cached || []);
+  const [loading, setLoading] = useState(!cached);
   const [error, setError] = useState("");
 
   const reload = useCallback(async () => {
-    setLoading(true);
+    // If we already have cached data, refresh in the background — no spinner.
+    if (!moduleStateCache.has(namespace)) setLoading(true);
     setError("");
     try {
       const payload = await apiRequest(`/module-state/${encodeURIComponent(namespace)}`);
       const value = payload?.value;
-      setItems(Array.isArray(value) ? value : value ? [value] : []);
+      const next = Array.isArray(value) ? value : value ? [value] : [];
+      moduleStateCache.set(namespace, next);
+      setItems(next);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -546,7 +554,7 @@ export function useModuleState(namespace) {
       pending = setTimeout(() => {
         pending = null;
         reload();
-      }, 800);
+      }, 2500);
     });
     return () => {
       if (pending) clearTimeout(pending);
@@ -560,6 +568,7 @@ export function useModuleState(namespace) {
         method: "PUT",
         body: JSON.stringify({ value: nextItems }),
       });
+      moduleStateCache.set(namespace, nextItems);
       setItems(nextItems);
     },
     [namespace]
