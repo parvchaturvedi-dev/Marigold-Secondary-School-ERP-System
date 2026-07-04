@@ -16,6 +16,11 @@
     ],
     "android": {
       "package": "com.parvchaturvediofficial.mgpserpmobile"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "bacdeda8-7b83-4529-84c2-18328c2eaf4d"
+      }
     }
   }
 }

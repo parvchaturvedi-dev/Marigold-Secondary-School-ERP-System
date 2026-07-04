@@ -39,6 +39,7 @@ export const adminModules = [
   },
   { title: "Feature Page", icon: "star-outline", color: "#EC4899" },
   { title: "Finance", icon: "wallet-outline", color: "#F59E0B" },
+  { title: "Payroll", icon: "cash-outline", color: "#059669" },
   { title: "Timetable", icon: "calendar-clear-outline", color: "#0F766E" },
   {
     title: "Faculty Desk",

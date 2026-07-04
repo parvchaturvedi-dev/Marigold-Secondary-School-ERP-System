@@ -38,10 +38,14 @@ import {
   teacherActionLeaveRequest,
   voteOnApplication,
 } from "../api/moduleApi";
+import { apiRequest } from "../api/apiClient";
+import { DateField, MultiSelect } from "./modules/shared/formKit";
 import { getActiveStudentProfile, getStaffProfile, getTeacherProfile } from "../shared/profile";
 import FeesScreen from "./modules/fees/FeesScreen";
 import ExaminationsScreen from "./modules/examinations/ExaminationsScreen";
 import MeetingsScreen from "./modules/meetings/MeetingsScreen";
+import { resolveModuleScreen } from "./modules/registry";
+import { exportIdCardPdf, exportManyIdCards } from "./modules/idcard/exportIdCard";
 
 const hiddenKeys = new Set([
   "_id",
@@ -502,11 +506,17 @@ export default function ConnectedModuleScreen() {
     }
   }
 
+  const isApprover = user?.role === "admin" || user?.role === "clerk";
   const showForm =
-    (title === "Application" || title === "Leave Requests") ||
+    ((title === "Application" || title === "Leave Requests") && !isApprover) ||
     (canCreateAssignment(user) && (title === "Assignment" || title === "Assignments")) ||
     (canManage(user) && title === "Teacher Assignment") ||
     (canManage(user) && (title === "Events" || title === "Notices"));
+
+  const RegisteredScreen = resolveModuleScreen(title);
+  if (RegisteredScreen) {
+    return <RegisteredScreen user={user} />;
+  }
 
   if (title === "Fees") {
     return <FeesScreen user={user} />;
@@ -717,7 +727,42 @@ function EventContent({ row, expanded, setExpanded }) {
   );
 }
 
+const ALL_CLASSES_OPTION = "ALL CLASSES";
+
 function ActionForm({ title, form, updateForm, onSubmit, acting, user }) {
+  const needsClassList = title === "Notices" || title === "Assignment" || title === "Assignments";
+  const [classNames, setClassNames] = useState([]);
+
+  useEffect(() => {
+    if (!needsClassList) return;
+    let active = true;
+    (async () => {
+      try {
+        const payload = await apiRequest("/module-state/admin-class-management-classes");
+        const value = payload?.value;
+        const list = Array.isArray(value) ? value : value ? [value] : [];
+        const names = list
+          .map((item) => item?.name || item?.className || item?.class)
+          .filter(Boolean);
+        if (active) setClassNames([...new Set(names)]);
+      } catch {
+        if (active) setClassNames([]);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [needsClassList]);
+
+  // targetClasses is stored as a comma string; convert to/from an array for MultiSelect
+  // so the exact same payload still reaches the submit handlers.
+  const targetClassValues = String(form.targetClasses || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const noticeClassOptions = [ALL_CLASSES_OPTION, ...classNames];
+  const setTargetClasses = (nextArray) => updateForm("targetClasses", nextArray.join(", "));
+
   const disabled =
     title === "Teacher Assignment"
       ? !form.name?.trim() || !form.email?.trim() || !form.mobile?.trim()
@@ -802,14 +847,24 @@ function ActionForm({ title, form, updateForm, onSubmit, acting, user }) {
       )}
       {title === "Leave Requests" && (
         <View style={styles.actionRow}>
-          <TextInput style={[styles.input, { flex: 1 }]} value={form.startDate} onChangeText={(value) => updateForm("startDate", value)} placeholder="From YYYY-MM-DD" />
-          <TextInput style={[styles.input, { flex: 1 }]} value={form.endDate} onChangeText={(value) => updateForm("endDate", value)} placeholder="To YYYY-MM-DD" />
+          <View style={{ flex: 1 }}>
+            <DateField label="From" value={form.startDate} onChange={(value) => updateForm("startDate", value)} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <DateField label="To" value={form.endDate} onChange={(value) => updateForm("endDate", value)} />
+          </View>
         </View>
       )}
       {(title === "Assignment" || title === "Assignments") && (
         <>
-          <TextInput style={styles.input} value={form.targetClasses} onChangeText={(value) => updateForm("targetClasses", value)} placeholder="Target classes e.g. Class 8, Class 9" />
-          <TextInput style={styles.input} value={form.checkingDate} onChangeText={(value) => updateForm("checkingDate", value)} placeholder="Checking date YYYY-MM-DD" />
+          <MultiSelect
+            label="Target Classes"
+            options={classNames}
+            values={targetClassValues}
+            onChange={setTargetClasses}
+            hint="Select one or more classes for this assignment."
+          />
+          <DateField label="Checking Date" value={form.checkingDate} onChange={(value) => updateForm("checkingDate", value)} />
           <TouchableOpacity style={styles.secondaryButton} onPress={pickAssignmentAttachment}>
             <Ionicons name="attach-outline" size={18} color={colors.primary} />
             <Text style={styles.secondaryButtonText}>{form.attachment?.name ? form.attachment.name : "Attach Image / Video / PDF"}</Text>
@@ -818,14 +873,31 @@ function ActionForm({ title, form, updateForm, onSubmit, acting, user }) {
       )}
       {title === "Events" && (
         <>
-          <TextInput style={styles.input} value={form.date} onChangeText={(value) => updateForm("date", value)} placeholder="Event date YYYY-MM-DD" />
+          {form.durationType === "multiple" ? (
+            <View style={styles.actionRow}>
+              <View style={{ flex: 1 }}>
+                <DateField label="From" value={form.fromDate} onChange={(value) => updateForm("fromDate", value)} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <DateField label="To" value={form.toDate} onChange={(value) => updateForm("toDate", value)} />
+              </View>
+            </View>
+          ) : (
+            <DateField label="Event Date" value={form.date} onChange={(value) => updateForm("date", value)} />
+          )}
           <View style={styles.actionRow}>
             <SmallButton label={form.participationEnabled ? "Participation On" : "Participation Off"} icon="person-add-outline" active={form.participationEnabled} onPress={() => updateForm("participationEnabled", !form.participationEnabled)} />
           </View>
         </>
       )}
       {title === "Notices" && (
-        <TextInput style={styles.input} value={form.targetClasses} onChangeText={(value) => updateForm("targetClasses", value)} placeholder="ALL CLASSES or Class 1, Class 2" />
+        <MultiSelect
+          label="Target Classes"
+          options={noticeClassOptions}
+          values={targetClassValues}
+          onChange={setTargetClasses}
+          hint="Pick ALL CLASSES or specific classes."
+        />
       )}
       <PrimaryButton icon="save-outline" label="Save" onPress={onSubmit} disabled={disabled || acting} />
       </View>
@@ -985,9 +1057,35 @@ function IdCards({ user, rows = [] }) {
     ? (user.studentProfiles || [activeIdentity(user)]).filter(Boolean).map(normalizeStudentCardRecord)
     : [normalizeStaffCardRecord(user?.role === "teacher" ? getTeacherProfile(user) : getStaffProfile(user), user?.role)];
 
-  return cards.map((profile, index) => (
-    <View key={profile.id || index} style={styles.idPair}>
-      <View style={styles.webIdFront}>
+  const showExportAll = (user?.role === "admin" || user?.role === "clerk") && cards.length > 1;
+
+  const handleExportCard = async (profile) => {
+    try {
+      await exportIdCardPdf(profile);
+    } catch (error) {
+      Alert.alert("Export failed", error?.message || "Could not export the ID card PDF.");
+    }
+  };
+
+  const handleExportAll = async () => {
+    try {
+      await exportManyIdCards(cards);
+    } catch (error) {
+      Alert.alert("Export failed", error?.message || "Could not export the ID cards PDF.");
+    }
+  };
+
+  return (
+    <View>
+      {showExportAll ? (
+        <TouchableOpacity onPress={handleExportAll} style={[styles.smallButton, styles.idExportAllButton]}>
+          <Ionicons name="download-outline" size={16} color="#4F46E5" />
+          <Text style={styles.smallButtonText}>Export All ({cards.length})</Text>
+        </TouchableOpacity>
+      ) : null}
+      {cards.map((profile, index) => (
+        <View key={profile.id || index} style={styles.idPair}>
+          <View style={styles.webIdFront}>
         <View style={styles.webIdLeft}>
           <Ionicons name="school" size={48} color="#fff" />
           <View style={styles.webIdPhoto}>
@@ -1028,8 +1126,14 @@ function IdCards({ user, rows = [] }) {
         </View>
         <Text style={styles.webIdBackNote}>If found, please return this card to the school office. This card is ERP generated.</Text>
       </View>
+          <TouchableOpacity onPress={() => handleExportCard(profile)} style={[styles.smallButton, styles.idExportButton]}>
+            <Ionicons name="share-outline" size={16} color="#4F46E5" />
+            <Text style={styles.smallButtonText}>Share / Export PDF</Text>
+          </TouchableOpacity>
+        </View>
+      ))}
     </View>
-  ));
+  );
 }
 
 function SmallButton({ label, icon, onPress, disabled, active }) {
@@ -1297,6 +1401,8 @@ const styles = {
     fontSize: 12,
   },
   idPair: { gap: 12, marginBottom: 20 },
+  idExportButton: { marginTop: 4 },
+  idExportAllButton: { marginBottom: 16, flexGrow: 0, alignSelf: "flex-start" },
   webIdFront: {
     minHeight: 224,
     backgroundColor: "#fff",

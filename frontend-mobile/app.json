@@ -6,6 +6,12 @@
     "orientation": "portrait",
     "scheme": "mgpserp",
     "userInterfaceStyle": "automatic",
+    "icon": "./assets/images/logo.png",
+    "splash": {
+      "image": "./assets/images/logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#eef2ff"
+    },
     "owner": "parvchaturvediofficial",
     "description": "Marigold Secondary School ERP Mobile Application",
     "sdkVersion": "54.0.0",
@@ -15,7 +21,11 @@
       "web"
     ],
     "android": {
-      "package": "com.parvchaturvediofficial.mgpserpmobile"
+      "package": "com.parvchaturvediofficial.mgpserpmobile",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/logo.png",
+        "backgroundColor": "#eef2ff"
+      }
     },
     "extra": {
       "eas": {
@@ -35,7 +45,8 @@
       "url": "https://u.expo.dev/bacdeda8-7b83-4529-84c2-18328c2eaf4d"
     },
     "plugins": [
-      "expo-notifications"
+      "expo-notifications",
+      "@react-native-community/datetimepicker"
     ]
   }
 }

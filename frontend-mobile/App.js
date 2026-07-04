@@ -2,6 +2,7 @@ import React from "react";
 import { StatusBar } from "expo-status-bar";
 
 import { AuthProvider, useAuth } from "./src/auth/AuthContext";
+import { ThemeProvider, useTheme } from "./src/theme/ThemeContext";
 
 import LoginScreen from "./src/modules/auth/screens/LoginScreen";
 import StudentDashboardScreen from "./src/screens/StudentDashboardScreen";
@@ -28,11 +29,18 @@ function Navigator() {
   return <LoginScreen />;
 }
 
+function ThemedStatusBar() {
+  const { palette } = useTheme();
+  return <StatusBar style={palette.statusBar} />;
+}
+
 export default function App() {
   return (
-    <AuthProvider>
-      <StatusBar style="dark" />
-      <Navigator />
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <ThemedStatusBar />
+        <Navigator />
+      </AuthProvider>
+    </ThemeProvider>
   );
 }

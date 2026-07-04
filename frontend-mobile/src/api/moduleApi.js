@@ -17,7 +17,6 @@ const moduleNamespaces = {
 };
 
 const endpointByModule = {
-  "Academic Calendar": { endpoint: "/academic-calendar/latest", extractor: (payload) => (payload ? [payload] : []) },
   "Admin Management": { endpoint: "/auth/users", extractor: (payload) => payload?.users || payload || [] },
   "Application": { endpoint: "/applications" },
   "Assignment": { endpoint: "/assignments" },

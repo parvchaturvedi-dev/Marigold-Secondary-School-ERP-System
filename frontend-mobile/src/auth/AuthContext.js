@@ -7,6 +7,7 @@ import {
   registerForPushNotifications,
   setupNotificationHandler,
 } from "../notifications/registerPush";
+import { connectRealtime, disconnectRealtime } from "../notifications/realtime";
 
 const AuthContext = createContext(null);
 const SESSION_KEY = "mgps_erp_auth_session";
@@ -82,6 +83,7 @@ export function AuthProvider({ children }) {
             // Update stored session with fresh data from server
             await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(serverSession));
             registerPushToken();
+            connectRealtime(serverSession.token || session.token);
             return;
           }
         } catch (validationError) {
@@ -114,6 +116,7 @@ export function AuthProvider({ children }) {
       setUser(sessionData);
       setScreen(`${role}-dashboard`);
       registerPushToken();
+      connectRealtime(sessionData.token);
     } catch (error) {
       // Re-throw so LoginScreen can show the error in an Alert
       throw error;
@@ -128,7 +131,11 @@ export function AuthProvider({ children }) {
   }
 
   function openConnectedModule(moduleName) {
-    if (moduleName === "Timetable" || String(moduleName || "").endsWith("> Timetable")) {
+    const isTimetable = moduleName === "Timetable" || String(moduleName || "").endsWith("> Timetable");
+    // Admin/clerk get the timetable EDITOR (via the connected-module registry);
+    // students/teachers get the read-only viewer.
+    const canEditTimetable = user?.role === "admin" || user?.role === "clerk";
+    if (isTimetable && !canEditTimetable) {
       setSelectedModule(moduleName);
       setScreen("timetable");
       return;
@@ -154,6 +161,7 @@ export function AuthProvider({ children }) {
     } catch (e) {
       console.error("Failed to clear session:", e);
     }
+    disconnectRealtime();
     setUser(null);
     setSelectedModule(null);
     setScreen("login");

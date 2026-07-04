@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "node server/index.js",
-    "start": "node server/index.js"
+    "start": "node server/index.js",
+    "seed:demo": "node scripts/seedDemoData.js"
   },
   "engines": {
     "node": "22.x"

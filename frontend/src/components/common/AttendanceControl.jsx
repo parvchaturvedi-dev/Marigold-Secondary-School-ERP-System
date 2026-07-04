@@ -277,7 +277,7 @@ const AttendanceControl = ({ role = 'admin' }) => {
       </section>
 
       {(message || error) && (
-        <div className="rounded-2xl bg-gradient-to-r from-indigo-500 to-violet-500 shadow-lg px-4 py-3 text-xs font-bold text-white">
+        <div className="rounded-2xl bg-linear-to-r from-indigo-500 to-violet-500 shadow-lg px-4 py-3 text-xs font-bold text-white">
           {message || error}
         </div>
       )}
@@ -380,7 +380,7 @@ const AttendanceControl = ({ role = 'admin' }) => {
         </div>
 
         <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-100/80">
-          <table className="w-full min-w-[720px] text-left text-xs font-bold">
+          <table className="w-full min-w-180 text-left text-xs font-bold">
             <thead className="bg-indigo-50/60 text-slate-500 uppercase text-[10px]">
               <tr>
                 <th className="px-3 py-3">Roll No</th>
@@ -421,7 +421,7 @@ const AttendanceControl = ({ role = 'admin' }) => {
         </div>
       </section>
 
-      <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-white/70 bg-white/70 px-6 py-3 backdrop-blur-xl">
+      <div className="fixed -bottom-full left-0 right-0 z-30 border-t border-white/70 bg-white/70 px-6 py-3 backdrop-blur-xl">
         <div className="mx-auto flex max-w-5xl justify-end gap-2">
           <button type="button" onClick={resetDraft} className="h-11 px-4 rounded-2xl btn-ghost text-xs font-black inline-flex items-center gap-2">
             <X className="w-4 h-4" /> Cancel

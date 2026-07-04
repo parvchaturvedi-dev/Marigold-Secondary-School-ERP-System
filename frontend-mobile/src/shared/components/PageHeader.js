@@ -3,9 +3,12 @@ import { View, Text, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "../theme/colors";
 import { useAuth } from "../../auth/AuthContext";
+import { useTheme } from "../../theme/ThemeContext";
 
 export default function PageHeader({ title }) {
   const { goBack, goHome } = useAuth();
+  const { palette } = useTheme();
+  const btn = [styles.btn, { backgroundColor: palette.headerChipBg, borderColor: palette.cardBorder }];
 
   return (
     <View
@@ -19,15 +22,15 @@ export default function PageHeader({ title }) {
         justifyContent: "space-between",
       }}
     >
-      <TouchableOpacity onPress={goBack} style={styles.btn}>
+      <TouchableOpacity onPress={goBack} style={btn}>
         <Ionicons name="arrow-back" size={22} color={colors.primary} />
       </TouchableOpacity>
 
-      <Text numberOfLines={1} style={styles.title}>
+      <Text numberOfLines={1} style={[styles.title, { color: palette.headerInk }]}>
         {title}
       </Text>
 
-      <TouchableOpacity onPress={goHome} style={styles.btn}>
+      <TouchableOpacity onPress={goHome} style={btn}>
         <Ionicons name="home" size={22} color={colors.primary} />
       </TouchableOpacity>
     </View>

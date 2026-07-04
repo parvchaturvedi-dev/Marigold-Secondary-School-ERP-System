@@ -26,6 +26,7 @@ import timetableRoutes from './routes/timetable.js';
 import vaultRoutes from './routes/vault.js';
 import { connectMongo, getDbStatus } from './db.js';
 import { requireAuth } from './middleware/auth.js';
+import { verifyAuthToken } from './utils/authToken.js';
 import { setRealtimeServer, trackRealtimeSocket } from './realtime.js';
 import { createSessionMiddleware } from './utils/session.js';
 
@@ -104,10 +105,30 @@ io.engine.use(sessionMiddleware);
 setRealtimeServer(io);
 
 io.use((socket, next) => {
+  // Web clients authenticate via the cookie session; mobile clients (no cookie
+  // jar) pass a Bearer token in the socket handshake auth payload.
   const sessionAuth = socket.request.session?.auth;
   if (sessionAuth?.username && sessionAuth?.role) {
     socket.data.auth = sessionAuth;
+    return next();
   }
+
+  const handshake = socket.handshake || {};
+  const rawToken =
+    handshake.auth?.token ||
+    (typeof handshake.headers?.authorization === 'string' && handshake.headers.authorization.startsWith('Bearer ')
+      ? handshake.headers.authorization.slice(7)
+      : '') ||
+    handshake.query?.token ||
+    '';
+
+  if (rawToken) {
+    const tokenAuth = verifyAuthToken(String(rawToken));
+    if (tokenAuth?.username && tokenAuth?.role) {
+      socket.data.auth = tokenAuth;
+    }
+  }
+
   next();
 });
 
