@@ -143,7 +143,6 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
     { name: 'Assignment', icon: ClipboardList },
     { name: 'Attendance', icon: CheckSquare },
     { name: 'Admin Management', icon: UserCheck },
-    { name: 'Biometric Attendance', icon: Contact },
     {
       name: 'Class Desk',
       icon: Layers,
@@ -216,7 +215,6 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
     { name: 'Application', icon: FileText },
     { name: 'Assignment', icon: ClipboardList },
     { name: 'Attendance', icon: CheckSquare },
-    { name: 'Biometric Attendance', icon: Contact },
     {
       name: 'Class Desk',
       icon: Layers,

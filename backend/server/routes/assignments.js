@@ -110,7 +110,10 @@ router.get('/', ensureMongo, async (request, response) => {
   response.json(await Promise.all(assignments.map(toAssignmentPayload)));
 });
 
-router.post('/', ensureMongo, upload.single('attachment'), async (request, response) => {
+router.post('/', ensureMongo, requireRole('admin', 'clerk', 'teacher'), upload.single('attachment'), async (request, response) => {
+  request.body.createdByRole = request.auth.role;
+  request.body.createdByUsername = request.auth.username;
+  request.body.createdByName = request.auth.displayName || request.auth.username;
   const targetClasses = parseTargetClasses(request.body.targetClasses);
 
   if (!request.body.title || !request.body.description || !request.body.checkingDate || targetClasses.length === 0) {
@@ -154,7 +157,10 @@ router.post('/', ensureMongo, upload.single('attachment'), async (request, respo
   response.status(201).json(await toAssignmentPayload(assignment));
 });
 
-router.patch('/:id', ensureMongo, upload.single('attachment'), async (request, response) => {
+router.patch('/:id', ensureMongo, requireRole('admin', 'clerk', 'teacher'), upload.single('attachment'), async (request, response) => {
+  request.body.actorRole = request.auth.role;
+  request.body.actorUsername = request.auth.username;
+  request.body.actorName = request.auth.displayName || request.auth.username;
   const assignment = await Assignment.findById(request.params.id);
 
   if (!assignment) {
@@ -190,7 +196,9 @@ router.patch('/:id', ensureMongo, upload.single('attachment'), async (request, r
   response.json(await toAssignmentPayload(assignment));
 });
 
-router.patch('/:id/checking-date', ensureMongo, async (request, response) => {
+router.patch('/:id/checking-date', ensureMongo, requireRole('admin', 'clerk', 'teacher'), async (request, response) => {
+  request.body.actorRole = request.auth.role;
+  request.body.actorUsername = request.auth.username;
   const assignment = await Assignment.findById(request.params.id);
 
   if (!assignment) {

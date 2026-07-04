@@ -336,9 +336,88 @@ export const getPaperStatusMeta = (status) => {
       tone: 'bg-emerald-50 text-emerald-700 border-emerald-200',
       description: 'Teacher and admin both approved.',
     },
+    // Simple approval-workflow statuses (draft → pending_admin → approved/rejected).
+    pending_admin: {
+      label: 'Pending Admin Approval',
+      tone: 'bg-amber-50 text-amber-700 border-amber-200',
+      description: 'Waiting for admin to approve or reject.',
+    },
+    approved: {
+      label: 'Approved',
+      tone: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      description: 'Admin approved this paper.',
+    },
+    rejected: {
+      label: 'Rejected',
+      tone: 'bg-rose-50 text-rose-700 border-rose-200',
+      description: 'Admin rejected this paper. See comments.',
+    },
   };
 
   return meta[status] || meta.draft;
+};
+
+// Approval-workflow status dot colour for the pill on paper cards.
+export const getPaperStatusDot = (status) => {
+  switch (status) {
+    case 'pending_admin':
+    case 'teacher_review':
+    case 'admin_review':
+      return 'bg-amber-500';
+    case 'approved':
+    case 'selected':
+    case 'teacher_approved':
+      return 'bg-emerald-500';
+    case 'rejected':
+    case 'admin_rejected':
+    case 'teacher_rejected':
+      return 'bg-rose-500';
+    default:
+      return 'bg-slate-400';
+  }
+};
+
+// PATCH /examinations/papers/:id/submit-for-approval  (teacher/admin/clerk)
+// Server flips draft → pending_admin and notifies all admins.
+export const submitPaperForApproval = async (paperId) => {
+  const response = await authFetch(
+    `${API_BASE_URL}/examinations/papers/${encodeURIComponent(paperId)}/submit-for-approval`,
+    {
+      method: 'PATCH',
+      headers: withAuthHeaders({ 'Content-Type': 'application/json' }),
+    }
+  );
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload?.message || 'Could not submit paper for approval.');
+  }
+  if (payload?.state) {
+    examinationStateCache = normalizeExaminationState(payload.state);
+    broadcastExaminationUpdate();
+  }
+  return examinationStateCache;
+};
+
+// PATCH /examinations/papers/:id/admin-decision  (admin only)
+// Body: { decision: 'approved' | 'rejected', comment }
+export const decideAdminOnPaper = async (paperId, decision, comment = '') => {
+  const response = await authFetch(
+    `${API_BASE_URL}/examinations/papers/${encodeURIComponent(paperId)}/admin-decision`,
+    {
+      method: 'PATCH',
+      headers: withAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ decision, comment }),
+    }
+  );
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload?.message || 'Could not record admin decision.');
+  }
+  if (payload?.state) {
+    examinationStateCache = normalizeExaminationState(payload.state);
+    broadcastExaminationUpdate();
+  }
+  return examinationStateCache;
 };
 
 export const savePaperRecord = (payload, actor) => {

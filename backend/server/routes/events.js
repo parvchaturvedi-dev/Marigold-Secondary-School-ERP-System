@@ -170,6 +170,15 @@ router.delete('/:id', ensureMongo, requireRole('admin', 'clerk'), async (request
 });
 
 router.patch('/:id/participate', ensureMongo, async (request, response) => {
+  // Force participant identity from the authenticated session — students cannot
+  // register someone else nor spoof another admission number.
+  if (request.auth.role === 'student') {
+    const s = request.auth.activeStudent || {};
+    request.body.admissionNumber = s.admissionNumber || request.auth.username;
+    request.body.name = s.displayName || request.auth.displayName || request.auth.username;
+    request.body.className = s.className || '';
+    request.body.username = request.auth.username;
+  }
   const event = await Event.findById(request.params.id);
 
   if (!event) {

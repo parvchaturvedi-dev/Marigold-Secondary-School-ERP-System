@@ -44,6 +44,7 @@ import {
   calculateGrade,
   configureExaminationMasterData,
   createExamRecord,
+  decideAdminOnPaper,
   enableTeacherMarksEdit,
   ensureStudentInRoster,
   fetchExaminationState,
@@ -52,6 +53,7 @@ import {
   getActor,
   getExamLabel,
   getFocusRemark,
+  getPaperStatusDot,
   getPaperStatusMeta,
   getPrintDocument,
   getReportRowsForStudent,
@@ -72,12 +74,98 @@ import {
   roleCanManageReportCards,
   savePaperRecord,
   setBoardClassEnabled,
+  submitPaperForApproval,
   upsertBoardResult,
   upsertMarksRecord,
   upsertScheduleRows,
 } from './examinationStore';
 import { sendGmailMessages } from './gmail';
 import { useMasterData } from './masterData';
+import { API_BASE_URL, getAuthToken } from './api';
+
+// Board Result PDFs upload as multipart/form-data. authFetch is JSON-only,
+// so the raw fetch is used here — token pulled from the same session store.
+const boardResultsApi = {
+  async upload({ file, className, examTitle, publishedAt }) {
+    const form = new FormData();
+    form.append('resultPdf', file);
+    form.append('className', className);
+    form.append('examTitle', examTitle);
+    if (publishedAt) form.append('publishedAt', publishedAt);
+
+    const token = getAuthToken();
+    const response = await fetch(`${API_BASE_URL}/examinations/board-results`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: form,
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.message || 'Board result upload failed.');
+    }
+    return payload;
+  },
+  async fetchPdf(id) {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_BASE_URL}/examinations/board-results/${id}/pdf`,
+      {
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      }
+    );
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.message || 'Could not load the board result PDF.');
+    }
+    return payload;
+  },
+  async remove(id) {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_BASE_URL}/examinations/board-results/${id}`,
+      {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      }
+    );
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.message || 'Could not delete the board result.');
+    }
+    return payload;
+  },
+};
+
+// state.boardResults[] holds two record shapes:
+//   1. per-student legacy uploads (studentId/admissionNumber, dataUrl)
+//   2. per-class PDF uploads from POST /board-results (pdfName + examTitle)
+// The Board Results section below shows only the class-level rows.
+const isClassBoardResult = (record) =>
+  Boolean(record?.pdfName) && !record?.studentId && !record?.admissionNumber;
+
+const openBoardResultPdf = async (id) => {
+  try {
+    const payload = await boardResultsApi.fetchPdf(id);
+    const nextWindow = window.open('', '_blank');
+    if (nextWindow) nextWindow.location.href = payload.dataUrl;
+  } catch (error) {
+    alert(error.message);
+  }
+};
+
+const formatBoardResultDate = (value) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+};
 
 const SECTION_BY_PAGE = {
   Examinations: '',
@@ -449,6 +537,8 @@ const ExaminationHub = ({ role = 'admin', session, activePage = 'Examinations', 
           onRefresh={refreshWith}
         />
       )}
+
+      <BoardResultsSection state={state} role={role} onRefresh={refreshWith} />
     </div>
   );
 };
@@ -967,12 +1057,15 @@ const PaperAnalysisSection = ({ state, actor, role, session, onRefresh, onRework
         (paper) =>
           paper.teacherUsername === session?.username ||
           paper.teacherName === session?.displayName ||
+          paper.createdByUsername === session?.username ||
           teacherAssignments.some(
             (assignment) =>
               assignment.className === paper.className && assignment.subject === paper.subject
           )
       );
     } else if (role === 'admin') {
+      // Admin sees anything except lingering "not-yet-sent" drafts; keeping
+      // "draft" out here matches the existing rich-flow behaviour.
       papers = papers.filter((paper) => paper.status !== 'draft');
     }
 
@@ -999,6 +1092,35 @@ const PaperAnalysisSection = ({ state, actor, role, session, onRefresh, onRework
     updateComment(paper.id, '');
   };
 
+  // Simple approval workflow: draft → pending_admin → approved|rejected.
+  // Hits the dedicated PATCH endpoints so the server can notify admins/teachers.
+  const runWorkflow = async (paper, action) => {
+    try {
+      if (action === 'submit') {
+        const nextState = await submitPaperForApproval(paper.id);
+        onRefresh(nextState);
+        return;
+      }
+
+      if (action === 'approve' || action === 'reject') {
+        const comment = commentDrafts[paper.id]?.trim() || '';
+        if (action === 'reject' && !comment) {
+          alert('Please write a rejection comment before rejecting this paper.');
+          return;
+        }
+        const nextState = await decideAdminOnPaper(
+          paper.id,
+          action === 'approve' ? 'approved' : 'rejected',
+          comment
+        );
+        onRefresh(nextState);
+        updateComment(paper.id, '');
+      }
+    } catch (error) {
+      alert(error.message || 'Workflow action failed.');
+    }
+  };
+
   return (
     <section className="space-y-5">
       <div className="glass-card rounded-3xl p-5 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -1016,11 +1138,15 @@ const PaperAnalysisSection = ({ state, actor, role, session, onRefresh, onRework
           className="rounded-2xl border border-white/70 bg-white/60 px-3 py-2 text-xs font-black outline-none"
         >
           <option value="all">All statuses</option>
+          <option value="draft">Draft</option>
+          <option value="pending_admin">Pending admin approval</option>
+          <option value="approved">Approved</option>
+          <option value="rejected">Rejected</option>
           <option value="teacher_review">Pending teacher approval</option>
           <option value="teacher_rejected">Teacher rejected</option>
           <option value="teacher_approved">Teacher approved</option>
-          <option value="admin_review">Pending admin approval</option>
-          <option value="admin_rejected">Admin rejected</option>
+          <option value="admin_review">Pending admin approval (legacy)</option>
+          <option value="admin_rejected">Admin rejected (legacy)</option>
           <option value="selected">Selected</option>
         </select>
       </div>
@@ -1035,7 +1161,15 @@ const PaperAnalysisSection = ({ state, actor, role, session, onRefresh, onRework
             <div key={paper.id} className="glass-card rounded-3xl p-5 shadow-sm">
               <div className="flex flex-col md:flex-row md:items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <span className={classNames('inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black', meta.tone)}>
+                  <span
+                    className={classNames(
+                      'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-black',
+                      meta.tone
+                    )}
+                  >
+                    <span
+                      className={classNames('h-2 w-2 rounded-full', getPaperStatusDot(paper.status))}
+                    />
                     {meta.label}
                   </span>
                   <h3 className="mt-3 text-base font-black truncate">{paper.title}</h3>
@@ -1077,20 +1211,26 @@ const PaperAnalysisSection = ({ state, actor, role, session, onRefresh, onRework
                 </div>
               </div>
 
-              {role !== 'clerk' && paper.status !== 'selected' && (
+              {(role === 'admin' && paper.status === 'pending_admin') ||
+              (role !== 'clerk' && paper.status !== 'selected' && !['approved', 'rejected', 'pending_admin'].includes(paper.status)) ? (
                 <textarea
                   value={comment}
                   onChange={(event) => updateComment(paper.id, event.target.value)}
-                  placeholder="Write mistake/correction comment..."
+                  placeholder={
+                    paper.status === 'pending_admin'
+                      ? 'Optional comment on approve, required to reject...'
+                      : 'Write mistake/correction comment...'
+                  }
                   rows={3}
                   className="mt-4 w-full rounded-2xl border border-white/70 bg-white/60 p-3 text-xs font-bold outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all"
                 />
-              )}
+              ) : null}
 
               <PaperActionBar
                 paper={paper}
                 role={role}
                 onDecision={(decision, requiresComment) => decide(paper, decision, requiresComment)}
+                onWorkflow={(action) => runWorkflow(paper, action)}
                 onRework={() => onReworkPaper(paper)}
               />
             </div>
@@ -1120,8 +1260,31 @@ const InfoPill = ({ label, value }) => (
   </div>
 );
 
-const PaperActionBar = ({ paper, role, onDecision, onRework }) => {
+const PaperActionBar = ({ paper, role, onDecision, onWorkflow, onRework }) => {
   const actions = [];
+  const workflowActions = [];
+
+  // ------ Simple approval workflow (draft → pending_admin → approved|rejected)
+  if (paper.status === 'draft' && ['teacher', 'admin', 'clerk'].includes(role)) {
+    workflowActions.push({
+      label: 'Submit for approval',
+      tone: 'border-indigo-200 bg-indigo-50 text-indigo-700',
+      action: 'submit',
+    });
+  }
+
+  if (paper.status === 'pending_admin' && role === 'admin') {
+    workflowActions.push({
+      label: 'Reject',
+      tone: 'border-rose-200 bg-rose-50 text-rose-700',
+      action: 'reject',
+    });
+    workflowActions.push({
+      label: 'Approve',
+      tone: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+      action: 'approve',
+    });
+  }
 
   if (role === 'teacher' && paper.status === 'teacher_review') {
     actions.push({
@@ -1170,11 +1333,16 @@ const PaperActionBar = ({ paper, role, onDecision, onRework }) => {
 
   const canRework = ['admin', 'clerk'].includes(role) && ['draft', 'teacher_rejected'].includes(paper.status);
 
+  // Contextual footer label — leans on the new simple flow where applicable.
+  let footerLabel = 'Awaiting next workflow action';
+  if (paper.status === 'selected') footerLabel = 'Paper selected for printing';
+  else if (paper.status === 'approved') footerLabel = 'Approved by admin';
+  else if (paper.status === 'rejected') footerLabel = 'Rejected — see comments trail';
+  else if (paper.status === 'pending_admin' && role !== 'admin') footerLabel = 'Awaiting admin review';
+
   return (
     <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100/80 pt-4">
-      <div className="text-[10px] font-black uppercase text-slate-400">
-        {paper.status === 'selected' ? 'Paper selected for printing' : 'Awaiting next workflow action'}
-      </div>
+      <div className="text-[10px] font-black uppercase text-slate-400">{footerLabel}</div>
       <div className="flex flex-wrap gap-2">
         {canRework && (
           <button
@@ -1185,6 +1353,16 @@ const PaperActionBar = ({ paper, role, onDecision, onRework }) => {
             <Edit3 className="w-4 h-4" /> Rework
           </button>
         )}
+        {workflowActions.map((action) => (
+          <button
+            key={action.label}
+            type="button"
+            onClick={() => onWorkflow?.(action.action)}
+            className={classNames('rounded-full border px-3 py-2 text-xs font-black', action.tone)}
+          >
+            {action.label}
+          </button>
+        ))}
         {actions.map((action) => (
           <button
             key={action.label}
@@ -1985,6 +2163,179 @@ const MarksManagementSection = ({ state, actor, role, session, onRefresh }) => {
   );
 };
 
+// Board Result PDFs (per-class). Admin/Clerk get an upload form + full list
+// (admin can delete); students get their class's list only, with Open PDF.
+const BoardResultsSection = ({ state, role, studentClassName, onRefresh }) => {
+  const canManage = role === 'admin' || role === 'clerk';
+  const canDelete = role === 'admin';
+
+  const [uploadClassName, setUploadClassName] = useState(allExamClasses[0] || 'Class 10');
+  const [examTitle, setExamTitle] = useState('');
+  const [file, setFile] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState('');
+
+  const results = useMemo(() => {
+    const all = (state.boardResults || []).filter(isClassBoardResult);
+    if (canManage) return all;
+    if (!studentClassName) return [];
+    return all.filter((item) => item.className === studentClassName);
+  }, [state.boardResults, canManage, studentClassName]);
+
+  const handleUpload = async (event) => {
+    event.preventDefault();
+    if (!file) {
+      setNotice('Please choose a PDF to upload.');
+      return;
+    }
+    if (!examTitle.trim()) {
+      setNotice('Please provide an exam title (e.g. CBSE Class 10 Result 2026).');
+      return;
+    }
+    setBusy(true);
+    setNotice('');
+    try {
+      await boardResultsApi.upload({
+        file,
+        className: uploadClassName,
+        examTitle: examTitle.trim(),
+      });
+      const nextState = await fetchExaminationState({ broadcast: true });
+      if (onRefresh) onRefresh(nextState);
+      setFile(null);
+      setExamTitle('');
+      setNotice('Board result published to the class.');
+    } catch (error) {
+      setNotice(error.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!canDelete) return;
+    if (!window.confirm('Delete this board result PDF?')) return;
+    try {
+      await boardResultsApi.remove(id);
+      const nextState = await fetchExaminationState({ broadcast: true });
+      if (onRefresh) onRefresh(nextState);
+    } catch (error) {
+      alert(error.message);
+    }
+  };
+
+  return (
+    <section className="glass-card rounded-3xl p-5 shadow-sm">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-black flex items-center gap-2">
+            <Award className="w-4 h-4 text-emerald-600" /> Board Results
+          </h3>
+          <p className="text-xs font-semibold text-slate-400 mt-1">
+            {canManage
+              ? 'Publish a board result PDF for a whole class. Students in that class will see it here.'
+              : studentClassName
+                ? `Board result PDFs published for ${studentClassName}.`
+                : 'Board result PDFs published by the school.'}
+          </p>
+        </div>
+      </div>
+
+      {canManage && (
+        <form
+          onSubmit={handleUpload}
+          className="mt-5 grid grid-cols-1 lg:grid-cols-[220px_1fr_240px_140px] gap-3 text-xs font-bold items-end"
+        >
+          <div className="space-y-1">
+            <label className="text-slate-500">Class</label>
+            <select
+              value={uploadClassName}
+              onChange={(event) => setUploadClassName(event.target.value)}
+              className="input-shell"
+            >
+              {allExamClasses.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1">
+            <label className="text-slate-500">Exam Title</label>
+            <input
+              value={examTitle}
+              onChange={(event) => setExamTitle(event.target.value)}
+              placeholder="CBSE Class 10 Result 2026"
+              className="input-shell"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-slate-500">Result PDF (max 10MB)</label>
+            <input
+              type="file"
+              accept="application/pdf,.pdf"
+              onChange={(event) => setFile(event.target.files?.[0] || null)}
+              className="w-full text-[11px] font-bold"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={busy}
+            className="rounded-full btn-primary px-4 py-3 text-xs font-black flex items-center justify-center gap-2 disabled:opacity-60"
+          >
+            <FileText className="w-4 h-4" /> {busy ? 'Uploading...' : 'Publish'}
+          </button>
+        </form>
+      )}
+
+      {!!notice && (
+        <p className="mt-3 text-[11px] font-bold text-slate-500">{notice}</p>
+      )}
+
+      <div className="mt-5 space-y-2">
+        {results.length === 0 ? (
+          <div className="rounded-2xl glass-soft p-4 text-xs font-bold text-slate-400">
+            No board result PDFs published yet.
+          </div>
+        ) : (
+          results.map((item) => (
+            <div
+              key={item.id}
+              className="rounded-2xl border border-slate-100/80 bg-white/60 p-3 flex flex-col md:flex-row md:items-center gap-3"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-black truncate">{item.examTitle}</p>
+                <p className="text-[11px] font-bold text-slate-400 mt-1">
+                  {item.className} · {item.pdfName} ·{' '}
+                  {formatBoardResultDate(item.publishedAt)}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => openBoardResultPdf(item.id)}
+                  className="rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 px-3 py-1.5 text-[10px] font-black"
+                >
+                  Open PDF
+                </button>
+                {canDelete && (
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(item.id)}
+                    className="rounded-full border border-rose-200 bg-rose-50 text-rose-700 px-3 py-1.5 text-[10px] font-black"
+                  >
+                    Delete
+                  </button>
+                )}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </section>
+  );
+};
+
 const StudentExamView = ({ state, session }) => {
   const activeStudent = session?.activeStudent || session?.studentProfiles?.[0] || {
     displayName: session?.displayName || 'Student',
@@ -2188,6 +2539,8 @@ const StudentExamView = ({ state, session }) => {
           </div>
         </div>
       </section>
+
+      <BoardResultsSection state={state} role="student" studentClassName={student.className} />
     </div>
   );
 };

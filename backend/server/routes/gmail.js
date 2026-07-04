@@ -6,6 +6,7 @@ import {
   getMailConfig,
   getSenderAddress,
 } from '../utils/mailer.js';
+import { requireRole } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -63,7 +64,7 @@ router.get('/status', (_request, response) => {
   });
 });
 
-router.post('/send', async (request, response) => {
+router.post('/send', requireRole('admin', 'clerk'), async (request, response) => {
   const mailConfig = getMailConfig();
 
   if (!mailConfig.isReady) {

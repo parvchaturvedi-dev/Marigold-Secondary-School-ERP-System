@@ -379,6 +379,45 @@ const AttendanceControl = ({ role = 'admin' }) => {
           </div>
         </div>
 
+        {/* Quick bulk actions — TCS-style shortcuts so a teacher doesn't tap 40 rows. */}
+        {roster.length > 0 && !isAdmin && (
+          <div className="mt-4 flex flex-wrap items-center gap-2 rounded-2xl bg-indigo-50/50 border border-indigo-100 px-3 py-2">
+            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Quick actions</span>
+            <button
+              type="button"
+              onClick={() => {
+                const next = {};
+                roster.forEach((s) => { next[s.entityId] = 'present'; });
+                setDraftStatus((prev) => ({ ...prev, ...next }));
+              }}
+              className="h-8 px-3 rounded-xl bg-emerald-500 text-white text-[11px] font-black hover:bg-emerald-600 transition"
+            >
+              Mark all Present
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const next = {};
+                roster.forEach((s) => { next[s.entityId] = 'absent'; });
+                setDraftStatus((prev) => ({ ...prev, ...next }));
+              }}
+              className="h-8 px-3 rounded-xl bg-red-500 text-white text-[11px] font-black hover:bg-red-600 transition"
+            >
+              Mark all Absent
+            </button>
+            <button
+              type="button"
+              onClick={() => setDraftStatus({})}
+              className="h-8 px-3 rounded-xl bg-white border border-slate-200 text-slate-700 text-[11px] font-black hover:bg-slate-50 transition inline-flex items-center gap-1"
+            >
+              <RotateCcw className="w-3 h-3" /> Reset draft
+            </button>
+            <div className="ml-auto text-[11px] font-black text-slate-700">
+              Present <span className="text-emerald-600">{localCounts.present}</span> · Absent <span className="text-red-600">{localCounts.absent}</span> · Total {roster.length}
+            </div>
+          </div>
+        )}
+
         <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-100/80">
           <table className="w-full min-w-180 text-left text-xs font-bold">
             <thead className="bg-indigo-50/60 text-slate-500 uppercase text-[10px]">

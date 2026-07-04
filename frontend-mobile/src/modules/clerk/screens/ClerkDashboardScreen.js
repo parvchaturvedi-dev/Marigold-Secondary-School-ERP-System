@@ -42,7 +42,7 @@ export default function ClerkDashboardScreen() {
         openConnectedModule("Profile");
       } else if (module.title === "Notices") {
         openConnectedModule("Notices");
-      } else if (module.title === "Attendance" || module.title === "Biometric Attendance") {
+      } else if (module.title === "Attendance") {
         setActiveTab("attendance");
       } else {
         openConnectedModule(module.title);

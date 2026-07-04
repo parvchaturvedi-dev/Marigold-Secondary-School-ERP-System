@@ -116,7 +116,10 @@ const validateAttendanceExecution = async (request, response, next) => {
   const hasSchoolFence = setting.geofenceLatitude !== null && setting.geofenceLongitude !== null;
   const action = clean(request.body?.action).toLowerCase();
   const source = clean(request.body?.source).toLowerCase();
+  // Any non-admin write must clear the geofence — closes the QR-scan bypass
+  // where a teacher POSTed source:"qr" and skipped the fence entirely.
   const isSelfService =
+    request.auth?.role !== 'admin' ||
     ['clock-in', 'clock-out'].includes(action) ||
     ['self-service', 'teacher-mobile', 'clerk-self'].includes(source) ||
     request.body?.requiresGeofence === true;

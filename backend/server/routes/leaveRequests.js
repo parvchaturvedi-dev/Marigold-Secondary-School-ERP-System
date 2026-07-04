@@ -3,6 +3,7 @@ import LeaveRequest from '../models/LeaveRequest.js';
 import { isMongoConnected } from '../db.js';
 import { emitRealtimeEvent } from '../realtime.js';
 import { createNotification } from '../utils/notify.js';
+import { requireRole } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -135,7 +136,9 @@ router.post('/', ensureMongo, async (request, response) => {
   response.status(201).json(toLeavePayload(leaveRequest));
 });
 
-router.patch('/:id/admin-action', ensureMongo, async (request, response) => {
+router.patch('/:id/admin-action', ensureMongo, requireRole('admin', 'clerk'), async (request, response) => {
+  // Never trust adminUsername from body — take it from the authenticated session.
+  request.body.adminUsername = request.auth.username;
   const leaveRequest = await LeaveRequest.findById(request.params.id);
 
   if (!leaveRequest) {
@@ -161,11 +164,21 @@ router.patch('/:id/admin-action', ensureMongo, async (request, response) => {
   response.json(toLeavePayload(leaveRequest));
 });
 
-router.patch('/:id/teacher-action', ensureMongo, async (request, response) => {
+router.patch('/:id/teacher-action', ensureMongo, requireRole('teacher', 'admin', 'clerk'), async (request, response) => {
+  request.body.teacherUsername = request.auth.username;
   const leaveRequest = await LeaveRequest.findById(request.params.id);
 
   if (!leaveRequest) {
     response.status(404).json({ message: 'Leave request not found.' });
+    return;
+  }
+
+  // Only the assigned class teacher (or an admin/clerk) may act on this request.
+  const actorIsClassTeacher =
+    !leaveRequest.classTeacherUsername ||
+    (request.auth.role === 'teacher' && request.auth.username === leaveRequest.classTeacherUsername);
+  if (!actorIsClassTeacher && !['admin', 'clerk'].includes(request.auth.role)) {
+    response.status(403).json({ message: 'Only the assigned class teacher can act on this leave request.' });
     return;
   }
 

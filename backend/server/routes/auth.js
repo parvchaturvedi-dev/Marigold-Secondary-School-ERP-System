@@ -1,6 +1,7 @@
 import express from 'express';
 import { randomInt } from 'crypto';
 import multer from 'multer';
+import rateLimit from 'express-rate-limit';
 import User from '../models/User.js';
 import { isMongoConnected } from '../db.js';
 import { optionalAuth, requireAuth, requireRole } from '../middleware/auth.js';
@@ -21,6 +22,22 @@ import {
 } from '../utils/identity.js';
 
 const router = express.Router();
+
+// Rate limits: block credential-stuffing on /login and OTP abuse on password reset.
+const loginLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 8,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many login attempts. Wait a minute and try again.' },
+});
+const otpLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 4,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many OTP requests. Please wait a minute.' },
+});
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
@@ -249,7 +266,7 @@ const persistSessionAuth = (request, payload, response) => {
   });
 };
 
-router.post('/login', ensureMongo, async (request, response) => {
+router.post('/login', loginLimiter, ensureMongo, async (request, response) => {
   const username = String(request.body.username || '').trim().toUpperCase();
   const password = String(request.body.password || '');
   const deviceId = String(request.body.deviceId || request.get('x-device-id') || '').trim();
@@ -488,7 +505,7 @@ router.post('/users/send-credentials-all', ensureMongo, requireAuth, requireRole
   });
 });
 
-router.post('/users/:username/request-password-otp', ensureMongo, requireAuth, requireRole('admin', 'clerk'), async (request, response) => {
+router.post('/users/:username/request-password-otp', otpLimiter, ensureMongo, requireAuth, requireRole('admin', 'clerk'), async (request, response) => {
   await syncIdentityUsersFromState();
   const username = String(request.params.username || '').trim().toUpperCase();
   const user = await User.findOne({ username }).lean();
@@ -520,7 +537,7 @@ router.post('/users/:username/request-password-otp', ensureMongo, requireAuth, r
   response.json({ message: `OTP sent to ${email}.`, email });
 });
 
-router.post('/users/:username/reveal-password', ensureMongo, requireAuth, requireRole('admin', 'clerk'), async (request, response) => {
+router.post('/users/:username/reveal-password', otpLimiter, ensureMongo, requireAuth, requireRole('admin', 'clerk'), async (request, response) => {
   await syncIdentityUsersFromState();
   const username = String(request.params.username || '').trim().toUpperCase();
 

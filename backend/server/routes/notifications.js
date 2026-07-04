@@ -72,10 +72,19 @@ const getRecipientQuery = ({ role, username, className, studentId }) => {
 };
 
 router.get('/', ensureMongo, async (request, response) => {
-  const role = request.query.role || request.auth?.role || '';
-  const username = request.query.username || request.auth?.username || '';
-  const className = request.query.className || '';
-  const studentId = request.query.studentId || '';
+  // Always read the recipient identity from the authenticated session so a
+  // student cannot pass ?role=admin&username=ADM-001 to peek at admin's inbox.
+  const role = request.auth?.role || '';
+  const username = request.auth?.username || '';
+  const activeStudent = request.auth?.activeStudent || {};
+  const className = role === 'student'
+    ? (activeStudent.className || '')
+    : role === 'teacher'
+      ? String(request.query.className || '') // teachers can filter by allotted class
+      : String(request.query.className || '');
+  const studentId = role === 'student'
+    ? (activeStudent.admissionNumber || activeStudent.id || username)
+    : String(request.query.studentId || '');
   const notifications = await Notification.find(
     getRecipientQuery({ role, username, className, studentId })
   )
@@ -143,6 +152,21 @@ router.post('/', ensureMongo, requireRole('admin', 'clerk', 'teacher'), async (r
     recipientClassName = '',
     recipientStudentId = '',
   } = request.body || {};
+
+  // Only admins can broadcast school-wide (recipientRole set without a
+  // recipientUsername/StudentId/ClassName filter). Teachers/clerks must scope
+  // to a specific class or student, otherwise the push would fan out to
+  // everyone in the school.
+  if (
+    request.auth.role !== 'admin' &&
+    recipientRole &&
+    !recipientUsername &&
+    !recipientStudentId &&
+    !recipientClassName
+  ) {
+    response.status(403).json({ message: 'Only admins can broadcast to a whole role. Please scope by class or user.' });
+    return;
+  }
 
   if (!title) {
     response.status(400).json({ message: 'A notification title is required.' });

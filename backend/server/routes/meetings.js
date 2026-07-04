@@ -5,6 +5,7 @@ import { isMongoConnected } from '../db.js';
 import { emitRealtimeEvent } from '../realtime.js';
 import { NOTIFICATIONS_UPDATED_EVENT } from './notifications.js';
 import { notifyMany } from '../utils/notify.js';
+import { requireRole } from '../middleware/auth.js';
 
 const router = express.Router();
 const MEETINGS_UPDATED_EVENT = 'mgps-erp-meetings-updated';
@@ -165,7 +166,7 @@ router.get('/', ensureMongo, async (request, response) => {
   );
 });
 
-router.post('/', ensureMongo, async (request, response) => {
+router.post('/', ensureMongo, requireRole('admin', 'clerk', 'teacher'), async (request, response) => {
   const targetClasses = Array.isArray(request.body.targetClasses) ? request.body.targetClasses : [];
   const actorRole = request.auth?.role;
   const actorUsername = request.auth?.username;
@@ -212,6 +213,12 @@ router.post('/', ensureMongo, async (request, response) => {
 });
 
 router.patch('/:id/attendance', ensureMongo, async (request, response) => {
+  // Prevent students from marking someone else's meeting attendance.
+  if (request.auth.role === 'student') {
+    const own = request.auth.activeStudent?.admissionNumber || request.auth.username;
+    request.body.studentId = own;
+    if (request.body.entry) request.body.entry.username = own;
+  }
   const meeting = await Meeting.findById(request.params.id);
 
   if (!meeting) {

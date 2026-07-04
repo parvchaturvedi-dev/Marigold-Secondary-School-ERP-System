@@ -4,6 +4,7 @@ import { isMongoConnected } from '../db.js';
 import { emitRealtimeEvent, isUserActiveOnErp } from '../realtime.js';
 import { resolveDisplayName } from '../utils/nameLookup.js';
 import { createNotification } from '../utils/notify.js';
+import { requireRole } from '../middleware/auth.js';
 
 const router = express.Router();
 const CLASS_APPROVAL_THRESHOLD = 80;
@@ -140,6 +141,9 @@ router.get('/', ensureMongo, async (request, response) => {
 });
 
 router.post('/', ensureMongo, async (request, response) => {
+  // Force sender identity from auth session; ignore client-supplied fields.
+  request.body.senderUsername = request.auth.username;
+  request.body.senderRole = request.auth.role;
   const payload = request.body;
   const isClassRequest =
     payload.senderRole === 'student' &&
@@ -179,6 +183,9 @@ router.post('/', ensureMongo, async (request, response) => {
 });
 
 router.patch('/:id/vote', ensureMongo, async (request, response) => {
+  // Vote must be under the authenticated user's identity — no ballot stuffing.
+  request.body.username = request.auth.username;
+  request.body.name = request.auth.displayName || request.auth.username;
   const { username, name, decision } = request.body;
   const application = await Application.findById(request.params.id);
 
@@ -201,7 +208,8 @@ router.patch('/:id/vote', ensureMongo, async (request, response) => {
   response.json(await normalizeApplication(application));
 });
 
-router.patch('/:id/admin-action', ensureMongo, async (request, response) => {
+router.patch('/:id/admin-action', ensureMongo, requireRole('admin', 'clerk'), async (request, response) => {
+  request.body.adminUsername = request.auth.username;
   const { action, reply, adminUsername } = request.body;
   const application = await Application.findById(request.params.id);
 

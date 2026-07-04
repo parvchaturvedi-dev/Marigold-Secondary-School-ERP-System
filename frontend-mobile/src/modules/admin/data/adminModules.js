@@ -4,7 +4,6 @@ export const adminModules = [
   { title: "Assignment", icon: "clipboard-outline", color: "#F97316" },
   { title: "Attendance", icon: "checkbox-outline", color: "#10B981" },
   { title: "Admin Management", icon: "shield-checkmark-outline", color: "#475569" },
-  { title: "Biometric Attendance", icon: "finger-print-outline", color: "#EF4444" },
   {
     title: "Class Desk",
     icon: "easel-outline",

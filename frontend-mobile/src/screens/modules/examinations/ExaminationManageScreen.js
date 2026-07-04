@@ -17,7 +17,9 @@
 //   admin-class-management-classes, admin-student-management-students,
 //   admin-subjects-global, admin-subjects-class-mapping
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Text, View } from "react-native";
+import { Alert, Linking, Platform, Text, View } from "react-native";
+import * as FileSystem from "expo-file-system/legacy";
+import * as IntentLauncher from "expo-intent-launcher";
 
 import { apiRequest } from "../../../api/apiClient";
 import { useTheme } from "../../../theme/ThemeContext";
@@ -28,6 +30,7 @@ import {
   Divider,
   EmptyState,
   Field,
+  FileField,
   Hero,
   LoadingCard,
   PrimaryButton,
@@ -47,7 +50,14 @@ const SECTIONS = [
   { value: "paper", label: "Paper" },
   { value: "schedule", label: "Schedule" },
   { value: "marks", label: "Marks" },
+  { value: "board", label: "Board Results" },
 ];
+
+// Class-level board result rows carry pdfName + examTitle. The legacy per-
+// student uploads in the same array are keyed by studentId/admissionNumber
+// instead. Only the class-level rows appear in the Board Results section.
+const isClassBoardResult = (record) =>
+  Boolean(record?.pdfName) && !record?.studentId && !record?.admissionNumber;
 
 const nowIso = () => new Date().toISOString();
 
@@ -75,6 +85,26 @@ const getClassName = (rec = {}) =>
   typeof rec === "string" ? rec : rec.name || rec.className || rec.class || rec.id || "";
 
 const getExamLabel = (exam) => (exam ? `${exam.name} Examination` : "Examination");
+
+// Approval-workflow status pill meta (dot color + label + ink color).
+const getPaperStatusMeta = (status) => {
+  switch (status) {
+    case "pending_admin":
+    case "teacher_review":
+    case "admin_review":
+      return { label: "Pending admin review", dot: "#f59e0b", ink: "#b45309" };
+    case "approved":
+    case "selected":
+    case "teacher_approved":
+      return { label: status === "selected" ? "Selected" : "Approved", dot: "#10b981", ink: "#047857" };
+    case "rejected":
+    case "admin_rejected":
+    case "teacher_rejected":
+      return { label: "Rejected", dot: "#f43f5e", ink: "#be123c" };
+    default:
+      return { label: "Draft", dot: "#94a3b8", ink: "#475569" };
+  }
+};
 
 const calculateGrade = (marks, maxMarks = 100) => {
   const pct = maxMarks ? (Number(marks) / Number(maxMarks)) * 100 : 0;
@@ -258,7 +288,9 @@ export default function ExaminationManageScreen({ user }) {
           classNames={classNames}
           subjectsForClass={subjectsForClass}
           actorName={actorName}
+          actorRole={actorRole}
           updatedBy={updatedBy}
+          setState={setState}
         />
       )}
       {section === "schedule" && (
@@ -282,6 +314,15 @@ export default function ExaminationManageScreen({ user }) {
           studentsForClass={studentsForClass}
           actorName={actorName}
           actorRole={actorRole}
+        />
+      )}
+      {section === "board" && (
+        <BoardResultsSection
+          state={state}
+          banner={banner}
+          classNames={classNames}
+          user={user}
+          reloadState={loadState}
         />
       )}
     </ScreenShell>
@@ -382,9 +423,71 @@ function PaperSection({
   classNames,
   subjectsForClass,
   actorName,
+  actorRole,
   updatedBy,
+  setState,
 }) {
   const { palette } = useTheme();
+  const [busyPaperId, setBusyPaperId] = useState("");
+  const [rejectCommentByPaperId, setRejectCommentByPaperId] = useState({});
+  const canDecideAsAdmin = actorRole === "admin";
+  const canSubmitDrafts = ["teacher", "admin", "clerk"].includes(actorRole);
+
+  // POST /examinations/papers/:id/submit-for-approval  → draft → pending_admin
+  // Server broadcasts mgps-erp-examinations-updated and notifies admins.
+  const submitForApproval = useCallback(
+    async (paper) => {
+      setBusyPaperId(paper.id);
+      banner.clear();
+      try {
+        const result = await apiRequest(
+          `/examinations/papers/${encodeURIComponent(paper.id)}/submit-for-approval`,
+          { method: "PATCH" }
+        );
+        if (result?.state) setState(normalizeState(result.state));
+        banner.showSuccess(`Paper "${paper.title}" submitted for admin approval.`);
+      } catch (err) {
+        banner.showError(err.message || "Could not submit paper.");
+      } finally {
+        setBusyPaperId("");
+      }
+    },
+    [banner, setState]
+  );
+
+  // POST /examinations/papers/:id/admin-decision  → pending_admin → approved | rejected
+  const decideAsAdmin = useCallback(
+    async (paper, decision) => {
+      const comment = (rejectCommentByPaperId[paper.id] || "").trim();
+      if (decision === "rejected" && !comment) {
+        banner.showError("Please write a rejection comment before rejecting.");
+        return;
+      }
+      setBusyPaperId(paper.id);
+      banner.clear();
+      try {
+        const result = await apiRequest(
+          `/examinations/papers/${encodeURIComponent(paper.id)}/admin-decision`,
+          {
+            method: "PATCH",
+            body: JSON.stringify({ decision, comment }),
+          }
+        );
+        if (result?.state) setState(normalizeState(result.state));
+        setRejectCommentByPaperId((prev) => ({ ...prev, [paper.id]: "" }));
+        banner.showSuccess(
+          decision === "approved"
+            ? `Approved "${paper.title}".`
+            : `Rejected "${paper.title}".`
+        );
+      } catch (err) {
+        banner.showError(err.message || "Could not save decision.");
+      } finally {
+        setBusyPaperId("");
+      }
+    },
+    [banner, rejectCommentByPaperId, setState]
+  );
   const [examId, setExamId] = useState(state.exams[0]?.id || "");
   const [className, setClassName] = useState(classNames[0] || "");
   const subjects = useMemo(() => subjectsForClass(className), [className, subjectsForClass]);
@@ -492,14 +595,85 @@ function PaperSection({
       {!examPapers.length ? (
         <EmptyState icon="documents-outline" title="No papers yet" text="No papers created for this exam." />
       ) : (
-        examPapers.map((paper) => (
-          <Card key={paper.id}>
-            <Text style={[styles.title, { color: palette.ink }]}>{paper.title}</Text>
-            <Text style={[styles.sub, { color: palette.inkSoft }]}>
-              {paper.className} · {paper.subject} · {paper.type} · {paper.status}
-            </Text>
-          </Card>
-        ))
+        examPapers.map((paper) => {
+          const meta = getPaperStatusMeta(paper.status);
+          const isBusy = busyPaperId === paper.id;
+          const commentDraft = rejectCommentByPaperId[paper.id] || "";
+          return (
+            <Card key={paper.id}>
+              <View style={styles.pillRow}>
+                <View style={[styles.dot, { backgroundColor: meta.dot }]} />
+                <Text style={[styles.pillLabel, { color: meta.ink }]}>{meta.label}</Text>
+              </View>
+              <Text style={[styles.title, { color: palette.ink }]}>{paper.title}</Text>
+              <Text style={[styles.sub, { color: palette.inkSoft }]}>
+                {paper.className} · {paper.subject} · {paper.type}
+              </Text>
+
+              {/* Teacher draft: submit-for-approval */}
+              {canSubmitDrafts && paper.status === "draft" ? (
+                <PrimaryButton
+                  icon="paper-plane-outline"
+                  label="Submit for approval"
+                  onPress={() => submitForApproval(paper)}
+                  loading={isBusy}
+                />
+              ) : null}
+
+              {/* Teacher pending: awaiting badge only */}
+              {!canDecideAsAdmin && paper.status === "pending_admin" ? (
+                <Text style={[styles.help, { color: palette.inkFaint }]}>
+                  Awaiting admin review.
+                </Text>
+              ) : null}
+
+              {/* Admin pending: approve/reject with comment */}
+              {canDecideAsAdmin && paper.status === "pending_admin" ? (
+                <>
+                  <TextField
+                    label="Rejection comment (required to reject)"
+                    value={commentDraft}
+                    onChangeText={(v) =>
+                      setRejectCommentByPaperId((prev) => ({ ...prev, [paper.id]: v }))
+                    }
+                    placeholder="Explain what needs correction..."
+                  />
+                  <PrimaryButton
+                    icon="checkmark-circle-outline"
+                    label="Approve"
+                    onPress={() => decideAsAdmin(paper, "approved")}
+                    loading={isBusy}
+                  />
+                  <PrimaryButton
+                    icon="close-circle-outline"
+                    label="Reject"
+                    onPress={() => decideAsAdmin(paper, "rejected")}
+                    loading={isBusy}
+                  />
+                </>
+              ) : null}
+
+              {/* Comments trail */}
+              {Array.isArray(paper.comments) && paper.comments.length ? (
+                <>
+                  <Divider />
+                  <Text style={[styles.help, { color: palette.inkFaint }]}>
+                    Comments trail
+                  </Text>
+                  {paper.comments.slice(-3).map((entry) => (
+                    <Text
+                      key={entry.id || `${entry.action}-${entry.createdAt}`}
+                      style={[styles.sub, { color: palette.inkSoft }]}
+                    >
+                      {entry.action} · {entry.actorName || entry.role || "-"}
+                      {entry.comment ? ` — ${entry.comment}` : ""}
+                    </Text>
+                  ))}
+                </>
+              ) : null}
+            </Card>
+          );
+        })
       )}
     </>
   );
@@ -818,6 +992,223 @@ function MarksSection({
 }
 
 // ---------------------------------------------------------------------------
+// Board Results (PDF per class)
+// ---------------------------------------------------------------------------
+// Admin/clerk publish a board result PDF; anyone authenticated can pull it via
+// GET /examinations/board-results/:id/pdf. The metadata list is embedded in
+// state.boardResults[] alongside the older per-student entries.
+function BoardResultsSection({ state, banner, classNames, user, reloadState }) {
+  const { palette } = useTheme();
+  const role = user?.role || "";
+  const canManage = role === "admin" || role === "clerk";
+  const canDelete = role === "admin";
+  const studentClassName =
+    user?.activeStudent?.className ||
+    user?.studentProfiles?.[0]?.className ||
+    user?.profile?.className ||
+    "";
+
+  const [uploadClassName, setUploadClassName] = useState(classNames[0] || "");
+  const [examTitle, setExamTitle] = useState("");
+  const [pickedFile, setPickedFile] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [opening, setOpening] = useState("");
+
+  useEffect(() => {
+    if (!uploadClassName && classNames[0]) setUploadClassName(classNames[0]);
+  }, [uploadClassName, classNames]);
+
+  const results = useMemo(() => {
+    const all = (state.boardResults || []).filter(isClassBoardResult);
+    if (canManage) return all;
+    if (!studentClassName) return [];
+    return all.filter((item) => item.className === studentClassName);
+  }, [state.boardResults, canManage, studentClassName]);
+
+  async function handleUpload() {
+    if (!uploadClassName) return banner.showError("Select a class first.");
+    if (!examTitle.trim()) return banner.showError("Provide an exam title.");
+    if (!pickedFile?.uri) return banner.showError("Attach the result PDF.");
+
+    setBusy(true);
+    banner.clear();
+    try {
+      const form = new FormData();
+      form.append("resultPdf", {
+        uri: pickedFile.uri,
+        name: pickedFile.name || "board-result.pdf",
+        type: pickedFile.type || "application/pdf",
+      });
+      form.append("className", uploadClassName);
+      form.append("examTitle", examTitle.trim());
+      form.append(
+        "uploadedByUsername",
+        user?.username || user?.displayName || "admin"
+      );
+
+      await apiRequest("/examinations/board-results", {
+        method: "POST",
+        body: form,
+      });
+      banner.showSuccess(`Board result published for ${uploadClassName}.`);
+      setPickedFile(null);
+      setExamTitle("");
+      await reloadState();
+    } catch (err) {
+      banner.showError(err.message || "Upload failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function openPdf(item) {
+    setOpening(item.id);
+    try {
+      const payload = await apiRequest(
+        `/examinations/board-results/${item.id}/pdf`
+      );
+      const base64 = String(payload?.dataUrl || "").split(",")[1];
+      if (!base64) throw new Error("Missing PDF data.");
+
+      const safeName = String(item.pdfName || `board-result-${item.id}.pdf`)
+        .replace(/[^A-Za-z0-9._-]/g, "_");
+      const fileUri = `${FileSystem.cacheDirectory}${safeName}`;
+      await FileSystem.writeAsStringAsync(fileUri, base64, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
+      if (Platform.OS === "android") {
+        const contentUri = await FileSystem.getContentUriAsync(fileUri);
+        await IntentLauncher.startActivityAsync(
+          "android.intent.action.VIEW",
+          {
+            data: contentUri,
+            flags: 1,
+            type: "application/pdf",
+          }
+        );
+      } else {
+        await Linking.openURL(fileUri);
+      }
+    } catch (err) {
+      Alert.alert(
+        "Could not open PDF",
+        err?.message || "Install a PDF viewer or use the web portal."
+      );
+    } finally {
+      setOpening("");
+    }
+  }
+
+  function confirmDelete(item) {
+    Alert.alert("Delete board result?", `${item.className} · ${item.examTitle}`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await apiRequest(`/examinations/board-results/${item.id}`, {
+              method: "DELETE",
+            });
+            await reloadState();
+          } catch (err) {
+            banner.showError(err.message || "Delete failed.");
+          }
+        },
+      },
+    ]);
+  }
+
+  return (
+    <>
+      {canManage && (
+        <Card>
+          <SectionTitle>Publish Board Result</SectionTitle>
+          <Text style={[styles.help, { color: palette.inkFaint }]}>
+            Upload a PDF result for a class. Students in that class see it here
+            and get a notification.
+          </Text>
+          <Select
+            label="Class"
+            options={classNames}
+            value={uploadClassName}
+            onChange={setUploadClassName}
+            placeholder={classNames.length ? "Select class" : "No classes found."}
+          />
+          <TextField
+            label="Exam Title"
+            value={examTitle}
+            onChangeText={setExamTitle}
+            placeholder="CBSE Class 10 Result 2026"
+          />
+          <FileField
+            label="Result PDF"
+            hint="PDF only, up to 10 MB."
+            value={pickedFile}
+            onChange={setPickedFile}
+            types={["application/pdf"]}
+          />
+          <PrimaryButton
+            icon="cloud-upload-outline"
+            label="Publish Result"
+            onPress={handleUpload}
+            loading={busy}
+          />
+        </Card>
+      )}
+
+      <SectionTitle>
+        Board Results{canManage ? "" : studentClassName ? ` · ${studentClassName}` : ""} (
+        {results.length})
+      </SectionTitle>
+      {!results.length ? (
+        <EmptyState
+          icon="document-text-outline"
+          title="No board results yet"
+          text={
+            canManage
+              ? "Upload the first board result PDF above."
+              : "Your board results will appear here after the school publishes them."
+          }
+        />
+      ) : (
+        results.map((item) => (
+          <Card key={item.id}>
+            <Text style={[styles.title, { color: palette.ink }]}>{item.examTitle}</Text>
+            <Text style={[styles.sub, { color: palette.inkSoft }]}>
+              {item.className} · {item.pdfName}
+            </Text>
+            <Text style={[styles.sub, { color: palette.inkSoft }]}>
+              Published {new Date(item.publishedAt || Date.now()).toLocaleDateString(
+                "en-IN",
+                { day: "2-digit", month: "short", year: "numeric" }
+              )}
+            </Text>
+            <Divider />
+            <PrimaryButton
+              icon="open-outline"
+              label={opening === item.id ? "Opening..." : "Open PDF"}
+              onPress={() => openPdf(item)}
+              loading={opening === item.id}
+            />
+            {canDelete && (
+              <View style={{ marginTop: 8 }}>
+                <PrimaryButton
+                  icon="trash-outline"
+                  label="Delete"
+                  onPress={() => confirmDelete(item)}
+                />
+              </View>
+            )}
+          </Card>
+        ))
+      )}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Local helpers
 // ---------------------------------------------------------------------------
 function Metric({ label, value }) {
@@ -846,4 +1237,7 @@ const styles = {
   },
   metricValue: { color: "#0F172A", fontSize: 18, fontWeight: "900" },
   metricLabel: { color: "#64748B", fontSize: 10, fontWeight: "900", textTransform: "uppercase", marginTop: 2 },
+  pillRow: { flexDirection: "row", alignItems: "center", marginBottom: 6 },
+  dot: { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
+  pillLabel: { fontSize: 10, fontWeight: "900", textTransform: "uppercase" },
 };

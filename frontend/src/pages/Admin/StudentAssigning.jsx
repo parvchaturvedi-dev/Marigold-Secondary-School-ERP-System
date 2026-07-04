@@ -10,6 +10,9 @@ const StudentAssigning = () => {
   const [roleDocuments] = useMongoState('admin-document-requirements', { Student: [] });
   const dynamicAdminDocs = roleDocuments.Student || [];
   const [studentsDb, setStudentsDb] = useMongoState('admin-student-management-students', []);
+  // Also read the alumni-pending bucket so a passed-out student's admission
+  // number is treated as "already used" and can't be silently re-assigned.
+  const [alumniPending] = useMongoState('admin-finance-alumni-pending', []);
 
   // Comprehensive Form State Bucket
   const [studentForm, setStudentForm] = useState({
@@ -87,8 +90,12 @@ const StudentAssigning = () => {
       (student) =>
         (student.admissionNumber || student.id || '').trim().toUpperCase() === normalizedAdmissionNumber
     );
-    if (isDuplicateAdmission) {
-      alert(`Admission Number "${normalizedAdmissionNumber}" already exists! Please enter a unique Admission Number.`);
+    const isAlumniAdmission = (Array.isArray(alumniPending) ? alumniPending : []).some(
+      (student) =>
+        (student.admissionNumber || student.id || '').trim().toUpperCase() === normalizedAdmissionNumber
+    );
+    if (isDuplicateAdmission || isAlumniAdmission) {
+      alert(`Admission Number "${normalizedAdmissionNumber}" is already in use${isAlumniAdmission ? ' (alumni bucket)' : ''}. Please enter a unique one.`);
       return;
     }
 

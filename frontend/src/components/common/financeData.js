@@ -609,7 +609,11 @@ const waterfallLedger = (feeLedger = [], amount, classOrder = [], receiptNo = ''
   const breakdown = [];
   const nextLedger = ordered.map((entry) => {
     const pending = entryPending(entry);
-    if (remaining <= 0 || pending <= 0) return entry;
+    const assigned = parseAmount(entry.assigned);
+    // Only skip when nothing to collect (no money left OR class has no assigned
+    // fee at all). A class with assigned > 0 but pending 0 (fully paid) is
+    // correctly skipped by `pending <= 0`.
+    if (remaining <= 0 || assigned <= 0 || pending <= 0) return entry;
     const applied = Math.min(pending, remaining);
     remaining -= applied;
     breakdown.push({ className: entry.className, amount: applied });
