@@ -23,6 +23,7 @@ import * as FileSystem from "expo-file-system";
 import PageHeader from "../../../components/cards/PageHeader";
 import AuroraBackground from "../../../shared/components/AuroraBackground";
 import GlassCard from "../../../shared/components/GlassCard";
+import { SkeletonHero, SkeletonList } from "../../../shared/components/Skeleton";
 import { useTheme } from "../../../theme/ThemeContext";
 import { gradients, glassColors } from "../../../shared/theme/glass";
 import { colors } from "../../../shared/theme/colors";
@@ -463,15 +464,13 @@ export function EmptyState({ icon = "file-tray-outline", title = "No records yet
   );
 }
 
-export function LoadingCard({ text = "Loading..." }) {
-  const { palette } = useTheme();
+export function LoadingCard({ text = "Loading...", rows = 5, hero = true }) {
+  // Modern shimmer skeleton — feels instant. `text` kept for API compatibility.
   return (
-    <GlassCard style={styles.loadingCard}>
-      <View style={styles.loadingInner}>
-        <ActivityIndicator color={palette.accent} size="large" />
-        <Text style={[styles.loadingText, { color: palette.inkSoft }]}>{text}</Text>
-      </View>
-    </GlassCard>
+    <View accessibilityLabel={text}>
+      {hero && <SkeletonHero />}
+      <SkeletonList rows={rows} />
+    </View>
   );
 }
 

@@ -1,8 +1,9 @@
 import React from "react";
 import { View, Text } from "react-native";
 import { useTheme } from "../../theme/ThemeContext";
+import { Skeleton } from "../../shared/components/Skeleton";
 
-export default function OverviewCard({ title, value, subtitle, color }) {
+export default function OverviewCard({ title, value, subtitle, color, loading }) {
   const { palette } = useTheme();
   return (
     <View
@@ -26,20 +27,21 @@ export default function OverviewCard({ title, value, subtitle, color }) {
         {title}
       </Text>
 
-      <Text
-        style={{
-          marginTop: 10,
-          fontSize: 26,
-          fontWeight: "900",
-          color,
-        }}
-      >
-        {value}
-      </Text>
-
-      <Text style={{ marginTop: 4, fontSize: 13, color, fontWeight: "600" }}>
-        {subtitle}
-      </Text>
+      {loading ? (
+        <>
+          <Skeleton width={64} height={26} borderRadius={8} style={{ marginTop: 10 }} />
+          <Skeleton width={48} height={12} borderRadius={6} style={{ marginTop: 8 }} />
+        </>
+      ) : (
+        <>
+          <Text style={{ marginTop: 10, fontSize: 26, fontWeight: "900", color }}>
+            {value}
+          </Text>
+          <Text style={{ marginTop: 4, fontSize: 13, color, fontWeight: "600" }}>
+            {subtitle}
+          </Text>
+        </>
+      )}
     </View>
   );
 }

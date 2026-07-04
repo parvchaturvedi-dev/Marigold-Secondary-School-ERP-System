@@ -376,7 +376,7 @@ function HomeContent({ user, summary, loading, error, onModulePress }) {
       {/* 3 Columns matching original Student layout */}
       <View style={{ flexDirection: "row", marginHorizontal: -5 }}>
         {stats.map((item) => (
-          <OverviewCard key={item.title} title={item.title} value={item.value} subtitle={item.subtitle} color={item.color} />
+          <OverviewCard key={item.title} title={item.title} value={item.value} subtitle={item.subtitle} color={item.color} loading={loading} />
         ))}
       </View>
     </View>
