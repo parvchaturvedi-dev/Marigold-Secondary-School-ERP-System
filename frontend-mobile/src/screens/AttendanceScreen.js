@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import * as Location from "expo-location";
 
 import PageHeader from "../components/cards/PageHeader";
 import { useAuth } from "../auth/AuthContext";
@@ -55,30 +56,23 @@ function distanceMeters(pointA = {}, pointB = {}) {
   return 2 * radius * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-function getLocation() {
-  return new Promise((resolve, reject) => {
-    const nativeAttendance = globalThis.MGPSAttendanceDevice;
-    if (nativeAttendance?.getLocation) {
-      Promise.resolve(nativeAttendance.getLocation()).then(resolve).catch(reject);
-      return;
-    }
+async function getLocation() {
+  const nativeAttendance = globalThis.MGPSAttendanceDevice;
+  if (nativeAttendance?.getLocation) {
+    return nativeAttendance.getLocation();
+  }
 
-    if (globalThis.navigator?.geolocation?.getCurrentPosition) {
-      globalThis.navigator.geolocation.getCurrentPosition(
-        (position) =>
-          resolve({
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-            isMockLocation: Boolean(position.mocked || position.coords.mocked),
-          }),
-        reject,
-        { enableHighAccuracy: true, timeout: 12000, maximumAge: 10000 }
-      );
-      return;
-    }
-
-    reject(new Error("Device GPS bridge is unavailable on this build."));
-  });
+  // Preferred path: expo-location.
+  const { status } = await Location.requestForegroundPermissionsAsync();
+  if (status !== "granted") {
+    throw new Error("Location permission is required for attendance.");
+  }
+  const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+  return {
+    latitude: position.coords.latitude,
+    longitude: position.coords.longitude,
+    isMockLocation: Boolean(position.mocked),
+  };
 }
 
 export default function AttendanceScreen({ role, onBack }) {
@@ -128,7 +122,7 @@ export default function AttendanceScreen({ role, onBack }) {
           schoolAddress: overviewPayload.settings.schoolAddress || "",
           geofenceLatitude: String(overviewPayload.settings.geofenceLatitude ?? ""),
           geofenceLongitude: String(overviewPayload.settings.geofenceLongitude ?? ""),
-          geofenceRadiusMeters: String(overviewPayload.settings.geofenceRadiusMeters || 100),
+          geofenceRadiusMeters: String(overviewPayload.settings.geofenceRadiusMeters || 50),
           authorizedWifiBssid: overviewPayload.settings.authorizedWifiBssid || "",
           enforceReceptionQr: overviewPayload.settings.enforceReceptionQr === true,
           presentUntil: overviewPayload.settings.presentUntil || "08:30",
@@ -218,7 +212,7 @@ export default function AttendanceScreen({ role, onBack }) {
         longitude: settings.geofenceLongitude,
       };
       const distance = distanceMeters(point, schoolPoint);
-      const radius = Number(settings.geofenceRadiusMeters || 100);
+      const radius = Number(settings.geofenceRadiusMeters || 50);
       const inside = distance <= radius;
       setLocationState({
         checking: false,
@@ -275,7 +269,7 @@ export default function AttendanceScreen({ role, onBack }) {
         ...settingsDraft,
         geofenceLatitude: Number(settingsDraft.geofenceLatitude),
         geofenceLongitude: Number(settingsDraft.geofenceLongitude),
-        geofenceRadiusMeters: Number(settingsDraft.geofenceRadiusMeters || 100),
+        geofenceRadiusMeters: Number(settingsDraft.geofenceRadiusMeters || 50),
       });
       Alert.alert("Settings", "Attendance security settings saved.");
       load();
@@ -469,9 +463,41 @@ function SecurityConfigurator({ settingsDraft, setSettingsDraft, onSave, saving 
         <Input label="Latitude" value={settingsDraft.geofenceLatitude} keyboardType="numeric" onChangeText={(value) => setSettingsDraft((draft) => ({ ...draft, geofenceLatitude: value }))} />
         <Input label="Longitude" value={settingsDraft.geofenceLongitude} keyboardType="numeric" onChangeText={(value) => setSettingsDraft((draft) => ({ ...draft, geofenceLongitude: value }))} />
       </View>
-      <Text style={styles.label}>Radius</Text>
+      <TouchableOpacity
+        onPress={async () => {
+          try {
+            const loc = await getLocation();
+            if (loc?.isMockLocation) {
+              Alert.alert("Mock location", "Mock location provider detected. Disable it and try again.");
+              return;
+            }
+            setSettingsDraft((draft) => ({
+              ...draft,
+              geofenceLatitude: String(loc.latitude.toFixed(6)),
+              geofenceLongitude: String(loc.longitude.toFixed(6)),
+            }));
+            Alert.alert("Location captured", `Lat ${loc.latitude.toFixed(6)}, Lng ${loc.longitude.toFixed(6)}`);
+          } catch (err) {
+            Alert.alert("Location error", err?.message || "Could not fetch location.");
+          }
+        }}
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 8,
+          minHeight: 44,
+          borderRadius: 12,
+          backgroundColor: "rgba(99,102,241,0.14)",
+          marginBottom: 14,
+        }}
+      >
+        <Ionicons name="locate-outline" size={18} color={colors.primary} />
+        <Text style={{ color: colors.primary, fontWeight: "900" }}>Use My Current Location as School</Text>
+      </TouchableOpacity>
+      <Text style={styles.label}>Allowed Radius (metres)</Text>
       <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
-        {["50", "100", "200"].map((radius) => (
+        {["25", "50", "100"].map((radius) => (
           <TouchableOpacity
             key={radius}
             onPress={() => setSettingsDraft((draft) => ({ ...draft, geofenceRadiusMeters: radius }))}

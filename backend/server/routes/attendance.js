@@ -114,19 +114,39 @@ const validateAttendanceExecution = async (request, response, next) => {
   const latitude = toNumber(request.body?.gpsLatitude ?? request.body?.latitude ?? metadata.latitude);
   const longitude = toNumber(request.body?.gpsLongitude ?? request.body?.longitude ?? metadata.longitude);
   const hasSchoolFence = setting.geofenceLatitude !== null && setting.geofenceLongitude !== null;
-  const requiresFence =
-    hasSchoolFence &&
-    (request.body?.requiresGeofence === true ||
-      ['clock-in', 'clock-out'].includes(clean(request.body?.action).toLowerCase()) ||
-      ['self-service', 'teacher-mobile', 'clerk-self'].includes(clean(request.body?.source).toLowerCase()));
+  const action = clean(request.body?.action).toLowerCase();
+  const source = clean(request.body?.source).toLowerCase();
+  const isSelfService =
+    ['clock-in', 'clock-out'].includes(action) ||
+    ['self-service', 'teacher-mobile', 'clerk-self'].includes(source) ||
+    request.body?.requiresGeofence === true;
 
-  if (requiresFence) {
+  // Staff self clock-in / clock-out MUST happen inside the school boundary.
+  // Guard both directions: if the admin hasn't configured the fence yet, refuse
+  // instead of silently letting people clock from anywhere.
+  if (isSelfService) {
+    if (!hasSchoolFence) {
+      response.status(400).json({
+        message: 'School location is not configured. Ask an admin to set the geofence in Attendance settings.',
+      });
+      return;
+    }
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      response.status(403).json({ message: 'Location is required. Enable GPS and try again.' });
+      return;
+    }
     const distance = haversineDistanceMeters(
       { latitude, longitude },
       { latitude: setting.geofenceLatitude, longitude: setting.geofenceLongitude }
     );
-    if (distance > Number(setting.geofenceRadiusMeters || 100)) {
-      response.status(403).json({ message: 'Out of school boundary', distanceMeters: Math.round(distance) });
+    const allowed = Number(setting.geofenceRadiusMeters || 50);
+    if (distance > allowed) {
+      const label = action === 'clock-out' ? 'clock out' : 'clock in';
+      response.status(403).json({
+        message: `You are ${Math.round(distance)}m away from the school. You can only ${label} within ${allowed}m of the campus.`,
+        distanceMeters: Math.round(distance),
+        allowedMeters: allowed,
+      });
       return;
     }
     request.geofenceDistanceMeters = Math.round(distance);

@@ -43,7 +43,7 @@ const attendanceSettingSchema = new mongoose.Schema(
     },
     geofenceRadiusMeters: {
       type: Number,
-      default: 100,
+      default: 50,
     },
     authorizedWifiBssid: {
       type: String,
