@@ -23,6 +23,44 @@ import TransportCard from "./components/TransportCard";
 
 const normalize = (value = "") => String(value || "").trim().toUpperCase();
 
+// The backend /fees/me now returns class-wise { totals, classLedger, concession }.
+// Map it to the shape the summary/installment/payment components expect.
+const mapFeeStudent = (student = {}) => {
+  const totals = student.totals || {};
+  const ledger = Array.isArray(student.classLedger) ? student.classLedger : [];
+  return {
+    ...student,
+    summary: {
+      annual: totals.assigned || 0,
+      concession: student.concession || 0,
+      paid: totals.paid || 0,
+      pending: totals.pending || 0,
+      status: student.status || (totals.pending > 0 ? "Pending" : "Clear"),
+    },
+    installments: ledger.map((row, i) => ({
+      id: `${row.className || "class"}-${i}`,
+      term: row.className || "Class",
+      months: "",
+      status: row.status || (row.pending > 0 ? (row.paid > 0 ? "Partial" : "Due") : "Paid"),
+      dueDate: "-",
+      amount: row.assigned || 0,
+      paid: row.paid || 0,
+      balance: row.pending != null ? row.pending : Math.max(0, (row.assigned || 0) - (row.paid || 0)),
+    })),
+    payments: ledger.flatMap((row) =>
+      (Array.isArray(row.payments) ? row.payments : []).map((p, i) => ({
+        id: `${row.className || "class"}-${p.receiptNo || i}`,
+        receiptNo: p.receiptNo || "—",
+        date: p.date || "",
+        mode: p.mode || "School Desk",
+        status: "Paid",
+        head: row.className || "Fee",
+        amount: p.amount || 0,
+      }))
+    ),
+  };
+};
+
 export default function FeesScreen({ user }) {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -46,7 +84,7 @@ export default function FeesScreen({ user }) {
     try {
       const payload = await fetchMyFees();
       const list = Array.isArray(payload?.students) ? payload.students : [];
-      setStudents(list);
+      setStudents(list.map(mapFeeStudent));
     } catch (err) {
       setError(err.message || "Failed to load fee details.");
     } finally {
