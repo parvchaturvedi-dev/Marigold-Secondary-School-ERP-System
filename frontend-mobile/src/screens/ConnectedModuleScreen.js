@@ -72,6 +72,8 @@ const hiddenKeys = new Set([
   "teacherUsername",
   "senderIdentityId",
   "recipientStudentId",
+  // Used for tap-to-navigate on notifications; not a human-facing detail row.
+  "linkPage",
 ]);
 
 const titleKeys = [
@@ -291,7 +293,7 @@ function initialForm(title, user = {}) {
 
 export default function ConnectedModuleScreen() {
   const { palette } = useTheme();
-  const { selectedModule, user } = useAuth();
+  const { selectedModule, user, openNotificationTarget } = useAuth();
   const [rows, setRows] = useState([]);
   const [config, setConfig] = useState(null);
   const [rawPayload, setRawPayload] = useState(null);
@@ -601,6 +603,7 @@ export default function ConnectedModuleScreen() {
               title={title}
               onParticipate={handleParticipate}
               onRowAction={handleRowAction}
+              onOpenLink={openNotificationTarget}
               acting={acting}
               user={user}
             />
@@ -632,7 +635,7 @@ function PrimaryButton({ icon, label, onPress, disabled }) {
   );
 }
 
-function DataCard({ row, index, title, onParticipate, onRowAction, acting, user }) {
+function DataCard({ row, index, title, onParticipate, onRowAction, onOpenLink, acting, user }) {
   const { palette } = useTheme();
   const details = getDetails(row);
   const student = title === "Events" ? (getActiveStudentProfile(user) || {}) : {};
@@ -656,6 +659,8 @@ function DataCard({ row, index, title, onParticipate, onRowAction, acting, user 
     title === "Leave Requests" && isAdmin && ["pending_admin", "forwarded_admin"].includes(row.status);
   const canApplicationAdminAction = title === "Application" && isAdmin && row.status === "pending";
   const canApplicationVote = title === "Application" && row.status === "collecting_consensus";
+  // A notification row with a target page can be tapped to jump to that page.
+  const isTappableNotification = title === "Notifications" && !!row.linkPage && typeof onOpenLink === "function";
 
   return (
     <GlassCard style={styles.card}>
@@ -664,7 +669,11 @@ function DataCard({ row, index, title, onParticipate, onRowAction, acting, user 
         <EventContent row={row} expanded={expanded} setExpanded={setExpanded} />
       )}
       {title !== "Events" && (
-        <>
+        <TouchableOpacity
+          activeOpacity={isTappableNotification ? 0.7 : 1}
+          disabled={!isTappableNotification}
+          onPress={isTappableNotification ? () => onOpenLink(row.linkPage) : undefined}
+        >
       <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
         <View style={[styles.indexBadge, { backgroundColor: palette.tile }]}>
           <Text style={[styles.indexText, { color: palette.accentDeep }]}>{index + 1}</Text>
@@ -674,6 +683,9 @@ function DataCard({ row, index, title, onParticipate, onRowAction, acting, user 
           <Text style={[styles.cardSubtitle, { color: palette.inkSoft }]}>{getSubtitle(row)}</Text>
         </View>
         {row.unread && <View style={styles.unreadDot} />}
+        {isTappableNotification && (
+          <Ionicons name="chevron-forward" size={18} color={palette.inkFaint} style={{ marginLeft: 6, marginTop: 2 }} />
+        )}
       </View>
 
       {details.length > 0 && (
@@ -688,7 +700,7 @@ function DataCard({ row, index, title, onParticipate, onRowAction, acting, user 
           ))}
         </View>
       )}
-        </>
+        </TouchableOpacity>
       )}
 
       {title === "Events" && hasParticipated && (

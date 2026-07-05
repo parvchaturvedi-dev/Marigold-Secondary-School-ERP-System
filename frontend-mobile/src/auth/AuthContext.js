@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef } from "react";
+import * as Notifications from "expo-notifications";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { loginApi } from "../api/authApi";
 import { apiRequest } from "../api/apiClient";
@@ -149,6 +150,64 @@ export function AuthProvider({ children }) {
     setScreen("connected-module");
   }
 
+  // Open the page a notification points at (its `linkPage`). Role-aware, mirrors
+  // openStudentModule / openConnectedModule. Used by both a tapped push and a
+  // tapped in-app notification row.
+  function openNotificationTarget(linkPage) {
+    const page = String(linkPage || "").trim();
+    if (!page) return;
+    // App tapped-open from a killed state before the session finished loading:
+    // stash the target and route it once the user is hydrated (effect below).
+    if (!user) {
+      pendingLinkRef.current = page;
+      return;
+    }
+    const isTimetable = page === "Timetable" || page.endsWith("> Timetable");
+    const canEditTimetable = user.role === "admin" || user.role === "clerk";
+    if (user.role === "student") {
+      setSelectedModule(page);
+      setScreen("student-module");
+    } else if (isTimetable && !canEditTimetable) {
+      setSelectedModule(page);
+      setScreen("timetable");
+    } else {
+      setSelectedModule(page);
+      setScreen("connected-module");
+    }
+  }
+
+  // Keep a live ref so the push-tap listener (registered once) always routes with
+  // the current user/role instead of a stale closure.
+  const openTargetRef = useRef(openNotificationTarget);
+  openTargetRef.current = openNotificationTarget;
+
+  // Route a notification tap that arrived before the session was ready, once the
+  // user is hydrated.
+  const pendingLinkRef = useRef(null);
+  useEffect(() => {
+    if (user && pendingLinkRef.current) {
+      const page = pendingLinkRef.current;
+      pendingLinkRef.current = null;
+      openTargetRef.current(page);
+    }
+  }, [user]);
+
+  // Route taps on push notifications (banner/lock-screen/action buttons) to the
+  // linked page — including a tap that cold-launched the app from a killed state.
+  useEffect(() => {
+    const route = (response) => {
+      const linkPage = response?.notification?.request?.content?.data?.linkPage;
+      if (linkPage) openTargetRef.current(linkPage);
+    };
+    const sub = Notifications.addNotificationResponseReceivedListener(route);
+    Notifications.getLastNotificationResponseAsync()
+      .then((response) => {
+        if (response) route(response);
+      })
+      .catch(() => {});
+    return () => sub.remove();
+  }, []);
+
   function goHome() {
     if (!user) {
       setScreen("login");
@@ -218,6 +277,7 @@ export function AuthProvider({ children }) {
           setScreen("timetable");
         },
         openConnectedModule,
+        openNotificationTarget,
         selectStudent,
         goHome,
         goBack: goHome,
