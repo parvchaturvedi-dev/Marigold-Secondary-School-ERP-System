@@ -215,6 +215,53 @@ export const assignClassFeeToStudent = (student = {}, className, amount, note = 
   return applyLedgerToStudent(student, nextLedger);
 };
 
+// Recompute a class entry's paid total from its payments (after edit/delete).
+const recomputeEntryPaid = (payments = []) =>
+  payments.reduce((sum, p) => sum + Math.max(0, parseAmount(p.amount)), 0);
+
+// Edit ONE payment inside a class entry (amount / date / mode). Recomputes paid
+// so the class + student aggregates stay correct. Used to fix data-entry mistakes.
+export const editLedgerPayment = (student = {}, className, paymentId, patch = {}) => {
+  const target = normalizeClassName(className);
+  if (!target || !paymentId) return student;
+  const ledger = ensureFeeLedger(student);
+  const nextLedger = ledger.map((entry) => {
+    if (entry.className.toLowerCase() !== target.toLowerCase()) return entry;
+    const payments = entry.payments.map((p) =>
+      p.id === paymentId ? normalizeLedgerPayment({ ...p, ...patch, id: p.id }) : p
+    );
+    return { ...entry, payments, paid: recomputeEntryPaid(payments) };
+  });
+  return applyLedgerToStudent(student, nextLedger);
+};
+
+// Delete ONE payment from a class entry. Recomputes paid.
+export const deleteLedgerPayment = (student = {}, className, paymentId) => {
+  const target = normalizeClassName(className);
+  if (!target || !paymentId) return student;
+  const ledger = ensureFeeLedger(student);
+  const nextLedger = ledger.map((entry) => {
+    if (entry.className.toLowerCase() !== target.toLowerCase()) return entry;
+    const payments = entry.payments.filter((p) => p.id !== paymentId);
+    return { ...entry, payments, paid: recomputeEntryPaid(payments) };
+  });
+  return applyLedgerToStudent(student, nextLedger);
+};
+
+// Human-friendly "12 Jun 2026, 3:45 PM" for a payment's ISO date (with time).
+export const formatPaymentDateTime = (iso) => {
+  const d = iso ? new Date(iso) : null;
+  if (!d || Number.isNaN(d.getTime())) return "-";
+  return d.toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+};
+
 // Waterfall an amount across one ledger (class-order first). Pure helper.
 const waterfallLedger = (feeLedger = [], amount, classOrder = [], receiptNo = "", date = "") => {
   let remaining = Math.max(0, parseAmount(amount));

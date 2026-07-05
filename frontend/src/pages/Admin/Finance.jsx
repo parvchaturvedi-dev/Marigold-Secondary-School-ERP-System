@@ -56,6 +56,9 @@ import {
   collectStudentPayment,
   collectFamilyPayment,
   buildClassWiseReceipt,
+  formatPaymentDateTime,
+  editLedgerPayment,
+  deleteLedgerPayment,
 } from '../../components/common/financeData';
 
 const buildFeeReminderMessage = (student) => ({
@@ -155,6 +158,11 @@ const Finance = ({ setActivePage }) => {
   const [assignClassName, setAssignClassName] = useState('');
   const [assignAmount, setAssignAmount] = useState('');
   const [assignNote, setAssignNote] = useState('');
+
+  // Inline editor state for fixing a single recorded payment (which class + which payment).
+  const [editingPayment, setEditingPayment] = useState(null); // { className, paymentId }
+  const [editPaymentAmount, setEditPaymentAmount] = useState('');
+  const [editPaymentDate, setEditPaymentDate] = useState(''); // datetime-local value
 
   const students = useMemo(
     () => masterData.raw.students.map(normalizeFinanceStudent),
@@ -404,6 +412,56 @@ const Finance = ({ setActivePage }) => {
     setAssignAmount('');
     setAssignNote('');
     alert(`Fee of ${formatCurrency(amount)} set for ${target}.`);
+  };
+
+  // Convert a stored ISO date into the local "YYYY-MM-DDTHH:mm" value an
+  // <input type="datetime-local"> expects (offsets to local time so the shown
+  // time matches formatPaymentDateTime).
+  const isoToDateTimeLocal = (iso) => {
+    const d = iso ? new Date(iso) : null;
+    if (!d || Number.isNaN(d.getTime())) return '';
+    const offset = d.getTimezoneOffset() * 60000;
+    return new Date(d.getTime() - offset).toISOString().slice(0, 16);
+  };
+
+  const openPaymentEditor = (className, payment) => {
+    setEditingPayment({ className, paymentId: payment.id });
+    setEditPaymentAmount(String(parseAmount(payment.amount)));
+    setEditPaymentDate(isoToDateTimeLocal(payment.date));
+  };
+
+  const closePaymentEditor = () => {
+    setEditingPayment(null);
+    setEditPaymentAmount('');
+    setEditPaymentDate('');
+  };
+
+  const savePaymentEdit = () => {
+    if (!ledgerStudent || !editingPayment) return;
+    const amount = parseAmount(editPaymentAmount);
+    if (amount <= 0) {
+      alert('Enter a valid payment amount.');
+      return;
+    }
+    if (!editPaymentDate) {
+      alert('Choose a valid payment date and time.');
+      return;
+    }
+    const newIso = new Date(editPaymentDate).toISOString();
+    const updated = editLedgerPayment(ledgerStudent, editingPayment.className, editingPayment.paymentId, {
+      amount,
+      date: newIso,
+    });
+    persistStudentUpdate(updated);
+    closePaymentEditor();
+  };
+
+  const deletePayment = (className, payment) => {
+    if (!ledgerStudent) return;
+    if (!window.confirm(`Delete this ${formatCurrency(payment.amount)} payment? This cannot be undone.`)) return;
+    const updated = deleteLedgerPayment(ledgerStudent, className, payment.id);
+    persistStudentUpdate(updated);
+    if (editingPayment && editingPayment.paymentId === payment.id) closePaymentEditor();
   };
 
   const notifyFeePayment = (admissionNumber, amount) => {
@@ -1029,16 +1087,104 @@ const Finance = ({ setActivePage }) => {
                 </thead>
                 <tbody className="divide-y divide-neutral-100 text-xs font-medium">
                   {ledgerEntries.map((entry) => (
-                    <tr key={entry.className} className="hover:bg-white/60">
-                      <td className="p-3 font-bold text-neutral-900">{entry.className}</td>
-                      <td className="p-3 text-center"><StatusBadge status={entryStatus(entry)} /></td>
-                      <td className="p-3 text-right font-mono font-bold text-neutral-800">{formatCurrency(entry.assigned)}</td>
-                      <td className="p-3 text-right font-mono font-bold text-emerald-600">{formatCurrency(entry.paid)}</td>
-                      <td className={`p-3 text-right font-mono font-bold ${entryPending(entry) > 0 ? 'text-red-500' : 'text-neutral-400'}`}>
-                        {formatCurrency(entryPending(entry))}
-                      </td>
-                      <td className="p-3 text-neutral-500">{entry.note || '-'}</td>
-                    </tr>
+                    <React.Fragment key={entry.className}>
+                      <tr className="hover:bg-white/60">
+                        <td className="p-3 font-bold text-neutral-900">{entry.className}</td>
+                        <td className="p-3 text-center"><StatusBadge status={entryStatus(entry)} /></td>
+                        <td className="p-3 text-right font-mono font-bold text-neutral-800">{formatCurrency(entry.assigned)}</td>
+                        <td className="p-3 text-right font-mono font-bold text-emerald-600">{formatCurrency(entry.paid)}</td>
+                        <td className={`p-3 text-right font-mono font-bold ${entryPending(entry) > 0 ? 'text-red-500' : 'text-neutral-400'}`}>
+                          {formatCurrency(entryPending(entry))}
+                        </td>
+                        <td className="p-3 text-neutral-500">{entry.note || '-'}</td>
+                      </tr>
+                      {entry.payments && entry.payments.length > 0 && (
+                        <tr className="bg-white/40">
+                          <td colSpan="6" className="px-3 pb-3 pt-0">
+                            <div className="space-y-1.5">
+                              <p className="text-[9px] font-black uppercase text-neutral-400 font-mono flex items-center gap-1">
+                                <Clock className="w-3 h-3" /> Payment History
+                              </p>
+                              {entry.payments.map((payment) => {
+                                const isEditing =
+                                  editingPayment &&
+                                  editingPayment.className === entry.className &&
+                                  editingPayment.paymentId === payment.id;
+                                if (isEditing) {
+                                  return (
+                                    <div
+                                      key={payment.id}
+                                      className="flex flex-wrap items-center gap-2 bg-white border border-indigo-200 rounded-xl p-2.5"
+                                    >
+                                      <div className="flex items-center bg-white border border-neutral-300 rounded-lg px-2 py-1">
+                                        <span className="text-[10px] font-mono font-black mr-1.5">Rs.</span>
+                                        <input
+                                          type="number"
+                                          value={editPaymentAmount}
+                                          onChange={(event) => setEditPaymentAmount(event.target.value)}
+                                          className="w-24 bg-transparent outline-none font-mono text-xs font-bold"
+                                        />
+                                      </div>
+                                      <input
+                                        type="datetime-local"
+                                        value={editPaymentDate}
+                                        onChange={(event) => setEditPaymentDate(event.target.value)}
+                                        className="bg-white border border-neutral-300 rounded-lg px-2 py-1 font-mono text-xs font-bold outline-none"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={savePaymentEdit}
+                                        className="text-[10px] font-black bg-neutral-900 text-white px-3 py-1.5 rounded-lg hover:bg-neutral-800 transition-all"
+                                      >
+                                        Save
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={closePaymentEditor}
+                                        className="text-[10px] font-black bg-neutral-100 border border-neutral-300 px-3 py-1.5 rounded-lg hover:bg-neutral-200 transition-all"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  );
+                                }
+                                return (
+                                  <div
+                                    key={payment.id}
+                                    className="flex flex-wrap items-center justify-between gap-2 bg-white/70 border border-slate-100/80 rounded-xl px-3 py-2"
+                                  >
+                                    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 font-mono">
+                                      <span className="font-black text-emerald-600">{formatCurrency(payment.amount)}</span>
+                                      <span className="text-neutral-500">{formatPaymentDateTime(payment.date)}</span>
+                                      <span className="text-[10px] text-neutral-400">{payment.mode || '-'}</span>
+                                      {payment.receiptNo && (
+                                        <span className="text-[10px] text-neutral-400">#{payment.receiptNo}</span>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => openPaymentEditor(entry.className, payment)}
+                                        className="text-[10px] font-black bg-neutral-100 border border-neutral-300 px-2.5 py-1 rounded-lg hover:bg-neutral-800 hover:text-white transition-all"
+                                      >
+                                        Edit
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => deletePayment(entry.className, payment)}
+                                        className="text-[10px] font-black bg-red-50 border border-red-200 text-red-600 px-2.5 py-1 rounded-lg hover:bg-red-500 hover:text-white transition-all"
+                                      >
+                                        Delete
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
                   ))}
                   {!ledgerEntries.length && (
                     <tr>

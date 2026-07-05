@@ -14,9 +14,11 @@ import {
   Banner,
   ButtonRow,
   Card,
+  DateField,
   Divider,
   EmptyState,
   Hero,
+  IconButton,
   LoadingCard,
   PrimaryButton,
   ScreenShell,
@@ -33,10 +35,13 @@ import {
   buildClassWiseReceipt,
   collectFamilyPayment,
   collectStudentPayment,
+  deleteLedgerPayment,
+  editLedgerPayment,
   ensureFeeLedger,
   entryPending,
   entryStatus,
   formatCurrency,
+  formatPaymentDateTime,
   getClassOrder,
   getFamilyKey,
   getManagedClassNames,
@@ -95,6 +100,11 @@ export default function FinanceScreen({ user }) {
   const [collectAmount, setCollectAmount] = useState("");
 
   const [latestReceipt, setLatestReceipt] = useState(null);
+
+  // Inline editor for correcting a single recorded payment.
+  const [editingPaymentId, setEditingPaymentId] = useState("");
+  const [editPayAmount, setEditPayAmount] = useState("");
+  const [editPayDate, setEditPayDate] = useState("");
 
   const loading = studentsState.loading || classesState.loading || preferencesState.loading;
 
@@ -280,6 +290,75 @@ export default function FinanceScreen({ user }) {
     } finally {
       setSaving(false);
     }
+  }
+
+  const startEditPayment = (payment) => {
+    setEditingPaymentId(payment.id);
+    setEditPayAmount(String(parseAmount(payment.amount)));
+    setEditPayDate((payment.date || "").slice(0, 10));
+  };
+
+  const cancelEditPayment = () => {
+    setEditingPaymentId("");
+    setEditPayAmount("");
+    setEditPayDate("");
+  };
+
+  // Save a correction to one recorded payment (amount and/or date). The original
+  // time-of-day is preserved when only the date is changed.
+  async function handleSavePaymentEdit(entry, payment) {
+    const amount = parseAmount(editPayAmount);
+    if (amount <= 0) return banner.showError("Enter a valid payment amount.");
+    setSaving(true);
+    banner.clear();
+    try {
+      let newIso = payment.date;
+      if (editPayDate) {
+        const d = new Date(payment.date || Date.now());
+        const [y, m, day] = editPayDate.split("-").map(Number);
+        if (y && m && day) {
+          d.setFullYear(y, m - 1, day);
+          newIso = d.toISOString();
+        }
+      }
+      const updated = editLedgerPayment(selectedStudent, entry.className, payment.id, { amount, date: newIso });
+      const map = new Map([[getStudentAdmissionNumber(updated), updated]]);
+      await persistUpdatedStudents(map);
+      cancelEditPayment();
+      banner.showSuccess("Payment updated.");
+    } catch (err) {
+      banner.showError(err);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleDeletePayment(entry, payment) {
+    Alert.alert(
+      "Delete Payment",
+      `Remove ${formatCurrency(payment.amount)} recorded on ${formatPaymentDateTime(payment.date)} for ${entry.className}? The paid total will be recalculated.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            setSaving(true);
+            banner.clear();
+            try {
+              const updated = deleteLedgerPayment(selectedStudent, entry.className, payment.id);
+              const map = new Map([[getStudentAdmissionNumber(updated), updated]]);
+              await persistUpdatedStudents(map);
+              banner.showSuccess("Payment deleted.");
+            } catch (err) {
+              banner.showError(err);
+            } finally {
+              setSaving(false);
+            }
+          },
+        },
+      ]
+    );
   }
 
   async function handleCollectPayment() {
@@ -539,6 +618,47 @@ export default function FinanceScreen({ user }) {
                       </Text>
                     </Text>
                     {!!entry.note && <Text style={[styles.ledgerNote, { color: palette.inkFaint }]}>Note: {entry.note}</Text>}
+
+                    {entry.payments && entry.payments.length > 0 && (
+                      <View style={styles.payList}>
+                        <Text style={[styles.payListTitle, { color: palette.inkSoft }]}>Payments</Text>
+                        {entry.payments.map((payment) => (
+                          <View key={payment.id} style={[styles.payRow, { borderTopColor: palette.cardBorder }]}>
+                            {editingPaymentId === payment.id ? (
+                              <View style={{ flex: 1 }}>
+                                <TextField
+                                  label="Amount"
+                                  value={editPayAmount}
+                                  onChangeText={setEditPayAmount}
+                                  placeholder="Amount"
+                                  keyboardType="numeric"
+                                />
+                                <DateField label="Date" value={editPayDate} onChange={setEditPayDate} />
+                                <ButtonRow>
+                                  <SmallButton label="Save" icon="checkmark-outline" onPress={() => handleSavePaymentEdit(entry, payment)} disabled={saving} />
+                                  <SmallButton label="Cancel" icon="close-outline" onPress={cancelEditPayment} />
+                                </ButtonRow>
+                              </View>
+                            ) : (
+                              <>
+                                <View style={{ flex: 1 }}>
+                                  <Text style={[styles.payAmount, { color: palette.ink }]}>{formatCurrency(payment.amount)}</Text>
+                                  <Text style={[styles.payMeta, { color: palette.inkSoft }]}>
+                                    {formatPaymentDateTime(payment.date)}
+                                    {payment.mode ? ` · ${payment.mode}` : ""}
+                                    {payment.receiptNo ? ` · ${payment.receiptNo}` : ""}
+                                  </Text>
+                                </View>
+                                <View style={styles.payActions}>
+                                  <IconButton icon="create-outline" onPress={() => startEditPayment(payment)} />
+                                  <IconButton icon="trash-outline" tone="danger" onPress={() => handleDeletePayment(entry, payment)} />
+                                </View>
+                              </>
+                            )}
+                          </View>
+                        ))}
+                      </View>
+                    )}
                   </View>
                 </View>
               ))
@@ -692,6 +812,12 @@ const styles = {
   ledgerClass: { color: "#0F172A", fontSize: 14, fontWeight: "900" },
   ledgerLine: { color: "#475569", fontSize: 12, fontWeight: "700" },
   ledgerNote: { color: "#94A3B8", fontSize: 11, fontWeight: "700", marginTop: 3 },
+  payList: { marginTop: 8 },
+  payListTitle: { fontSize: 10, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 2 },
+  payRow: { flexDirection: "row", alignItems: "center", paddingVertical: 7, borderTopWidth: 1, gap: 8 },
+  payAmount: { fontSize: 13, fontWeight: "900" },
+  payMeta: { fontSize: 11, fontWeight: "700", marginTop: 1 },
+  payActions: { flexDirection: "row", alignItems: "center", gap: 6 },
   receiptMeta: { color: "#94A3B8", fontSize: 11, fontWeight: "700", marginBottom: 10 },
   allocRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: "#EEF2F7" },
   allocName: { color: "#0F172A", fontSize: 13, fontWeight: "700", flex: 1, marginRight: 8 },
