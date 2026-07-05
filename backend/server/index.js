@@ -97,7 +97,11 @@ app.use(compression());
 app.use(corsMiddleware);
 app.options(/.*/, corsMiddleware);
 app.use(sessionMiddleware);
-app.use(express.json({ limit: '8mb' }));
+// 25mb so base64 document/photo payloads inside master-data blobs (e.g. the
+// student roster with attached documents) aren't rejected as "payload too large"
+// on save. Note: a single Mongo document still caps at 16MB — large binary
+// documents should ideally live in their own collection.
+app.use(express.json({ limit: '25mb' }));
 
 const io = new Server(server, {
   cors: {
