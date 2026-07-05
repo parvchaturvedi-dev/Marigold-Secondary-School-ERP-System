@@ -2,6 +2,9 @@ import express from 'express';
 import multer from 'multer';
 import ExaminationState from '../models/ExaminationState.js';
 import BoardResultFile from '../models/BoardResultFile.js';
+import BoardExamAccess from '../models/BoardExamAccess.js';
+import BoardTimetableFile from '../models/BoardTimetableFile.js';
+import BoardStudentResultFile from '../models/BoardStudentResultFile.js';
 import { isMongoConnected } from '../db.js';
 import { emitRealtimeEvent } from '../realtime.js';
 import { requireRole } from '../middleware/auth.js';
@@ -11,6 +14,22 @@ const router = express.Router();
 
 // Buffer PDF uploads in memory (cap 10 MB; application/pdf enforced below).
 const boardResultUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024,
+  },
+});
+
+// Board timetable is always a PDF (cap 10 MB; application/pdf enforced in-route).
+const boardTimetableUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024,
+  },
+});
+
+// Per-student board result may be PDF, JPG, or PNG (cap 10 MB; type enforced in-route).
+const boardStudentResultUpload = multer({
   storage: multer.memoryStorage(),
   limits: {
     fileSize: 10 * 1024 * 1024,
@@ -498,6 +517,459 @@ router.delete(
     await record.save();
 
     await BoardResultFile.deleteOne({ resultId: request.params.id });
+
+    broadcastExaminationsUpdated();
+    response.json({ message: 'Board result removed.' });
+  }
+);
+
+// -----------------------------------------------------------------------------
+// Board Examination desk — access approval
+// -----------------------------------------------------------------------------
+// A clerk cannot open the Board Examination desk until an admin approves them.
+// Each clerk has one BoardExamAccess doc tracking status ('none' | 'requested'
+// | 'approved'). Admins can see all records to action pending requests.
+
+// Clerk requests access → upsert their record to 'requested' and page admins.
+router.post(
+  '/board-access/request',
+  ensureMongo,
+  requireRole('clerk'),
+  async (request, response) => {
+    const clerkUsername = request.auth?.username || '';
+    if (!clerkUsername) {
+      response.status(400).json({ message: 'Clerk username could not be resolved.' });
+      return;
+    }
+
+    const record = await BoardExamAccess.findOneAndUpdate(
+      { clerkUsername },
+      {
+        clerkUsername,
+        status: 'requested',
+        requestedAt: new Date(),
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+
+    broadcastExaminationsUpdated();
+
+    createNotification({
+      title: 'Board Exam Access Request',
+      description: `${clerkUsername} has requested access to the Board Examination desk.`,
+      type: 'general',
+      linkPage: 'Examinations',
+      recipientRole: 'admin',
+    }).catch(() => {});
+
+    response.status(201).json(record);
+  }
+);
+
+// Admin grants access → set the clerk's record to 'approved' and notify them.
+router.post(
+  '/board-access/grant',
+  ensureMongo,
+  requireRole('admin'),
+  async (request, response) => {
+    const clerkUsername = String(request.body?.clerkUsername || '').trim();
+    if (!clerkUsername) {
+      response.status(400).json({ message: 'clerkUsername is required.' });
+      return;
+    }
+
+    const grantedByName = request.auth?.displayName || request.auth?.username || 'Admin';
+    const record = await BoardExamAccess.findOneAndUpdate(
+      { clerkUsername },
+      {
+        clerkUsername,
+        status: 'approved',
+        grantedByName,
+        grantedAt: new Date(),
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+
+    broadcastExaminationsUpdated();
+
+    createNotification({
+      title: 'Board Access Approved',
+      description: 'Your Board Examination access has been approved.',
+      type: 'general',
+      linkPage: 'Examinations',
+      recipientUsername: clerkUsername,
+    }).catch(() => {});
+
+    response.json(record);
+  }
+);
+
+// Admin revokes access → reset the clerk's record to 'none'.
+router.post(
+  '/board-access/revoke',
+  ensureMongo,
+  requireRole('admin'),
+  async (request, response) => {
+    const clerkUsername = String(request.body?.clerkUsername || '').trim();
+    if (!clerkUsername) {
+      response.status(400).json({ message: 'clerkUsername is required.' });
+      return;
+    }
+
+    const record = await BoardExamAccess.findOneAndUpdate(
+      { clerkUsername },
+      {
+        clerkUsername,
+        status: 'none',
+        grantedByName: '',
+        grantedAt: null,
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+
+    broadcastExaminationsUpdated();
+    response.json(record);
+  }
+);
+
+// Status check: a clerk gets their own record (synthesised 'none' if absent);
+// an admin gets the full list so they can see/grant pending requests.
+router.get(
+  '/board-access/status',
+  ensureMongo,
+  requireRole('admin', 'clerk'),
+  async (request, response) => {
+    if (request.auth?.role === 'admin') {
+      const records = await BoardExamAccess.find().sort({ updatedAt: -1 });
+      response.json(records);
+      return;
+    }
+
+    const clerkUsername = request.auth?.username || '';
+    const record = await BoardExamAccess.findOne({ clerkUsername });
+    if (record) {
+      response.json(record);
+      return;
+    }
+
+    response.json({ clerkUsername, status: 'none', requestedAt: null, grantedByName: '', grantedAt: null });
+  }
+);
+
+// -----------------------------------------------------------------------------
+// Board Examination desk — board timetable PDF (class-scoped)
+// -----------------------------------------------------------------------------
+
+// Upload/replace the board timetable for a (className, examId) and notify the
+// class's students. The binary lives in BoardTimetableFile; one per pair.
+router.post(
+  '/board-timetable',
+  ensureMongo,
+  requireRole('admin', 'clerk'),
+  boardTimetableUpload.single('file'),
+  async (request, response) => {
+    const file = request.file;
+    if (!file) {
+      response.status(400).json({ message: 'PDF file is required.' });
+      return;
+    }
+
+    const isPdf =
+      file.mimetype === 'application/pdf' ||
+      (file.originalname || '').toLowerCase().endsWith('.pdf');
+    if (!isPdf) {
+      response.status(400).json({ message: 'Only PDF files are allowed.' });
+      return;
+    }
+
+    const className = String(request.body?.className || '').trim();
+    const examId = String(request.body?.examId || '').trim();
+    if (!className) {
+      response.status(400).json({ message: 'className is required.' });
+      return;
+    }
+    if (!examId) {
+      response.status(400).json({ message: 'examId is required.' });
+      return;
+    }
+
+    const uploadedByName = request.auth?.displayName || request.auth?.username || 'Admin';
+
+    const record = await BoardTimetableFile.findOneAndUpdate(
+      { className, examId },
+      {
+        className,
+        examId,
+        fileName: file.originalname || 'board-timetable.pdf',
+        mimeType: file.mimetype || 'application/pdf',
+        data: file.buffer,
+        uploadedByName,
+        uploadedAt: new Date(),
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+
+    broadcastExaminationsUpdated();
+
+    createNotification({
+      title: 'Board Timetable',
+      description: `The board exam timetable for ${className} has been uploaded.`,
+      type: 'general',
+      linkPage: 'Examinations',
+      recipientRole: 'student',
+      recipientClassName: className,
+    }).catch(() => {});
+
+    response.status(201).json({
+      id: record._id,
+      className: record.className,
+      examId: record.examId,
+      fileName: record.fileName,
+      mimeType: record.mimeType,
+      uploadedByName: record.uploadedByName,
+      uploadedAt: record.uploadedAt,
+    });
+  }
+);
+
+// Metadata listing (no Buffer) for a class/exam so the UI can show what exists.
+router.get('/board-timetable', ensureMongo, async (request, response) => {
+  const filter = {};
+  const className = String(request.query?.className || '').trim();
+  const examId = String(request.query?.examId || '').trim();
+  if (className) filter.className = className;
+  if (examId) filter.examId = examId;
+
+  const records = await BoardTimetableFile.find(filter)
+    .select('-data')
+    .sort({ uploadedAt: -1 });
+  response.json(records);
+});
+
+// Fetch the timetable PDF bytes for a class/exam, or 404.
+router.get('/board-timetable/:className/:examId', ensureMongo, async (request, response) => {
+  const file = await BoardTimetableFile.findOne({
+    className: request.params.className,
+    examId: request.params.examId,
+  });
+  if (!file || !file.data) {
+    response.status(404).json({ message: 'Board timetable not found.' });
+    return;
+  }
+
+  response.setHeader('Content-Type', file.mimeType || 'application/pdf');
+  response.setHeader(
+    'Content-Disposition',
+    `inline; filename="${file.fileName || 'board-timetable.pdf'}"`
+  );
+  response.send(file.data);
+});
+
+router.delete(
+  '/board-timetable/:id',
+  ensureMongo,
+  requireRole('admin', 'clerk'),
+  async (request, response) => {
+    const result = await BoardTimetableFile.deleteOne({ _id: request.params.id });
+    if (result.deletedCount === 0) {
+      response.status(404).json({ message: 'Board timetable not found.' });
+      return;
+    }
+
+    broadcastExaminationsUpdated();
+    response.json({ message: 'Board timetable removed.' });
+  }
+);
+
+// -----------------------------------------------------------------------------
+// Board Examination desk — per-student final result (PDF / JPG / PNG)
+// -----------------------------------------------------------------------------
+
+const BOARD_STUDENT_RESULT_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
+
+// Upload/replace one student's final board result and notify that student.
+router.post(
+  '/board-student-result',
+  ensureMongo,
+  requireRole('admin', 'clerk'),
+  boardStudentResultUpload.single('file'),
+  async (request, response) => {
+    const file = request.file;
+    if (!file) {
+      response.status(400).json({ message: 'A result file is required.' });
+      return;
+    }
+
+    if (!BOARD_STUDENT_RESULT_TYPES.includes(file.mimetype)) {
+      response.status(400).json({ message: 'Only PDF, JPG, or PNG files are allowed.' });
+      return;
+    }
+
+    const admissionNumber = String(request.body?.admissionNumber || '').trim();
+    const studentName = String(request.body?.studentName || '').trim();
+    const className = String(request.body?.className || '').trim();
+    const examId = String(request.body?.examId || '').trim();
+    if (!admissionNumber) {
+      response.status(400).json({ message: 'admissionNumber is required.' });
+      return;
+    }
+    if (!className) {
+      response.status(400).json({ message: 'className is required.' });
+      return;
+    }
+    if (!examId) {
+      response.status(400).json({ message: 'examId is required.' });
+      return;
+    }
+
+    const uploadedByName = request.auth?.displayName || request.auth?.username || 'Admin';
+
+    const record = await BoardStudentResultFile.findOneAndUpdate(
+      { admissionNumber, examId },
+      {
+        admissionNumber,
+        studentName,
+        className,
+        examId,
+        fileName: file.originalname || 'board-result',
+        mimeType: file.mimetype,
+        data: file.buffer,
+        uploadedByName,
+        uploadedAt: new Date(),
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+
+    broadcastExaminationsUpdated();
+
+    createNotification({
+      title: 'Board Result Available',
+      description: 'Your board examination result has been published. Tap to view.',
+      type: 'result',
+      linkPage: 'Examinations',
+      recipientStudentId: admissionNumber,
+    }).catch(() => {});
+
+    response.status(201).json({
+      id: record._id,
+      admissionNumber: record.admissionNumber,
+      studentName: record.studentName,
+      className: record.className,
+      examId: record.examId,
+      fileName: record.fileName,
+      mimeType: record.mimeType,
+      uploadedByName: record.uploadedByName,
+      uploadedAt: record.uploadedAt,
+    });
+  }
+);
+
+// Metadata array of uploaded student results for a class/exam so the admin UI
+// can show which students already have a result.
+router.get(
+  '/board-student-result',
+  ensureMongo,
+  requireRole('admin', 'clerk'),
+  async (request, response) => {
+    const filter = {};
+    const className = String(request.query?.className || '').trim();
+    const examId = String(request.query?.examId || '').trim();
+    if (className) filter.className = className;
+    if (examId) filter.examId = examId;
+
+    const records = await BoardStudentResultFile.find(filter)
+      .select('admissionNumber studentName fileName mimeType uploadedAt')
+      .sort({ uploadedAt: -1 });
+    response.json(records);
+  }
+);
+
+// A student fetches their OWN result. Resolve their admission number(s) from
+// request.auth (same source student routes use) and only serve a file that
+// belongs to them. Admin/clerk may pass admissionNumber to fetch any student's.
+router.get('/board-student-result/me/:examId', ensureMongo, async (request, response) => {
+  const role = request.auth?.role;
+  const examId = request.params.examId;
+
+  let admissionNumbers = [];
+  if (role === 'admin' || role === 'clerk') {
+    const requested = String(request.query?.admissionNumber || '').trim();
+    if (!requested) {
+      response.status(400).json({ message: 'admissionNumber is required.' });
+      return;
+    }
+    admissionNumbers = [requested];
+  } else if (role === 'student') {
+    // Collect every admission number this account may own (solo or sibling).
+    const profiles = Array.isArray(request.auth?.studentProfiles)
+      ? request.auth.studentProfiles
+      : [];
+    admissionNumbers = profiles
+      .map((student) => student?.admissionNumber)
+      .filter(Boolean);
+    if (request.auth?.activeStudent?.admissionNumber) {
+      admissionNumbers.push(request.auth.activeStudent.admissionNumber);
+    }
+    admissionNumbers = [...new Set(admissionNumbers.filter(Boolean))];
+    if (!admissionNumbers.length) {
+      response.status(404).json({ message: 'No student profile is linked to this account.' });
+      return;
+    }
+  } else {
+    response.status(403).json({ message: 'You do not have permission to perform this action.' });
+    return;
+  }
+
+  const file = await BoardStudentResultFile.findOne({
+    admissionNumber: { $in: admissionNumbers },
+    examId,
+  });
+  if (!file || !file.data) {
+    response.status(404).json({ message: 'Board result not found.' });
+    return;
+  }
+
+  response.setHeader('Content-Type', file.mimeType || 'application/pdf');
+  response.setHeader(
+    'Content-Disposition',
+    `inline; filename="${file.fileName || 'board-result'}"`
+  );
+  response.send(file.data);
+});
+
+// Fetch a specific student's result bytes by admission number + exam, or 404.
+router.get(
+  '/board-student-result/:admissionNumber/:examId',
+  ensureMongo,
+  async (request, response) => {
+    const file = await BoardStudentResultFile.findOne({
+      admissionNumber: request.params.admissionNumber,
+      examId: request.params.examId,
+    });
+    if (!file || !file.data) {
+      response.status(404).json({ message: 'Board result not found.' });
+      return;
+    }
+
+    response.setHeader('Content-Type', file.mimeType || 'application/pdf');
+    response.setHeader(
+      'Content-Disposition',
+      `inline; filename="${file.fileName || 'board-result'}"`
+    );
+    response.send(file.data);
+  }
+);
+
+router.delete(
+  '/board-student-result/:id',
+  ensureMongo,
+  requireRole('admin', 'clerk'),
+  async (request, response) => {
+    const result = await BoardStudentResultFile.deleteOne({ _id: request.params.id });
+    if (result.deletedCount === 0) {
+      response.status(404).json({ message: 'Board result not found.' });
+      return;
+    }
 
     broadcastExaminationsUpdated();
     response.json({ message: 'Board result removed.' });

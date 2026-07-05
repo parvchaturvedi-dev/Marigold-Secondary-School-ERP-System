@@ -34,6 +34,9 @@ import {
   Users,
   X,
 } from 'lucide-react';
+import { printReportCard, printReportCardsForClass } from './reportCard';
+import { printAdmitCard, printAdmitCardsForClass } from './admitCard';
+import BoardExaminationDesk from './BoardExaminationDesk';
 import {
   EXAMINATION_UPDATED_EVENT,
   MARKS_ADMIN_UNLOCK_HOURS,
@@ -411,6 +414,10 @@ const ExaminationHub = ({ role = 'admin', session, activePage = 'Examinations', 
   const [state, setState] = useState(() => readExaminationState());
   const [localSection, setLocalSection] = useState(getDefaultSection(role));
   const [paperToEdit, setPaperToEdit] = useState(null);
+  // Top-level desk: 'school' (regular exams for every class) vs 'board' (board
+  // classes' final exam — external centre, admin/clerk only). Teachers never see board.
+  const canAccessBoardDesk = role === 'admin' || role === 'clerk';
+  const [desk, setDesk] = useState('school');
   const routeSection = SECTION_BY_PAGE[activePage];
   const visibleSections = ROLE_SECTIONS[role] || ROLE_SECTIONS.admin;
   const activeSection =
@@ -510,6 +517,32 @@ const ExaminationHub = ({ role = 'admin', session, activePage = 'Examinations', 
           </div>
         </div>
 
+        {canAccessBoardDesk && (
+          <div className="mt-5 flex gap-2">
+            <button
+              type="button"
+              onClick={() => setDesk('school')}
+              className={classNames(
+                'flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-black transition-all border',
+                desk === 'school' ? 'btn-primary border-transparent shadow-sm' : 'bg-white/50 text-slate-500 border-slate-100/80 hover:bg-white/70'
+              )}
+            >
+              <GraduationCap className="w-4 h-4" /> School Examination
+            </button>
+            <button
+              type="button"
+              onClick={() => setDesk('board')}
+              className={classNames(
+                'flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-black transition-all border',
+                desk === 'board' ? 'btn-primary border-transparent shadow-sm' : 'bg-white/50 text-slate-500 border-slate-100/80 hover:bg-white/70'
+              )}
+            >
+              <Award className="w-4 h-4" /> Board Examination
+            </button>
+          </div>
+        )}
+
+        {desk === 'school' && (
         <div className="mt-5 flex gap-2 overflow-x-auto pb-1">
           {visibleSections.map((section) => {
             const tab = TAB_CONFIG[section];
@@ -533,8 +566,11 @@ const ExaminationHub = ({ role = 'admin', session, activePage = 'Examinations', 
             );
           })}
         </div>
+        )}
       </section>
 
+      {desk === 'school' && (
+      <>
       {activeSection === 'exam-creation' && (
         <ExamCreationSection state={state} actor={actor} role={role} onRefresh={refreshWith} />
       )}
@@ -571,8 +607,12 @@ const ExaminationHub = ({ role = 'admin', session, activePage = 'Examinations', 
           onRefresh={refreshWith}
         />
       )}
+      </>
+      )}
 
-      <BoardResultsSection state={state} role={role} onRefresh={refreshWith} />
+      {desk === 'board' && canAccessBoardDesk && (
+        <BoardExaminationDesk state={state} role={role} actor={actor} session={session} onRefresh={refreshWith} />
+      )}
     </div>
   );
 };
@@ -1597,10 +1637,12 @@ const ReportCardManagementSection = ({ state, role, actor, onRefresh }) => {
   };
 
   const printAdmitCards = () => {
-    openPrintWindow(
-      `${getExamLabel(selectedExam)} Admit Cards`,
-      buildAdmitCardHtml(selectedExam, className, students, scheduleRows)
-    );
+    printAdmitCardsForClass({
+      students,
+      exam: selectedExam,
+      schedule: scheduleRows,
+      schoolInfo: { academicYear: selectedExam?.academicYear },
+    });
   };
 
   const uploadBoardResult = async (student, file) => {
@@ -1939,11 +1981,14 @@ const MarksManagementSection = ({ state, actor, role, session, onRefresh }) => {
   };
 
   const printReports = () => {
-    const students = getStudentsForClass(className);
-    openPrintWindow(
-      `${getExamLabel(selectedExam)} ${className} Report Cards`,
-      buildReportCardHtml(state, selectedExam, students)
-    );
+    // Full-year Annual Progress Report for the whole class (all exams as columns).
+    printReportCardsForClass({
+      students: getStudentsForClass(className),
+      exams: state.exams,
+      marks: state.marks,
+      className,
+      schoolInfo: { academicYear: selectedExam?.academicYear },
+    });
   };
 
   const buildReportText = (students) => [
@@ -2439,10 +2484,37 @@ const StudentExamView = ({ state, session }) => {
   const focusRows = [...rows].sort((a, b) => a.marks / a.maxMarks - b.marks / b.maxMarks).slice(0, 2);
 
   const printReport = () => {
-    openPrintWindow(
-      `${getExamLabel(selectedExam)} ${student.displayName} Report Card`,
-      buildReportCardHtml(state, selectedExam, [reportStudent])
-    );
+    // Full-year progress report (all exams as columns), matching the school's
+    // official Annual Progress Report layout.
+    printReportCard({
+      student,
+      exams: state.exams,
+      marks: state.marks,
+      className: selectedOption.className,
+      schoolInfo: { academicYear: selectedExam?.academicYear },
+    });
+  };
+
+  // For a board class's FINAL exam the result is an uploaded per-student file
+  // (from the Board Examination desk), not a computed report card.
+  const isBoardFinal = isBoardFinalExam(state, selectedExam, selectedOption.className);
+  const openMyBoardResult = async () => {
+    if (!selectedExam?.id) return;
+    try {
+      const token = getAuthToken();
+      const response = await fetch(
+        `${API_BASE_URL}/examinations/board-student-result/me/${selectedExam.id}`,
+        { credentials: 'include', headers: token ? { Authorization: `Bearer ${token}` } : {} }
+      );
+      if (!response.ok) {
+        alert('Your board result has not been published yet.');
+        return;
+      }
+      const blob = await response.blob();
+      window.open(URL.createObjectURL(blob), '_blank');
+    } catch (error) {
+      alert('Could not open your board result. Please try again.');
+    }
   };
 
   return (
@@ -2479,10 +2551,16 @@ const StudentExamView = ({ state, session }) => {
             </select>
             <button
               type="button"
-              onClick={isBoardReport ? () => window.open(selectedBoardResult.dataUrl, '_blank') : printReport}
+              onClick={
+                isBoardFinal
+                  ? openMyBoardResult
+                  : isBoardReport
+                    ? () => window.open(selectedBoardResult.dataUrl, '_blank')
+                    : printReport
+              }
               className="rounded-full btn-primary px-4 py-2 text-xs font-black flex items-center gap-2"
             >
-              <Printer className="w-4 h-4" /> {isBoardReport ? 'Open Board Result PDF' : 'Print Report Card'}
+              <Printer className="w-4 h-4" /> {isBoardFinal || isBoardReport ? 'Open Board Result' : 'Print Report Card'}
             </button>
           </div>
         </div>
