@@ -30,6 +30,7 @@ import { useTheme } from "../../../theme/ThemeContext";
 
 const TEACHERS_NS = "admin-teacher-management-list";
 const CLASSES_NS = "admin-class-management-classes";
+const SUBJECTS_NS = "admin-subjects-global";
 
 const GENDERS = ["Male", "Female", "Other"];
 const MARITAL = ["Single", "Married", "Divorced"];
@@ -95,6 +96,13 @@ export default function TeacherManagementScreen({ user }) {
     reload: reloadTeachers,
   } = teachersState;
   const { items: classes, persist: persistClasses, reload: reloadClasses } = classesState;
+  const subjectsState = useModuleState(SUBJECTS_NS);
+  const subjectNames = useMemo(() => {
+    const names = (Array.isArray(subjectsState.items) ? subjectsState.items : [])
+      .map((s) => (typeof s === "string" ? s : s?.name || s?.subject))
+      .filter(Boolean);
+    return [...new Set(names)];
+  }, [subjectsState.items]);
 
   const canRemoveTeacher = user?.role !== "clerk";
 
@@ -333,6 +341,7 @@ export default function TeacherManagementScreen({ user }) {
             data={form}
             set={setF}
             classNames={classNames}
+            subjectNames={subjectNames}
             onAddDocument={addCreateDocument}
             onSubmit={createTeacher}
             submitLabel="Register Teacher"
@@ -388,6 +397,7 @@ export default function TeacherManagementScreen({ user }) {
                   data={editForm}
                   set={setE}
                   classNames={classNames}
+                  subjectNames={subjectNames}
                   onAddDocument={addEditDocument}
                   onSubmit={saveEdit}
                   submitLabel="Update Database"
@@ -413,7 +423,7 @@ export default function TeacherManagementScreen({ user }) {
 }
 
 // ---- Shared form (create + edit) ----------------------------------------
-function TeacherForm({ data, set, classNames, onAddDocument, onSubmit, submitLabel, saving, onCancel }) {
+function TeacherForm({ data, set, classNames, subjectNames = [], onAddDocument, onSubmit, submitLabel, saving, onCancel }) {
   const { palette } = useTheme();
   const fatherBlocked = data.gender === "Female" && data.maritalStatus === "Married";
 
@@ -492,7 +502,11 @@ function TeacherForm({ data, set, classNames, onAddDocument, onSubmit, submitLab
             value={assign.className}
             onChange={(v) => setAssignment(i, "className", v)}
           />
-          <TextField label="Subject" value={assign.subject} onChangeText={(v) => setAssignment(i, "subject", v)} placeholder="Subject" />
+          {subjectNames.length ? (
+            <Select label="Subject" options={subjectNames} value={assign.subject} onChange={(v) => setAssignment(i, "subject", v)} placeholder="Select subject" />
+          ) : (
+            <TextField label="Subject" value={assign.subject} onChangeText={(v) => setAssignment(i, "subject", v)} placeholder="Subject" />
+          )}
           {data.classAssignments.length > 1 && (
             <SmallButton label="Remove assignment" icon="trash-outline" tone="danger" onPress={() => removeAssignment(i)} />
           )}

@@ -39,7 +39,7 @@ import {
   voteOnApplication,
 } from "../api/moduleApi";
 import { apiRequest } from "../api/apiClient";
-import { DateField, LoadingCard, MultiSelect, Toggle } from "./modules/shared/formKit";
+import { DateField, LoadingCard, MultiSelect, Select, Toggle } from "./modules/shared/formKit";
 import { getActiveStudentProfile, getStaffProfile, getTeacherProfile } from "../shared/profile";
 import FeesScreen from "./modules/fees/FeesScreen";
 import ExaminationsScreen from "./modules/examinations/ExaminationsScreen";
@@ -760,11 +760,17 @@ function EventContent({ row, expanded, setExpanded }) {
 }
 
 const ALL_CLASSES_OPTION = "ALL CLASSES";
+const GENDER_OPTIONS = ["Male", "Female", "Other"];
+const CATEGORY_OPTIONS = ["General", "OBC", "SC", "ST", "EWS"];
 
 function ActionForm({ title, form, updateForm, onSubmit, acting, user }) {
   const { palette } = useTheme();
-  const needsClassList = title === "Notices" || title === "Assignment" || title === "Assignments";
+  const isAssignment = title === "Assignment" || title === "Assignments";
+  const isTeacherForm = title === "Teacher Assignment";
+  const needsClassList = title === "Notices" || isAssignment || isTeacherForm;
+  const needsSubjectList = isAssignment || isTeacherForm;
   const [classNames, setClassNames] = useState([]);
+  const [subjectNames, setSubjectNames] = useState([]);
 
   useEffect(() => {
     if (!needsClassList) return;
@@ -786,6 +792,27 @@ function ActionForm({ title, form, updateForm, onSubmit, acting, user }) {
       active = false;
     };
   }, [needsClassList]);
+
+  useEffect(() => {
+    if (!needsSubjectList) return;
+    let active = true;
+    (async () => {
+      try {
+        const payload = await apiRequest("/module-state/admin-subjects-global");
+        const value = payload?.value;
+        const list = Array.isArray(value) ? value : value ? [value] : [];
+        const names = list
+          .map((item) => item?.name || item?.subject || item)
+          .filter((n) => typeof n === "string" && n.trim());
+        if (active) setSubjectNames([...new Set(names)]);
+      } catch {
+        if (active) setSubjectNames([]);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [needsSubjectList]);
 
   // targetClasses is stored as a comma string; convert to/from an array for MultiSelect
   // so the exact same payload still reaches the submit handlers.
@@ -827,14 +854,18 @@ function ActionForm({ title, form, updateForm, onSubmit, acting, user }) {
         <TextInput style={styles.input} value={form.mobile} onChangeText={(value) => updateForm("mobile", value)} placeholder="Mobile" />
         <TextInput style={styles.input} value={form.aadharNumber} onChangeText={(value) => updateForm("aadharNumber", value)} placeholder="Aadhaar number" />
         <TextInput style={styles.input} value={form.address} onChangeText={(value) => updateForm("address", value)} placeholder="Address" />
-        <View style={styles.actionRow}>
-          <TextInput style={[styles.input, { flex: 1 }]} value={form.gender} onChangeText={(value) => updateForm("gender", value)} placeholder="Gender" />
-          <TextInput style={[styles.input, { flex: 1 }]} value={form.category} onChangeText={(value) => updateForm("category", value)} placeholder="Category" />
-        </View>
-        <View style={styles.actionRow}>
-          <TextInput style={[styles.input, { flex: 1 }]} value={form.className} onChangeText={(value) => updateForm("className", value)} placeholder="Class" />
-          <TextInput style={[styles.input, { flex: 1 }]} value={form.subject} onChangeText={(value) => updateForm("subject", value)} placeholder="Subject" />
-        </View>
+        <Select label="Gender" value={form.gender} onChange={(value) => updateForm("gender", value)} options={GENDER_OPTIONS} placeholder="Select gender" />
+        <Select label="Category" value={form.category} onChange={(value) => updateForm("category", value)} options={CATEGORY_OPTIONS} placeholder="Select category" />
+        {classNames.length ? (
+          <Select label="Class" value={form.className} onChange={(value) => updateForm("className", value)} options={classNames} placeholder="Select class" />
+        ) : (
+          <TextInput style={styles.input} value={form.className} onChangeText={(value) => updateForm("className", value)} placeholder="Class" placeholderTextColor={palette.inkFaint} />
+        )}
+        {subjectNames.length ? (
+          <Select label="Subject" value={form.subject} onChange={(value) => updateForm("subject", value)} options={subjectNames} placeholder="Select subject" />
+        ) : (
+          <TextInput style={styles.input} value={form.subject} onChangeText={(value) => updateForm("subject", value)} placeholder="Subject" placeholderTextColor={palette.inkFaint} />
+        )}
         <SmallButton label={form.isClassTeacher ? "Class Teacher: Yes" : "Class Teacher: No"} icon="school-outline" active={form.isClassTeacher} onPress={() => updateForm("isClassTeacher", !form.isClassTeacher)} />
         <TouchableOpacity style={styles.secondaryButton} onPress={pickTeacherDocument}>
           <Ionicons name="cloud-upload-outline" size={18} color={colors.primary} />
@@ -860,7 +891,11 @@ function ActionForm({ title, form, updateForm, onSubmit, acting, user }) {
         <TextInput style={styles.input} value={form.category} onChangeText={(value) => updateForm("category", value)} placeholder="Category" />
       )}
       {(title === "Assignment" || title === "Assignments") && (
-        <TextInput style={styles.input} value={form.subject} onChangeText={(value) => updateForm("subject", value)} placeholder="Subject e.g. Mathematics" />
+        subjectNames.length ? (
+          <Select label="Subject" value={form.subject} onChange={(value) => updateForm("subject", value)} options={subjectNames} placeholder="Select subject" />
+        ) : (
+          <TextInput style={styles.input} value={form.subject} onChangeText={(value) => updateForm("subject", value)} placeholder="Subject e.g. Mathematics" placeholderTextColor={palette.inkFaint} />
+        )
       )}
       <TextInput
         style={[styles.input, styles.textArea]}
