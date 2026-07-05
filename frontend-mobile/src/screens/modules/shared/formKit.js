@@ -196,6 +196,7 @@ export function Checkbox({ label, checked, onChange, disabled }) {
 
 // Multi-select checkbox list. values = array of selected values.
 export function MultiSelect({ label, hint, options = [], values = [], onChange }) {
+  const { palette } = useTheme();
   const opts = normalizeOptions(options);
   const selected = Array.isArray(values) ? values : [];
   const toggle = (v) => onChange(selected.includes(v) ? selected.filter((x) => x !== v) : [...selected, v]);
@@ -205,7 +206,7 @@ export function MultiSelect({ label, hint, options = [], values = [], onChange }
         {opts.length ? (
           opts.map((o) => <Checkbox key={String(o.value)} label={o.label} checked={selected.includes(o.value)} onChange={() => toggle(o.value)} />)
         ) : (
-          <Text style={{ color: "#94A3B8", fontWeight: "700" }}>No options available.</Text>
+          <Text style={{ color: palette.inkFaint, fontWeight: "700" }}>No options available.</Text>
         )}
       </View>
     </Field>

@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   Image,
   RefreshControl,
@@ -19,6 +18,7 @@ import { useAuth } from "../auth/AuthContext";
 import PageHeader from "../components/cards/PageHeader";
 import AuroraBackground from "../shared/components/AuroraBackground";
 import GlassCard from "../shared/components/GlassCard";
+import { useTheme } from "../theme/ThemeContext";
 import { gradients, glassColors } from "../shared/theme/glass";
 import { colors } from "../shared/theme/colors";
 import {
@@ -39,7 +39,7 @@ import {
   voteOnApplication,
 } from "../api/moduleApi";
 import { apiRequest } from "../api/apiClient";
-import { DateField, MultiSelect, Toggle } from "./modules/shared/formKit";
+import { DateField, LoadingCard, MultiSelect, Toggle } from "./modules/shared/formKit";
 import { getActiveStudentProfile, getStaffProfile, getTeacherProfile } from "../shared/profile";
 import FeesScreen from "./modules/fees/FeesScreen";
 import ExaminationsScreen from "./modules/examinations/ExaminationsScreen";
@@ -286,6 +286,7 @@ function initialForm(title, user = {}) {
 }
 
 export default function ConnectedModuleScreen() {
+  const { palette } = useTheme();
   const { selectedModule, user } = useAuth();
   const [rows, setRows] = useState([]);
   const [config, setConfig] = useState(null);
@@ -554,8 +555,8 @@ export default function ConnectedModuleScreen() {
               <Ionicons name={title === "Notifications" ? "notifications-outline" : "apps-outline"} size={28} color="#fff" />
             </LinearGradient>
             <View style={{ flex: 1 }}>
-              <Text style={styles.heroTitle}>{getCountLabel(title, rows)}</Text>
-              <Text style={styles.heroText}>Review and manage the latest records for your account.</Text>
+              <Text style={[styles.heroTitle, { color: palette.ink }]}>{getCountLabel(title, rows)}</Text>
+              <Text style={[styles.heroText, { color: palette.inkSoft }]}>Review and manage the latest records for your account.</Text>
             </View>
           </View>
         </GlassCard>
@@ -571,12 +572,7 @@ export default function ConnectedModuleScreen() {
         {error ? (
           <StateCard icon="warning-outline" title="Unable to load module" text={error} />
         ) : loading && !rows.length ? (
-          <GlassCard style={styles.loadingCard}>
-            <View style={styles.loadingCardInner}>
-              <ActivityIndicator color={glassColors.accent} size="large" />
-              <Text style={styles.loadingText}>Loading records...</Text>
-            </View>
-          </GlassCard>
+          <LoadingCard text="Loading records..." />
         ) : title === "Profile" ? (
           <ProfileCard user={user} />
         ) : title === "ID Card" || title === "Id Card" ? (
@@ -622,6 +618,7 @@ function PrimaryButton({ icon, label, onPress, disabled }) {
 }
 
 function DataCard({ row, index, title, onParticipate, onRowAction, acting, user }) {
+  const { palette } = useTheme();
   const details = getDetails(row);
   const student = title === "Events" ? (getActiveStudentProfile(user) || {}) : {};
   const myAdmission = String(student.admissionNumber || student.id || user?.username || "").toLowerCase();
@@ -654,12 +651,12 @@ function DataCard({ row, index, title, onParticipate, onRowAction, acting, user 
       {title !== "Events" && (
         <>
       <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
-        <View style={styles.indexBadge}>
-          <Text style={styles.indexText}>{index + 1}</Text>
+        <View style={[styles.indexBadge, { backgroundColor: palette.tile }]}>
+          <Text style={[styles.indexText, { color: palette.accentDeep }]}>{index + 1}</Text>
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.cardTitle}>{getTitle(row, `${title} record`)}</Text>
-          <Text style={styles.cardSubtitle}>{getSubtitle(row)}</Text>
+          <Text style={[styles.cardTitle, { color: palette.ink }]}>{getTitle(row, `${title} record`)}</Text>
+          <Text style={[styles.cardSubtitle, { color: palette.inkSoft }]}>{getSubtitle(row)}</Text>
         </View>
         {row.unread && <View style={styles.unreadDot} />}
       </View>
@@ -668,8 +665,8 @@ function DataCard({ row, index, title, onParticipate, onRowAction, acting, user 
         <View style={styles.detailBox}>
           {details.map(([key, value]) => (
             <View key={key} style={styles.detailRow}>
-              <Text style={styles.detailKey}>{humanizeKey(key)}</Text>
-              <Text style={styles.detailValue} numberOfLines={2}>
+              <Text style={[styles.detailKey, { color: palette.inkFaint }]}>{humanizeKey(key)}</Text>
+              <Text style={[styles.detailValue, { color: palette.ink }]} numberOfLines={2}>
                 {valueToText(value)}
               </Text>
             </View>
@@ -735,26 +732,27 @@ function DataCard({ row, index, title, onParticipate, onRowAction, acting, user 
 }
 
 function EventContent({ row, expanded, setExpanded }) {
+  const { palette } = useTheme();
   const description = valueToText(row.description);
   const shouldCompress = description.length > 140;
   const visibleDescription = shouldCompress && !expanded ? `${description.slice(0, 140)}...` : description;
   return (
     <View>
-      <Text style={styles.cardTitle}>{row.title || "Event"}</Text>
+      <Text style={[styles.cardTitle, { color: palette.ink }]}>{row.title || "Event"}</Text>
       {!!description && (
-        <Text style={styles.eventDescription}>
+        <Text style={[styles.eventDescription, { color: palette.inkSoft }]}>
           {visibleDescription}
         </Text>
       )}
       {shouldCompress && (
         <TouchableOpacity onPress={() => setExpanded((value) => !value)}>
-          <Text style={styles.readMoreText}>{expanded ? "Show less" : "Read more"}</Text>
+          <Text style={[styles.readMoreText, { color: palette.accentDeep }]}>{expanded ? "Show less" : "Read more"}</Text>
         </TouchableOpacity>
       )}
       {!!row.imageDataUrl && (
         <Image source={{ uri: row.imageDataUrl }} style={styles.eventImage} resizeMode="cover" />
       )}
-      <Text style={styles.cardSubtitle}>
+      <Text style={[styles.cardSubtitle, { color: palette.inkSoft }]}>
         {[row.durationType === "multiple" ? `${row.fromDate} to ${row.toDate}` : row.date, row.participationEnabled ? "Participation open" : ""].filter(Boolean).join(" | ")}
       </Text>
     </View>
@@ -764,6 +762,7 @@ function EventContent({ row, expanded, setExpanded }) {
 const ALL_CLASSES_OPTION = "ALL CLASSES";
 
 function ActionForm({ title, form, updateForm, onSubmit, acting, user }) {
+  const { palette } = useTheme();
   const needsClassList = title === "Notices" || title === "Assignment" || title === "Assignments";
   const [classNames, setClassNames] = useState([]);
 
@@ -822,7 +821,7 @@ function ActionForm({ title, form, updateForm, onSubmit, acting, user }) {
     return (
       <GlassCard style={styles.formCard}>
         <View style={styles.formCardInner}>
-        <Text style={styles.formTitle}>Teacher Registration</Text>
+        <Text style={[styles.formTitle, { color: palette.ink }]}>Teacher Registration</Text>
         <TextInput style={styles.input} value={form.name} onChangeText={(value) => updateForm("name", value)} placeholder="Teacher full name" />
         <TextInput style={styles.input} value={form.email} onChangeText={(value) => updateForm("email", value)} placeholder="Official email" />
         <TextInput style={styles.input} value={form.mobile} onChangeText={(value) => updateForm("mobile", value)} placeholder="Mobile" />
@@ -842,7 +841,7 @@ function ActionForm({ title, form, updateForm, onSubmit, acting, user }) {
           <Text style={styles.secondaryButtonText}>Upload Document</Text>
         </TouchableOpacity>
         {(form.documentsAttached || []).map((doc) => (
-          <Text key={doc.uploadedAt} style={styles.cardSubtitle}>{doc.file}</Text>
+          <Text key={doc.uploadedAt} style={[styles.cardSubtitle, { color: palette.inkSoft }]}>{doc.file}</Text>
         ))}
         <PrimaryButton icon="save-outline" label="Save Teacher" onPress={onSubmit} disabled={disabled || acting} />
         </View>
@@ -853,7 +852,7 @@ function ActionForm({ title, form, updateForm, onSubmit, acting, user }) {
   return (
     <GlassCard style={styles.formCard}>
       <View style={styles.formCardInner}>
-      <Text style={styles.formTitle}>
+      <Text style={[styles.formTitle, { color: palette.ink }]}>
         {title === "Application" ? "New Application" : title === "Leave Requests" ? "New Leave Request" : title === "Events" ? "Create Event" : title === "Assignment" || title === "Assignments" ? "Issue Assignment" : "Publish Notice"}
       </Text>
       <TextInput style={styles.input} value={form.title} onChangeText={(value) => updateForm("title", value)} placeholder="Title" />
@@ -952,6 +951,7 @@ function ActionForm({ title, form, updateForm, onSubmit, acting, user }) {
 }
 
 function ProfileCard({ user }) {
+  const { palette } = useTheme();
   const originalProfile = user?.role === "teacher" ? getTeacherProfile(user) : user?.role === "student" ? activeIdentity(user) : getStaffProfile(user);
   const [profile, setProfile] = useState(originalProfile);
   const documents = profile.documents || profile.rawProfile?.documents || [];
@@ -1036,7 +1036,7 @@ function ProfileCard({ user }) {
     <GlassCard style={styles.card}>
       <View style={styles.cardInner}>
       <View style={styles.profileHeader}>
-        <View style={styles.profilePhoto}>
+        <View style={[styles.profilePhoto, { backgroundColor: palette.tile }]}>
           {profile.photoDataUrl ? (
             <Image source={{ uri: profile.photoDataUrl }} style={styles.profilePhotoImage} />
           ) : (
@@ -1044,8 +1044,8 @@ function ProfileCard({ user }) {
           )}
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.cardTitle}>{profile.displayName || user?.displayName || user?.username}</Text>
-          <Text style={styles.cardSubtitle}>{profile.className || profile.designation || user?.role}</Text>
+          <Text style={[styles.cardTitle, { color: palette.ink }]}>{profile.displayName || user?.displayName || user?.username}</Text>
+          <Text style={[styles.cardSubtitle, { color: palette.inkSoft }]}>{profile.className || profile.designation || user?.role}</Text>
         </View>
       </View>
       {user?.role === "student" && (
@@ -1057,26 +1057,26 @@ function ProfileCard({ user }) {
       <View style={styles.detailBox}>
         {rows.filter(([, value]) => value).map(([label, value]) => (
           <View key={label} style={styles.detailRow}>
-            <Text style={styles.detailKey}>{label}</Text>
-            <Text style={styles.detailValue}>{String(value)}</Text>
+            <Text style={[styles.detailKey, { color: palette.inkFaint }]}>{label}</Text>
+            <Text style={[styles.detailValue, { color: palette.ink }]}>{String(value)}</Text>
           </View>
         ))}
       </View>
       {user?.role === "student" && (
         <View style={styles.detailBox}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.formTitle}>Documents</Text>
-            <TouchableOpacity onPress={() => uploadDocument()} style={styles.iconButton}>
+            <Text style={[styles.formTitle, { color: palette.ink }]}>Documents</Text>
+            <TouchableOpacity onPress={() => uploadDocument()} style={[styles.iconButton, { backgroundColor: palette.tile }]}>
               <Ionicons name="add-outline" size={20} color={colors.primary} />
             </TouchableOpacity>
           </View>
           {documents.length ? documents.map((doc) => (
             <View key={`${doc.name}-${doc.uploadedAt}`} style={styles.documentRow}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.cardTitle}>{doc.name}</Text>
-                <Text style={styles.cardSubtitle}>{doc.status || "Uploaded"} | {doc.file || "File saved"}</Text>
+                <Text style={[styles.cardTitle, { color: palette.ink }]}>{doc.name}</Text>
+                <Text style={[styles.cardSubtitle, { color: palette.inkSoft }]}>{doc.status || "Uploaded"} | {doc.file || "File saved"}</Text>
               </View>
-              <TouchableOpacity onPress={() => uploadDocument(doc.name)} style={styles.iconButton}>
+              <TouchableOpacity onPress={() => uploadDocument(doc.name)} style={[styles.iconButton, { backgroundColor: palette.tile }]}>
                 <Ionicons name="cloud-upload-outline" size={18} color={colors.primary} />
               </TouchableOpacity>
               <TouchableOpacity onPress={() => deleteDocument(doc.name)} style={[styles.iconButton, { backgroundColor: `${glassColors.danger}14` }]}>
@@ -1084,7 +1084,7 @@ function ProfileCard({ user }) {
               </TouchableOpacity>
             </View>
           )) : (
-            <Text style={styles.cardSubtitle}>No documents uploaded yet.</Text>
+            <Text style={[styles.cardSubtitle, { color: palette.inkSoft }]}>No documents uploaded yet.</Text>
           )}
         </View>
       )}
@@ -1094,6 +1094,7 @@ function ProfileCard({ user }) {
 }
 
 function IdCards({ user, rows = [] }) {
+  const { palette } = useTheme();
   const cards = (user?.role === "admin" || user?.role === "clerk") && rows.length
     ? rows.flatMap((item) => {
         if (Array.isArray(item.linkedStudents) && item.linkedStudents.length) return item.linkedStudents.map(normalizeStudentCardRecord);
@@ -1124,9 +1125,9 @@ function IdCards({ user, rows = [] }) {
   return (
     <View>
       {showExportAll ? (
-        <TouchableOpacity onPress={handleExportAll} style={[styles.smallButton, styles.idExportAllButton]}>
-          <Ionicons name="download-outline" size={16} color="#4F46E5" />
-          <Text style={styles.smallButtonText}>Export All ({cards.length})</Text>
+        <TouchableOpacity onPress={handleExportAll} style={[styles.smallButton, styles.idExportAllButton, { backgroundColor: palette.tile }]}>
+          <Ionicons name="download-outline" size={16} color={palette.accentDeep} />
+          <Text style={[styles.smallButtonText, { color: palette.accentDeep }]}>Export All ({cards.length})</Text>
         </TouchableOpacity>
       ) : null}
       {cards.map((profile, index) => (
@@ -1172,9 +1173,9 @@ function IdCards({ user, rows = [] }) {
         </View>
         <Text style={styles.webIdBackNote}>If found, please return this card to the school office. This card is ERP generated.</Text>
       </View>
-          <TouchableOpacity onPress={() => handleExportCard(profile)} style={[styles.smallButton, styles.idExportButton]}>
-            <Ionicons name="share-outline" size={16} color="#4F46E5" />
-            <Text style={styles.smallButtonText}>Share / Export PDF</Text>
+          <TouchableOpacity onPress={() => handleExportCard(profile)} style={[styles.smallButton, styles.idExportButton, { backgroundColor: palette.tile }]}>
+            <Ionicons name="share-outline" size={16} color={palette.accentDeep} />
+            <Text style={[styles.smallButtonText, { color: palette.accentDeep }]}>Share / Export PDF</Text>
           </TouchableOpacity>
         </View>
       ))}
@@ -1183,34 +1184,37 @@ function IdCards({ user, rows = [] }) {
 }
 
 function SmallButton({ label, icon, onPress, disabled, active }) {
+  const { palette } = useTheme();
   return (
-    <TouchableOpacity onPress={onPress} disabled={disabled} style={[styles.smallButton, active && { backgroundColor: colors.primaryDark }]}>
+    <TouchableOpacity onPress={onPress} disabled={disabled} style={[styles.smallButton, { backgroundColor: palette.tile }, active && { backgroundColor: colors.primaryDark }]}>
       <Ionicons name={icon} size={16} color={active ? "#fff" : colors.primary} />
-      <Text style={[styles.smallButtonText, active && { color: "#fff" }]}>{label}</Text>
+      <Text style={[styles.smallButtonText, { color: palette.accentDeep }, active && { color: "#fff" }]}>{label}</Text>
     </TouchableOpacity>
   );
 }
 
 function UsageCard({ usage }) {
+  const { palette } = useTheme();
   const usedMb = (Number(usage.totalBytes || 0) / (1024 * 1024)).toFixed(2);
   const limitMb = (Number(usage.storageLimitBytes || 0) / (1024 * 1024)).toFixed(0);
   return (
     <GlassCard style={styles.card}>
       <View style={styles.cardInner}>
-        <Text style={styles.cardTitle}>Vault Storage</Text>
-        <Text style={styles.cardSubtitle}>{usedMb} MB used of {limitMb} MB</Text>
+        <Text style={[styles.cardTitle, { color: palette.ink }]}>Vault Storage</Text>
+        <Text style={[styles.cardSubtitle, { color: palette.inkSoft }]}>{usedMb} MB used of {limitMb} MB</Text>
       </View>
     </GlassCard>
   );
 }
 
 function StateCard({ icon, title, text }) {
+  const { palette } = useTheme();
   return (
     <GlassCard style={styles.stateCard}>
       <View style={styles.stateCardInner}>
         <Ionicons name={icon} size={58} color={colors.primary} />
-        <Text style={styles.stateTitle}>{title}</Text>
-        <Text style={styles.stateText}>{text}</Text>
+        <Text style={[styles.stateTitle, { color: palette.ink }]}>{title}</Text>
+        <Text style={[styles.stateText, { color: palette.inkSoft }]}>{text}</Text>
       </View>
     </GlassCard>
   );
@@ -1499,21 +1503,6 @@ const styles = {
   webIdBackLabel: { color: "#5B6472", fontSize: 8, fontWeight: "900" },
   webIdBackValue: { color: "#111827", fontSize: 10, fontWeight: "900", marginTop: 2 },
   webIdBackNote: { position: "absolute", left: 0, right: 0, bottom: 0, backgroundColor: "#08285f", color: "#fff", textAlign: "center", padding: 8, fontWeight: "800", fontSize: 9 },
-  loadingCard: {
-    borderRadius: 22,
-    minHeight: 180,
-  },
-  loadingCardInner: {
-    flex: 1,
-    minHeight: 180,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  loadingText: {
-    color: "#64748B",
-    marginTop: 12,
-    fontWeight: "800",
-  },
   stateCard: {
     borderRadius: 24,
   },

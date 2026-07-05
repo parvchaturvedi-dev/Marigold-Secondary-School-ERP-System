@@ -364,7 +364,7 @@ export default function TimetableEditorScreen({ user }) {
             const key = activeClass ? getCellKey(period.id, activeClass) : "";
             const cell = (activeClass && activeCells[key]) || {};
             return (
-              <View key={period.id} style={styles.periodBox}>
+              <View key={period.id} style={[styles.periodBox, { borderColor: palette.cardBorder }]}>
                 <View style={styles.periodHead}>
                   <Text style={[styles.periodIndex, { color: palette.accentDeep }]}>{index + 1}</Text>
                   <View style={{ flex: 1 }}>
@@ -382,7 +382,7 @@ export default function TimetableEditorScreen({ user }) {
                   placeholder="08:30 - 09:10"
                 />
                 {activeClass ? (
-                  <View style={styles.cellBox}>
+                  <View style={[styles.cellBox, { borderTopColor: palette.cardBorder }]}>
                     <TextField
                       label="Subject"
                       value={cell.subject || ""}

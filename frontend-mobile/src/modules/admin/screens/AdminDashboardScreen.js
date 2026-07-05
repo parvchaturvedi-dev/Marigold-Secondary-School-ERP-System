@@ -12,7 +12,8 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { colors } from "../../../shared/theme/colors";
-import { gradients, glassColors, glassStyles } from "../../../shared/theme/glass";
+import { gradients, glassColors } from "../../../shared/theme/glass";
+import { useTheme } from "../../../theme/ThemeContext";
 import AuroraBackground from "../../../shared/components/AuroraBackground";
 import { useAuth } from "../../../auth/AuthContext";
 import { useDashboardSummary } from "../../../hooks/useDashboardSummary";
@@ -25,6 +26,7 @@ const logo = require("../../../../assets/images/logo.png");
 const width = Dimensions.get("window").width;
 
 export default function AdminDashboardScreen() {
+  const { palette } = useTheme();
   const { user, logout, openConnectedModule } = useAuth();
   const { summary, loading, error } = useDashboardSummary();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -83,7 +85,7 @@ export default function AdminDashboardScreen() {
             }}
           >
             <TouchableOpacity onPress={() => setDrawerOpen(true)}>
-              <Ionicons name="menu-outline" size={35} color="#0F172A" />
+              <Ionicons name="menu-outline" size={35} color={palette.headerInk} />
             </TouchableOpacity>
 
             <View style={{ flexDirection: "row", alignItems: "center" }}>
@@ -99,7 +101,7 @@ export default function AdminDashboardScreen() {
 
             <TouchableOpacity onPress={() => openConnectedModule("Notifications")}>
               <View>
-                <Ionicons name="notifications-outline" size={28} color="#0F172A" />
+                <Ionicons name="notifications-outline" size={28} color={palette.headerInk} />
                 <View
                   style={{
                     position: "absolute",
@@ -213,6 +215,7 @@ const getGreeting = () => {
 };
 
 function HomeContent({ user, summary, loading, error, onModulePress }) {
+  const { palette } = useTheme();
   const profile = summary?.profile || {};
   const action = summary?.action || {};
   const stats = summary?.stats?.length
@@ -235,18 +238,18 @@ function HomeContent({ user, summary, loading, error, onModulePress }) {
         }}
       >
         <View>
-          <Text style={{ fontSize: 18, color: "#0F172A" }}>{getGreeting()}</Text>
+          <Text style={{ fontSize: 18, color: palette.ink }}>{getGreeting()}</Text>
           <Text
             style={{
               fontSize: 26,
               fontWeight: "900",
-              color: "#0F172A",
+              color: palette.ink,
               marginTop: 8,
             }}
           >
             {user?.name || "Administrator"}
           </Text>
-          <Text style={{ marginTop: 8, color: "#475569", fontSize: 16 }}>
+          <Text style={{ marginTop: 8, color: palette.inkLabel, fontSize: 16 }}>
             {profile.designation || "Administrator"} | {profile.classLabel || "System administration"}
           </Text>
         </View>
@@ -270,7 +273,14 @@ function HomeContent({ user, summary, loading, error, onModulePress }) {
       {/* Admin Action Card */}
       <View
         style={{
-          ...glassStyles.card,
+          backgroundColor: palette.card,
+          borderWidth: 1,
+          borderColor: palette.cardBorder,
+          shadowColor: palette.shadow,
+          shadowOpacity: palette.shadowOpacity,
+          shadowRadius: 8,
+          shadowOffset: { width: 0, height: 3 },
+          elevation: 2,
           borderRadius: 18,
           padding: 18,
           flexDirection: "row",
@@ -295,12 +305,12 @@ function HomeContent({ user, summary, loading, error, onModulePress }) {
         </LinearGradient>
 
         <View style={{ flex: 1 }}>
-          <Text style={{ color: "#0F172A", fontSize: 15, fontWeight: "800" }}>
+          <Text style={{ color: palette.ink, fontSize: 15, fontWeight: "800" }}>
             {action.label || "System Directory"}
           </Text>
           <Text
             style={{
-              color: "#0F172A",
+              color: palette.ink,
               fontSize: 21,
               fontWeight: "900",
               marginTop: 4,
@@ -308,7 +318,7 @@ function HomeContent({ user, summary, loading, error, onModulePress }) {
           >
             {action.title || "No directory data"}
           </Text>
-          <Text style={{ color: "#64748B", marginTop: 6, fontSize: 15 }}>
+          <Text style={{ color: palette.inkSoft, marginTop: 6, fontSize: 15 }}>
             {error || action.subtitle || "Live ERP data"}
           </Text>
         </View>
@@ -337,7 +347,7 @@ function HomeContent({ user, summary, loading, error, onModulePress }) {
           marginBottom: 14,
         }}
       >
-        <Text style={{ fontSize: 20, fontWeight: "900", color: "#0F172A" }}>
+        <Text style={{ fontSize: 20, fontWeight: "900", color: palette.ink }}>
           Quick Access
         </Text>
       </View>
@@ -366,7 +376,7 @@ function HomeContent({ user, summary, loading, error, onModulePress }) {
         style={{
           fontSize: 20,
           fontWeight: "900",
-          color: "#0F172A",
+          color: palette.ink,
           marginTop: 16,
           marginBottom: 14,
         }}
@@ -385,11 +395,19 @@ function HomeContent({ user, summary, loading, error, onModulePress }) {
 }
 
 function SimpleTabPage({ title, icon, text, logout }) {
+  const { palette } = useTheme();
   return (
     <View style={{ marginTop: 60 }}>
       <View
         style={{
-          ...glassStyles.card,
+          backgroundColor: palette.card,
+          borderWidth: 1,
+          borderColor: palette.cardBorder,
+          shadowColor: palette.shadow,
+          shadowOpacity: palette.shadowOpacity,
+          shadowRadius: 8,
+          shadowOffset: { width: 0, height: 3 },
+          elevation: 2,
           borderRadius: 24,
           padding: 28,
           alignItems: "center",
@@ -401,7 +419,7 @@ function SimpleTabPage({ title, icon, text, logout }) {
             marginTop: 20,
             fontSize: 28,
             fontWeight: "900",
-            color: "#0F172A",
+            color: palette.ink,
           }}
         >
           {title}
@@ -412,7 +430,7 @@ function SimpleTabPage({ title, icon, text, logout }) {
             marginTop: 12,
             fontSize: 16,
             lineHeight: 24,
-            color: "#64748B",
+            color: palette.inkSoft,
           }}
         >
           {text}
