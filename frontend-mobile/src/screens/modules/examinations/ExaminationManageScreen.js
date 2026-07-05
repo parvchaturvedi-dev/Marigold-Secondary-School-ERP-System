@@ -48,6 +48,7 @@ import {
   useBanner,
   useModuleState,
 } from "../shared/formKit";
+import { printReportCardsForClass, printAdmitCardsForClass, printReportCard, printAdmitCard } from "./printDocs";
 
 const PAPER_TYPES = ["Written", "Oral", "Practical", "Worksheet"];
 // School Examination desk sections. The old "board" entry moved to the dedicated
@@ -58,6 +59,8 @@ const SECTIONS = [
   { value: "schedule", label: "Schedule" },
   { value: "marks", label: "Marks" },
 ];
+// Report Cards & Admit Cards are admin/clerk only (web parity: roleCanManageReportCards).
+const REPORTS_SECTION = { value: "reports", label: "Report Cards" };
 // Top-level desk toggle (School vs Board examination).
 const DESKS = [
   { value: "school", label: "School Examination", icon: "school-outline" },
@@ -326,7 +329,11 @@ export default function ExaminationManageScreen({ user }) {
       ) : (
         <>
           <View style={{ marginBottom: 14 }}>
-            <Segmented options={SECTIONS} value={section} onChange={setSection} />
+            <Segmented
+              options={isBoardManager ? [...SECTIONS, REPORTS_SECTION] : SECTIONS}
+              value={section}
+              onChange={setSection}
+            />
           </View>
 
           {section === "exam" && (
@@ -374,6 +381,14 @@ export default function ExaminationManageScreen({ user }) {
               studentsForClass={studentsForClass}
               actorName={actorName}
               actorRole={actorRole}
+            />
+          )}
+          {section === "reports" && isBoardManager && (
+            <ReportCardsSection
+              state={state}
+              banner={banner}
+              classNames={classNames}
+              studentsForClass={studentsForClass}
             />
           )}
         </>
@@ -1040,6 +1055,230 @@ function MarksSection({
           <PrimaryButton icon="save-outline" label="Save Marks" onPress={handleSave} loading={saving} />
         </>
       )}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Report Cards & Admit Cards (admin / clerk only) — web parity
+// ---------------------------------------------------------------------------
+// Bulk (whole-class) + optional single-student generation of the Annual Progress
+// Report card and the Admit Card. Everything renders to a shareable PDF via
+// ./printDocs (expo-print + expo-sharing) — printing opens the share sheet, so no
+// success banner is needed here.
+function ReportCardsSection({ state, banner, classNames, studentsForClass }) {
+  const { palette } = useTheme();
+  const [className, setClassName] = useState(classNames[0] || "");
+  const [examId, setExamId] = useState(state.exams[0]?.id || "");
+  const [studentId, setStudentId] = useState("");
+  const [generating, setGenerating] = useState(false);
+
+  useEffect(() => {
+    if (!className && classNames[0]) setClassName(classNames[0]);
+  }, [className, classNames]);
+  useEffect(() => {
+    if (!examId && state.exams[0]) setExamId(state.exams[0].id);
+  }, [examId, state.exams]);
+
+  const selectedExam = useMemo(
+    () => state.exams.find((e) => e.id === examId) || null,
+    [state.exams, examId]
+  );
+
+  // Roster for the picked class (already normalized: id, displayName, className,
+  // section, rollNo, admissionNumber). printDocs picks name || displayName defensively.
+  const students = useMemo(
+    () => (className ? studentsForClass(className) : []),
+    [className, studentsForClass]
+  );
+
+  // Reset the single-student picker whenever the class roster changes.
+  useEffect(() => {
+    if (!students.some((s) => s.id === studentId)) {
+      setStudentId(students[0]?.id || "");
+    }
+  }, [students, studentId]);
+
+  const selectedStudent = useMemo(
+    () => students.find((s) => s.id === studentId) || null,
+    [students, studentId]
+  );
+
+  const scheduleForSelection = useMemo(
+    () =>
+      state.schedules.filter(
+        (row) => row.examId === selectedExam?.id && row.className === className
+      ),
+    [state.schedules, selectedExam, className]
+  );
+
+  const schoolInfo = useMemo(
+    () => ({ academicYear: selectedExam?.academicYear }),
+    [selectedExam]
+  );
+
+  // Run a print helper with shared guards: no double-run, class must have students,
+  // errors surface in the banner. No success banner — the share sheet is the feedback.
+  const runPrint = useCallback(
+    async (action) => {
+      if (generating) return;
+      setGenerating(true);
+      banner.clear();
+      try {
+        await action();
+      } catch (err) {
+        banner.showError(err?.message || "Could not generate the document.");
+      } finally {
+        setGenerating(false);
+      }
+    },
+    [generating, banner]
+  );
+
+  const printClassReports = () =>
+    runPrint(() => {
+      if (!students.length) throw new Error("No students found in this class.");
+      return printReportCardsForClass({
+        students,
+        exams: state.exams,
+        marks: state.marks,
+        className,
+        schoolInfo,
+      });
+    });
+
+  const printClassAdmits = () =>
+    runPrint(() => {
+      if (!students.length) throw new Error("No students found in this class.");
+      if (!selectedExam) throw new Error("Select an examination first.");
+      return printAdmitCardsForClass({
+        students,
+        exam: selectedExam,
+        schedule: scheduleForSelection,
+        schoolInfo,
+      });
+    });
+
+  const printOneReport = () =>
+    runPrint(() => {
+      if (!selectedStudent) throw new Error("Select a student first.");
+      return printReportCard({
+        student: selectedStudent,
+        exams: state.exams,
+        marks: state.marks,
+        className,
+        schoolInfo,
+      });
+    });
+
+  const printOneAdmit = () =>
+    runPrint(() => {
+      if (!selectedStudent) throw new Error("Select a student first.");
+      if (!selectedExam) throw new Error("Select an examination first.");
+      return printAdmitCard({
+        student: selectedStudent,
+        exam: selectedExam,
+        schedule: scheduleForSelection,
+        schoolInfo,
+      });
+    });
+
+  if (!state.exams.length) {
+    return (
+      <EmptyState
+        icon="print-outline"
+        title="No exams yet"
+        text="Create an examination first, then generate report cards and admit cards."
+      />
+    );
+  }
+
+  return (
+    <>
+      <Card>
+        <SectionTitle>Report Cards &amp; Admit Cards</SectionTitle>
+        <Text style={[styles.help, { color: palette.inkFaint }]}>
+          Generates a PDF you can print or share.
+        </Text>
+        <Select
+          label="Class"
+          options={classNames}
+          value={className}
+          onChange={setClassName}
+          placeholder={classNames.length ? "Select class" : "No classes found."}
+        />
+        <Select
+          label="Examination"
+          options={state.exams.map((e) => ({
+            value: e.id,
+            label: `${e.name}${e.academicYear ? ` · ${e.academicYear}` : ""}`,
+          }))}
+          value={examId}
+          onChange={setExamId}
+          placeholder="Select examination"
+        />
+        <Text style={[styles.help, { color: palette.inkFaint }]}>
+          {students.length
+            ? `${students.length} student${students.length === 1 ? "" : "s"} in ${className}.`
+            : "No students found in this class."}
+        </Text>
+      </Card>
+
+      <Card>
+        <SectionTitle>Whole Class</SectionTitle>
+        <PrimaryButton
+          icon="document-text-outline"
+          label="Print / Share Report Cards (whole class)"
+          onPress={printClassReports}
+          loading={generating}
+          disabled={generating || !students.length}
+        />
+        <View style={{ height: 10 }} />
+        <PrimaryButton
+          icon="reader-outline"
+          label="Print / Share Admit Cards (whole class)"
+          onPress={printClassAdmits}
+          loading={generating}
+          disabled={generating || !students.length || !selectedExam}
+        />
+      </Card>
+
+      <Card>
+        <SectionTitle>Single Student</SectionTitle>
+        {students.length ? (
+          <>
+            <Select
+              label="Student"
+              options={students.map((s) => ({
+                value: s.id,
+                label: `${s.displayName}${s.rollNo ? ` · Roll ${s.rollNo}` : ""}`,
+              }))}
+              value={studentId}
+              onChange={setStudentId}
+              placeholder="Select student"
+            />
+            <PrimaryButton
+              icon="document-outline"
+              label="Report Card"
+              onPress={printOneReport}
+              loading={generating}
+              disabled={generating || !selectedStudent}
+            />
+            <View style={{ height: 10 }} />
+            <PrimaryButton
+              icon="card-outline"
+              label="Admit Card"
+              onPress={printOneAdmit}
+              loading={generating}
+              disabled={generating || !selectedStudent || !selectedExam}
+            />
+          </>
+        ) : (
+          <Text style={[styles.help, { color: palette.inkFaint }]}>
+            No students found for this class. Add students in Student Management.
+          </Text>
+        )}
+      </Card>
     </>
   );
 }

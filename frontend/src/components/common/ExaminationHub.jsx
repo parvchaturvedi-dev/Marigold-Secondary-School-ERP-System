@@ -78,7 +78,6 @@ import {
   savePaperRecord,
   setBoardClassEnabled,
   submitPaperForApproval,
-  upsertBoardResult,
   upsertMarksRecord,
   upsertScheduleRows,
 } from './examinationStore';
@@ -256,15 +255,6 @@ const ROLE_SECTIONS = {
 const getDefaultSection = (role) => ROLE_SECTIONS[role]?.[0] || 'exam-creation';
 
 const getTodayInputValue = () => new Date().toISOString().slice(0, 10);
-const MAX_BOARD_RESULT_SIZE = 4 * 1024 * 1024;
-
-const fileToDataUrl = (file) =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
 
 const classNames = (...items) => items.filter(Boolean).join(' ');
 const getReportOptionKey = (option) => `${option?.examId || ''}__${option?.className || ''}`;
@@ -1583,14 +1573,13 @@ const PaperSelectedSection = ({ state }) => {
   );
 };
 
-const ReportCardManagementSection = ({ state, role, actor, onRefresh }) => {
+const ReportCardManagementSection = ({ state, role, onRefresh }) => {
   const [examId, setExamId] = useState(state.exams[0]?.id || '');
   const [className, setClassName] = useState('Class 9');
   const [scheduleRows, setScheduleRows] = useState([]);
   const [showAdmitPreview, setShowAdmitPreview] = useState(false);
   const selectedExam = state.exams.find((exam) => exam.id === examId) || state.exams[0];
   const students = getStudentsForClass(className);
-  const boardFinalSelected = isBoardFinalExam(state, selectedExam, className);
 
   useEffect(() => {
     const savedRows = state.schedules.filter(
@@ -1643,35 +1632,6 @@ const ReportCardManagementSection = ({ state, role, actor, onRefresh }) => {
       schedule: scheduleRows,
       schoolInfo: { academicYear: selectedExam?.academicYear },
     });
-  };
-
-  const uploadBoardResult = async (student, file) => {
-    if (!file) return;
-    if (file.type !== 'application/pdf') {
-      alert('Please upload the board result as a PDF file.');
-      return;
-    }
-    if (file.size > MAX_BOARD_RESULT_SIZE) {
-      alert('Board result PDF must be 4 MB or less.');
-      return;
-    }
-
-    const dataUrl = await fileToDataUrl(file);
-    const nextState = upsertBoardResult(
-      {
-        examId,
-        className,
-        studentId: student.id,
-        admissionNumber: student.admissionNumber,
-        studentName: student.displayName,
-        fileName: file.name,
-        fileType: file.type,
-        fileSize: file.size,
-        dataUrl,
-      },
-      actor
-    );
-    onRefresh(nextState);
   };
 
   return (
@@ -1794,11 +1754,6 @@ const ReportCardManagementSection = ({ state, role, actor, onRefresh }) => {
           <h3 className="text-sm font-black flex items-center gap-2">
             <Users className="w-4 h-4 text-emerald-600" /> Student List: {className}
           </h3>
-          {boardFinalSelected && (
-            <p className="mt-2 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-2xl px-3 py-2">
-              Final outcome for this board class is recorded by uploading each student's PDF result.
-            </p>
-          )}
           <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-100/80">
             <table className="w-full min-w-[920px] text-left text-xs font-bold">
               <thead className="bg-indigo-50/60 text-slate-500 uppercase text-[10px]">
@@ -1811,55 +1766,25 @@ const ReportCardManagementSection = ({ state, role, actor, onRefresh }) => {
                   <th className="px-3 py-2">Mother</th>
                   <th className="px-3 py-2">Mobile</th>
                   <th className="px-3 py-2">Address</th>
-                  {boardFinalSelected && <th className="px-3 py-2">Board Result PDF</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100/80">
-                {students.map((student) => {
-                  const boardResult = getBoardResultForStudent(state, student, examId, className);
-                  return (
-                    <tr key={student.id}>
-                      <td className="px-3 py-2">
-                        <div className="w-10 h-10 rounded-xl bg-[#F5F3FF] text-[#8b5cf6] flex items-center justify-center font-black">
-                          {getInitials(student.displayName)}
-                        </div>
-                      </td>
-                      <td className="px-3 py-2">{student.admissionNumber}</td>
-                      <td className="px-3 py-2">{student.rollNo}</td>
-                      <td className="px-3 py-2 font-black">{student.displayName}</td>
-                      <td className="px-3 py-2">{student.fatherName}</td>
-                      <td className="px-3 py-2">{student.motherName}</td>
-                      <td className="px-3 py-2">{student.guardianPhone}</td>
-                      <td className="px-3 py-2 max-w-[220px] truncate">{student.address}</td>
-                      {boardFinalSelected && (
-                        <td className="px-3 py-2">
-                          <div className="flex items-center gap-2">
-                            {boardResult?.dataUrl ? (
-                              <button
-                                type="button"
-                                onClick={() => window.open(boardResult.dataUrl, '_blank')}
-                                className="rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 px-3 py-1.5 text-[10px] font-black"
-                              >
-                                View PDF
-                              </button>
-                            ) : (
-                              <span className="text-[10px] text-slate-400">Not uploaded</span>
-                            )}
-                            <label className="btn-primary rounded-full px-3 py-1.5 text-[10px] font-black cursor-pointer">
-                              Upload
-                              <input
-                                type="file"
-                                accept="application/pdf,.pdf"
-                                onChange={(event) => uploadBoardResult(student, event.target.files?.[0])}
-                                className="hidden"
-                              />
-                            </label>
-                          </div>
-                        </td>
-                      )}
-                    </tr>
-                  );
-                })}
+                {students.map((student) => (
+                  <tr key={student.id}>
+                    <td className="px-3 py-2">
+                      <div className="w-10 h-10 rounded-xl bg-[#F5F3FF] text-[#8b5cf6] flex items-center justify-center font-black">
+                        {getInitials(student.displayName)}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2">{student.admissionNumber}</td>
+                    <td className="px-3 py-2">{student.rollNo}</td>
+                    <td className="px-3 py-2 font-black">{student.displayName}</td>
+                    <td className="px-3 py-2">{student.fatherName}</td>
+                    <td className="px-3 py-2">{student.motherName}</td>
+                    <td className="px-3 py-2">{student.guardianPhone}</td>
+                    <td className="px-3 py-2 max-w-[220px] truncate">{student.address}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
