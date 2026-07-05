@@ -7,6 +7,7 @@ import './utils/loadEnv.js';
 import academicCalendarRoutes from './routes/academicCalendar.js';
 import adminResetRoutes from './routes/adminReset.js';
 import aiRoutes from './routes/ai.js';
+import assistantRoutes from './routes/assistant.js';
 import classInfoRoutes from './routes/classInfo.js';
 import applicationRoutes from './routes/applications.js';
 import assignmentRoutes from './routes/assignments.js';
@@ -150,6 +151,7 @@ app.get('/api/health', (_request, response) => {
 app.use('/api/auth', authRoutes);
 app.use('/api', requireAuth);
 app.use('/api/academic-calendar', academicCalendarRoutes);
+app.use('/api/ai/assistant', assistantRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/class-info', classInfoRoutes);
 app.use('/api/applications', applicationRoutes);

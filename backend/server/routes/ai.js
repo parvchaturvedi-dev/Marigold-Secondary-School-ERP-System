@@ -2523,4 +2523,13 @@ router.post('/actions/execute', async (request, response) => {
   }
 });
 
+// Reused by the clean Gemini assistant (routes/assistant.js) for read tools.
+export {
+  getStudents,
+  findOneStudent,
+  buildStudentDetails,
+  buildSchoolOverviewContext,
+  buildClassAnalytics,
+};
+
 export default router;
