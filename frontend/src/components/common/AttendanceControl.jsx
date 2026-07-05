@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   CalendarDays,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clock3,
@@ -12,12 +13,14 @@ import {
   Save,
   Search,
   ShieldCheck,
+  UsersRound,
   Wifi,
   X,
 } from 'lucide-react';
 import { useMasterData } from './masterData';
 import {
   clockAttendance,
+  fetchStaffAttendanceRecords,
   saveAttendanceSettings,
   saveStudentAttendanceBatch,
   useAttendanceOverview,
@@ -40,6 +43,24 @@ const addDays = (date, days) => {
 };
 const statusFromLog = (log) => (log?.status === 'absent' ? 'absent' : log ? 'present' : 'present');
 const bssidPlaceholder = 'AA:BB:CC:DD:EE:FF';
+
+// First / last day of the current month as LOCAL YYYY-MM-DD (never toISOString).
+const monthStartKey = () => {
+  const now = new Date();
+  return toLocalKey(new Date(now.getFullYear(), now.getMonth(), 1));
+};
+const monthEndKey = () => {
+  const now = new Date();
+  return toLocalKey(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+};
+
+// Format an ISO timestamp string as local hh:mm AM/PM. Returns '—' for null.
+const formatClockTime = (iso) => {
+  if (!iso) return '—';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+};
 
 const AttendanceControl = ({ role = 'admin' }) => {
   const isAdmin = role === 'admin';
@@ -286,6 +307,8 @@ const AttendanceControl = ({ role = 'admin' }) => {
         )}
       </section>
 
+      {isAdmin && <StaffAttendanceRecords />}
+
       {(message || error) && (
         <div className="rounded-2xl bg-linear-to-r from-indigo-500 to-violet-500 shadow-lg px-4 py-3 text-xs font-bold text-white">
           {message || error}
@@ -490,6 +513,168 @@ const AttendanceControl = ({ role = 'admin' }) => {
         document.body
       )}
     </div>
+  );
+};
+
+const StaffAttendanceRecords = () => {
+  const [from, setFrom] = useState(monthStartKey());
+  const [to, setTo] = useState(monthEndKey());
+  const [state, setState] = useState({ isLoading: false, error: '', data: null });
+  const [expanded, setExpanded] = useState({});
+
+  const load = async (rangeFrom, rangeTo) => {
+    setState((current) => ({ ...current, isLoading: true, error: '' }));
+    try {
+      const data = await fetchStaffAttendanceRecords({ from: rangeFrom, to: rangeTo });
+      setState({ isLoading: false, error: '', data });
+      setExpanded({});
+    } catch (loadError) {
+      setState({ isLoading: false, error: loadError.message || 'Could not load staff records.', data: null });
+    }
+  };
+
+  useEffect(() => {
+    load(from, to);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const staff = state.data?.staff || [];
+
+  return (
+    <section className="glass-card rounded-3xl p-5 space-y-4">
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 border-b border-slate-100/80 pb-4">
+        <div>
+          <h3 className="text-sm font-black flex items-center gap-2">
+            <UsersRound className="w-4 h-4 text-emerald-700" /> Staff Attendance Record
+          </h3>
+          <p className="text-[10px] font-bold text-slate-500 mt-1">
+            Days present and daily clock-in / clock-out times for every teacher and clerk.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="text-[10px] font-black uppercase text-slate-500">
+            From
+            <input
+              type="date"
+              value={from}
+              onChange={(event) => setFrom(event.target.value)}
+              className="mt-1 h-10 w-full rounded-2xl bg-white/60 border border-white/80 px-3 text-xs font-bold outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all"
+            />
+          </label>
+          <label className="text-[10px] font-black uppercase text-slate-500">
+            To
+            <input
+              type="date"
+              value={to}
+              onChange={(event) => setTo(event.target.value)}
+              className="mt-1 h-10 w-full rounded-2xl bg-white/60 border border-white/80 px-3 text-xs font-bold outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => load(from, to)}
+            disabled={state.isLoading}
+            className="h-10 px-4 rounded-2xl btn-primary text-xs font-black inline-flex items-center gap-2 disabled:opacity-40"
+          >
+            <RefreshCcw className="w-4 h-4" /> {state.isLoading ? 'Loading...' : 'Load'}
+          </button>
+        </div>
+      </div>
+
+      {state.error && (
+        <div className="rounded-2xl bg-rose-50 border border-rose-100 px-4 py-3 text-xs font-black text-rose-700">
+          {state.error}
+        </div>
+      )}
+
+      <div className="overflow-x-auto rounded-2xl border border-slate-100/80">
+        <table className="w-full min-w-180 text-left text-xs font-bold">
+          <thead className="bg-indigo-50/60 text-slate-500 uppercase text-[10px]">
+            <tr>
+              <th className="px-3 py-3">Staff Name</th>
+              <th className="px-3 py-3">Role</th>
+              <th className="px-3 py-3">Days Present</th>
+              <th className="px-3 py-3 text-right">Details</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100/80">
+            {staff.map((person) => {
+              const isOpen = Boolean(expanded[person.entityId]);
+              const hasDays = person.days.length > 0;
+              return (
+                <React.Fragment key={person.entityId}>
+                  <tr className="hover:bg-white/60">
+                    <td className="px-3 py-3">
+                      <p className="font-black">{person.displayName}</p>
+                      <p className="text-[10px] font-mono text-slate-500">{person.entityId}</p>
+                    </td>
+                    <td className="px-3 py-3 capitalize text-slate-500">{person.role}</td>
+                    <td className="px-3 py-3">
+                      <span className={`text-lg font-black ${person.daysPresent > 0 ? 'text-emerald-700' : 'text-slate-400'}`}>
+                        {person.daysPresent}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3 text-right">
+                      <button
+                        type="button"
+                        onClick={() => setExpanded((current) => ({ ...current, [person.entityId]: !isOpen }))}
+                        disabled={!hasDays}
+                        className="h-8 px-3 rounded-xl bg-white/70 border border-white/80 text-[11px] font-black inline-flex items-center gap-1 disabled:opacity-40"
+                      >
+                        {isOpen ? 'Hide' : 'View'}
+                        <ChevronDown className={`w-3 h-3 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                      </button>
+                    </td>
+                  </tr>
+                  {isOpen && hasDays && (
+                    <tr>
+                      <td colSpan="4" className="px-3 pb-4">
+                        <div className="overflow-x-auto rounded-xl border border-slate-100/80 bg-white/40">
+                          <table className="w-full text-left text-[11px] font-bold">
+                            <thead className="bg-emerald-50/60 text-slate-500 uppercase text-[9px]">
+                              <tr>
+                                <th className="px-3 py-2">Date</th>
+                                <th className="px-3 py-2">Clock In</th>
+                                <th className="px-3 py-2">Clock Out</th>
+                                <th className="px-3 py-2">Status</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100/70">
+                              {person.days.map((day) => (
+                                <tr key={day.date}>
+                                  <td className="px-3 py-2 font-mono">{day.date}</td>
+                                  <td className="px-3 py-2 font-mono text-emerald-700">{formatClockTime(day.clockInAt)}</td>
+                                  <td className="px-3 py-2 font-mono text-indigo-700">{formatClockTime(day.clockOutAt)}</td>
+                                  <td className="px-3 py-2 capitalize text-slate-500">{day.status || '—'}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  {!hasDays && (
+                    <tr>
+                      <td colSpan="4" className="px-3 pb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                        No clock-ins in this range
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              );
+            })}
+            {!staff.length && (
+              <tr>
+                <td colSpan="4" className="py-10 text-center text-[10px] font-black uppercase tracking-widest text-neutral-400">
+                  {state.isLoading ? 'Loading staff records...' : 'No teachers or clerks found.'}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 };
 

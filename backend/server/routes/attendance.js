@@ -615,6 +615,99 @@ router.get('/logs', requireRole('admin', 'clerk', 'teacher', 'student'), async (
   response.json({ logs });
 });
 
+const toLocalKey = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const monthBounds = (reference = new Date()) => {
+  const year = reference.getFullYear();
+  const month = reference.getMonth();
+  const first = new Date(year, month, 1);
+  const last = new Date(year, month + 1, 0);
+  return { from: toLocalKey(first), to: toLocalKey(last) };
+};
+
+router.get('/staff-records', requireRole('admin', 'clerk'), async (request, response) => {
+  const defaults = monthBounds();
+  const from = clean(request.query.from) || defaults.from;
+  const to = clean(request.query.to) || defaults.to;
+
+  const [directory, logs] = await Promise.all([
+    listDirectory(),
+    AttendanceLog.find({
+      entityType: { $in: ['teacher', 'clerk'] },
+      attendanceDate: { $gte: from, $lte: to },
+    })
+      .sort({ attendanceDate: 1, scannedAt: 1 })
+      .lean(),
+  ]);
+
+  // Seed with every teacher/clerk from the directory so admins can see who
+  // never clocked in (daysPresent 0, empty days list).
+  const staffById = new Map();
+  directory
+    .filter((person) => person.entityType === 'teacher' || person.entityType === 'clerk')
+    .forEach((person) => {
+      staffById.set(person.entityId, {
+        entityId: person.entityId,
+        displayName: person.displayName || person.entityId,
+        role: person.entityType,
+        _days: new Map(),
+      });
+    });
+
+  // Merge logs per (entityId, date). Only ONE AttendanceLog row can exist per
+  // staff/day (unique index), but its `action` tells us whether the recorded
+  // scannedAt is a clock-in or clock-out; clock-out logs still imply presence.
+  logs.forEach((log) => {
+    let staff = staffById.get(log.entityId);
+    if (!staff) {
+      staff = {
+        entityId: log.entityId,
+        displayName: log.displayName || log.entityId,
+        role: log.entityType,
+        _days: new Map(),
+      };
+      staffById.set(log.entityId, staff);
+    }
+    const date = log.attendanceDate;
+    const day = staff._days.get(date) || { date, clockInAt: null, clockOutAt: null, status: log.status };
+    const stamp = log.scannedAt ? new Date(log.scannedAt).toISOString() : null;
+    if (log.action === 'clock-out') {
+      day.clockOutAt = stamp;
+    } else {
+      day.clockInAt = stamp;
+    }
+    // Prefer a present-ish status label if any log for the day was present.
+    if (log.status === 'present' || log.status === 'manual') day.status = log.status;
+    else if (!day.status) day.status = log.status;
+    staff._days.set(date, day);
+  });
+
+  const isPresentDay = (day) =>
+    Boolean(day.clockInAt || day.clockOutAt) &&
+    day.status !== 'absent';
+
+  const staff = Array.from(staffById.values())
+    .map((entry) => {
+      const days = Array.from(entry._days.values()).sort((a, b) => a.date.localeCompare(b.date));
+      const daysPresent = days.filter(isPresentDay).length;
+      return {
+        entityId: entry.entityId,
+        displayName: entry.displayName,
+        role: entry.role,
+        daysPresent,
+        days,
+      };
+    })
+    .sort((a, b) => a.displayName.localeCompare(b.displayName));
+
+  response.json({ from, to, staff });
+});
+
 router.get('/overview', requireRole('admin', 'clerk', 'teacher'), async (request, response) => {
   const date = clean(request.query.date) || todayKey();
   const className = clean(request.query.className);

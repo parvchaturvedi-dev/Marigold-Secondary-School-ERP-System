@@ -29,6 +29,9 @@ export const fetchAttendanceLogs = (params = {}) =>
 export const fetchAttendanceDirectory = (params = {}) =>
   apiFetch(`/attendance/directory?${normalizeParams(params)}`);
 
+export const fetchStaffAttendanceRecords = ({ from, to } = {}) =>
+  apiFetch(`/attendance/staff-records?${normalizeParams({ from, to })}`);
+
 export const fetchAttendanceSettings = () =>
   apiFetch('/attendance/settings');
 
