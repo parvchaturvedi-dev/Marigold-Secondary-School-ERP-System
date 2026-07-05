@@ -137,6 +137,62 @@ const buildStudentRecord = (row, selectedClassView) => {
   };
 };
 
+// Column → field map for a PARTIAL update (re-importing a sheet to fill/fix a few
+// columns like Aadhaar without touching everything else). `profile` writes into
+// rawProfile; `top` mirrors onto top-level field(s). Only NON-EMPTY cells apply.
+const UPDATE_FIELD_MAP = [
+  { cols: ['studentAadhar', 'Student Aadhaar'], profile: 'studentAadhar' },
+  { cols: ['fatherAadhar', 'Father Aadhaar'], profile: 'fatherAadhar' },
+  { cols: ['motherAadhar', 'Mother Aadhaar'], profile: 'motherAadhar' },
+  { cols: ['guardianAadhar', 'Guardian Aadhaar'], profile: 'guardianAadhar' },
+  { cols: ['penNumber', 'PEN Number'], profile: 'penNumber' },
+  { cols: ['mobileNo', 'mobile', 'Mobile Number'], profile: 'mobileNo', top: ['mobile'] },
+  { cols: ['altMobileNo', 'Alternative Mobile Number'], profile: 'altMobileNo' },
+  { cols: ['email'], profile: 'email', top: ['email', 'guardianEmail'] },
+  { cols: ['gender'], profile: 'gender', top: ['gender'] },
+  { cols: ['dob'], profile: 'dob' },
+  { cols: ['category'], profile: 'category', top: ['category'] },
+  { cols: ['religion'], profile: 'religion' },
+  { cols: ['tempAddress', 'Temporary Address'], profile: 'tempAddress' },
+  { cols: ['permAddress', 'Permanent Address'], profile: 'permAddress', top: ['address'] },
+  { cols: ['dateOfAdmission', 'Date Of Admission'], profile: 'dateOfAdmission' },
+  { cols: ['lastSchoolName', 'Last School Name'], profile: 'lastSchoolName', top: ['lastSchoolName'] },
+  { cols: ['fatherName', 'Father Name'], profile: 'fatherName', top: ['fatherName'] },
+  { cols: ['motherName', 'Mother Name'], profile: 'motherName', top: ['motherName'] },
+  { cols: ['guardianName', 'Guardian Name'], profile: 'guardianName', top: ['guardianName'] },
+  { cols: ['guardianMobile', 'Guardian Mobile'], profile: 'guardianMobile', top: ['guardianPhone'] },
+  { cols: ['studentName', 'name', 'Student Name'], profile: 'studentName', top: ['name', 'displayName'] },
+  { cols: ['targetClass', 'class', 'className', 'Target Class'], profile: 'targetClass', top: ['className', 'class'] },
+  { cols: ['section'], top: ['section'] },
+  { cols: ['rollNo'], top: ['rollNo'] },
+];
+
+const firstNonEmptyCell = (row, cols) => {
+  for (const col of cols) {
+    const value = normalizeCell(row[col]);
+    if (value) return value;
+  }
+  return '';
+};
+
+// Merge only the NON-EMPTY cells of a sheet row onto an existing student record.
+// Untouched columns keep their current values (fees, documents, etc. are safe).
+// Returns { record, changed } — changed=false means the row added nothing new.
+const mergeRowIntoStudent = (existing, row) => {
+  const record = { ...existing, rawProfile: { ...(existing.rawProfile || {}) } };
+  let changed = false;
+  for (const mapping of UPDATE_FIELD_MAP) {
+    const value = firstNonEmptyCell(row, mapping.cols);
+    if (!value) continue;
+    changed = true;
+    if (mapping.profile) record.rawProfile[mapping.profile] = value;
+    (mapping.top || []).forEach((topKey) => {
+      record[topKey] = value;
+    });
+  }
+  return { record, changed };
+};
+
 const StudentManagement = ({ setActivePage }) => {
   // Phase 1 Context: Track selected class card
   const [selectedClassView, setSelectedClassView] = useState(null);
@@ -231,61 +287,86 @@ const StudentManagement = ({ setActivePage }) => {
         return;
       }
 
-      const validByAdmission = new Map();
+      const additions = new Map();
+      const updates = new Map();
       const skippedRows = [];
       const duplicateRows = [];
       const alumniRows = [];
+      const unchangedRows = [];
       const alumniIds = new Set(
         (Array.isArray(alumniPending) ? alumniPending : [])
           .map((student) => String(student.admissionNumber || student.id || '').trim().toUpperCase())
           .filter(Boolean)
       );
+      const existingByAdmission = new Map(
+        (Array.isArray(studentsDb) ? studentsDb : []).map((student) => [
+          String(student.admissionNumber || student.id || '').trim().toUpperCase(),
+          student,
+        ])
+      );
 
       rows.forEach((row, index) => {
-        const student = buildStudentRecord(row, selectedClassView);
-        if (!student.admissionNumber || !student.name || !student.class) {
+        const admissionNumber = normalizeCell(row.admissionNumber || row['Admission Number']).toUpperCase();
+        if (!admissionNumber) {
           skippedRows.push(index + 2);
           return;
         }
-        // Guard against admission numbers still held in the alumni/pending bucket
-        // so a passed-out student's dues can't be orphaned by a re-import.
-        if (alumniIds.has(student.admissionNumber)) {
+        // Guard against admission numbers held in the alumni/pending bucket.
+        if (alumniIds.has(admissionNumber)) {
           alumniRows.push(index + 2);
           return;
         }
-        // Guard duplicate admission numbers within the sheet itself: keep the
-        // first occurrence and flag the later rows instead of silently adding
-        // two records that share the same primary key.
-        if (validByAdmission.has(student.admissionNumber)) {
+        // Guard duplicate admission numbers within the sheet itself.
+        if (additions.has(admissionNumber) || updates.has(admissionNumber)) {
           duplicateRows.push(index + 2);
           return;
         }
-        validByAdmission.set(student.admissionNumber, student);
+
+        const existing = existingByAdmission.get(admissionNumber);
+        if (existing) {
+          // EXISTING student → UPDATE: merge only the non-empty cells from this row
+          // (e.g. a re-import that just fills Aadhaar). Fees, documents and every
+          // other field are preserved. Name/class are NOT required for an update.
+          const { record, changed } = mergeRowIntoStudent(existing, row);
+          if (!changed) {
+            unchangedRows.push(index + 2);
+            return;
+          }
+          updates.set(admissionNumber, record);
+        } else {
+          // NEW student → ADD: build a full record (name + class required).
+          const student = buildStudentRecord(row, selectedClassView);
+          if (!student.name || !student.class) {
+            skippedRows.push(index + 2);
+            return;
+          }
+          additions.set(admissionNumber, student);
+        }
       });
 
-      const validStudents = [...validByAdmission.values()];
-
-      if (validStudents.length === 0) {
-        alert('No valid students found. Admission number, student name, and class are required.');
+      if (additions.size === 0 && updates.size === 0) {
+        alert('No changes to apply.\n\n• New students need Admission Number + Name + Class.\n• To update existing students, the Admission Number must already exist and at least one column must be filled.');
         return;
       }
 
       setStudentsDb((students) => {
-        const incomingIds = new Set(validStudents.map((student) => student.admissionNumber));
-        return [
-          ...validStudents,
-          ...students.filter((student) => !incomingIds.has(student.admissionNumber)),
-        ];
+        const merged = (Array.isArray(students) ? students : []).map((student) => {
+          const admission = String(student.admissionNumber || student.id || '').trim().toUpperCase();
+          return updates.has(admission) ? updates.get(admission) : student;
+        });
+        return [...additions.values(), ...merged];
       });
 
       alert(
-        `Bulk import complete.\nAdded/updated: ${validStudents.length} students${
-          skippedRows.length ? `\nSkipped rows (missing required fields): ${skippedRows.join(', ')}` : ''
+        `Bulk import complete.\nAdded: ${additions.size} new student(s)\nUpdated: ${updates.size} existing student(s)${
+          unchangedRows.length ? `\nUnchanged rows (nothing new to fill): ${unchangedRows.join(', ')}` : ''
+        }${
+          skippedRows.length ? `\nSkipped rows (new student missing name/class, or no admission no.): ${skippedRows.join(', ')}` : ''
         }${
           duplicateRows.length ? `\nSkipped rows (duplicate admission number in file): ${duplicateRows.join(', ')}` : ''
         }${
           alumniRows.length ? `\nSkipped rows (admission number held in alumni/pending dues): ${alumniRows.join(', ')}` : ''
-        }\n\nDocuments can be uploaded later from each student's profile > Document Vault.`
+        }\n\nTIP: to fill a field (e.g. Aadhaar) for students already added, upload a sheet with just the Admission Number column + the column(s) you want to set — everything else stays untouched.`
       );
     } catch (error) {
       alert(`Could not read this Excel file. Please use .xlsx/.xls format.\n\n${error.message}`);
