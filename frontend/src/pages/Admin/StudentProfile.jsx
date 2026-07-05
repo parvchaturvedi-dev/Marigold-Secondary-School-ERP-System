@@ -4,6 +4,7 @@ import {
   FileText, BarChart3, GraduationCap, Download, Eye, PlusCircle, Save, UploadCloud, Camera, CreditCard, Users
 } from 'lucide-react';
 import { useMongoState } from '../../components/common/mongoState';
+import { API_BASE_URL, getAuthToken } from '../../components/common/api';
 import { fetchAttendanceLogs } from '../../components/common/attendanceStore';
 import { DEFAULT_CLASS_NAMES, sortClassNames } from '../../components/common/masterData';
 import {
@@ -31,6 +32,63 @@ const fileToDataUrl = (file) =>
     reader.onerror = () => reject(reader.error);
     reader.readAsDataURL(file);
   });
+
+// Documents now live in binary storage server-side (POST/GET/DELETE
+// /student-documents). We keep ONLY metadata in the student roster blob so the
+// shared roster payload never carries base64 dataUrls again. This mirrors the
+// authed FormData-upload + authed blob-fetch pattern in ExaminationHub's
+// boardResultsApi.
+const studentDocumentsApi = {
+  async upload({ file, admissionNumber, docName }) {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('admissionNumber', admissionNumber);
+    form.append('docName', docName);
+
+    const token = getAuthToken();
+    const response = await fetch(`${API_BASE_URL}/student-documents`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: form,
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.message || 'Document upload failed.');
+    }
+    return payload;
+  },
+  async fetchBlob({ admissionNumber, docName }) {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_BASE_URL}/student-documents/${encodeURIComponent(admissionNumber)}/${encodeURIComponent(docName)}`,
+      {
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      }
+    );
+    if (!response.ok) {
+      throw new Error('Document not available.');
+    }
+    return response.blob();
+  },
+  async remove({ admissionNumber, docName }) {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_BASE_URL}/student-documents/${encodeURIComponent(admissionNumber)}/${encodeURIComponent(docName)}`,
+      {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      }
+    );
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(payload.message || 'Could not delete the document.');
+    }
+    return true;
+  },
+};
 
 const normalizeDocument = (doc, fallbackName = '') => ({
   name: doc?.name || fallbackName,
@@ -276,7 +334,21 @@ const StudentProfile = ({ studentContext, onBack }) => {
       return;
     }
 
-    const dataUrl = await fileToDataUrl(file);
+    // Persist the file to binary storage immediately. Only metadata (a pointer)
+    // goes into the roster draft — never base64 — so the shared roster blob
+    // stays small. The Save button then just writes that pointer metadata.
+    let resp;
+    try {
+      resp = await studentDocumentsApi.upload({
+        file,
+        admissionNumber: profileData.admissionNumber,
+        docName,
+      });
+    } catch (error) {
+      alert(error.message || 'Document upload failed. Please try again.');
+      return;
+    }
+
     setDocumentDraftState({
       key: documentDraftKey,
       documents: documentDrafts.map((doc) =>
@@ -284,20 +356,28 @@ const StudentProfile = ({ studentContext, onBack }) => {
           ? {
               ...doc,
               file: file.name,
+              fileName: resp?.fileName || file.name,
               status: 'Uploaded',
-              uploadedAt: new Date().toISOString(),
+              uploadedAt: resp?.uploadedAt || new Date().toISOString(),
               size: file.size,
               type: file.type,
-              dataUrl,
+              stored: true,
             }
           : doc
       ),
     });
-    setDocumentMessage('Unsaved document changes pending.');
+    setDocumentMessage('Document uploaded. Save documents to update the record.');
   };
 
   const handleSaveDocuments = () => {
-    const cleanDocuments = documentDrafts.filter((doc) => doc.name);
+    // Persist metadata only. Strip any legacy base64 dataUrl so old bloated
+    // records get cleaned out of the roster blob on the next save.
+    const cleanDocuments = documentDrafts
+      .filter((doc) => doc.name)
+      .map((doc) => {
+        const { dataUrl, ...rest } = doc;
+        return rest;
+      });
 
     setStudentsDb((students) =>
       students.map((student) => {
@@ -338,30 +418,41 @@ const StudentProfile = ({ studentContext, onBack }) => {
     setDocumentMessage('New document slot added. Upload a file and save documents.');
   };
 
-  const handleDownloadDocument = (doc) => {
-    if (!doc.dataUrl) {
-      alert('This document only has a filename record. Upload/replace it once to enable download.');
-      return;
+  // Open a document: prefer a legacy inline dataUrl (not-yet-migrated records),
+  // otherwise fetch the bytes from binary storage as an authed blob and open the
+  // object URL. Returns true when it managed to open something.
+  const openStudentDocument = async (doc) => {
+    if (doc.dataUrl) {
+      window.open(doc.dataUrl, '_blank');
+      return true;
     }
 
-    const link = document.createElement('a');
-    link.href = doc.dataUrl;
-    link.download = doc.file || `${doc.name}.pdf`;
-    link.click();
+    if (!(doc.stored || doc.status === 'Uploaded' || doc.file)) {
+      alert('This document only has a filename record. Upload/replace it once to enable preview.');
+      return false;
+    }
+
+    try {
+      const blob = await studentDocumentsApi.fetchBlob({
+        admissionNumber: profileData.admissionNumber,
+        docName: doc.name,
+      });
+      window.open(URL.createObjectURL(blob), '_blank');
+      return true;
+    } catch (error) {
+      alert(error.message || 'Document not available.');
+      return false;
+    }
+  };
+
+  const handleDownloadDocument = (doc) => {
+    // Fetching an authed blob and opening it lets the user save from the viewer;
+    // the endpoint sets the download filename server-side.
+    openStudentDocument(doc);
   };
 
   const handleViewDocument = (doc) => {
-    if (!doc.dataUrl) {
-      alert('This document only has a filename record. Upload/replace it once to enable preview.');
-      return;
-    }
-
-    const viewer = window.open();
-    if (viewer) {
-      viewer.document.write(
-        `<iframe src="${doc.dataUrl}" title="${doc.name}" style="border:0;width:100%;height:100vh"></iframe>`
-      );
-    }
+    openStudentDocument(doc);
   };
 
   const handlePhotoUpload = async (event) => {

@@ -18,6 +18,8 @@ import PayrollScreen from "./payroll/PayrollScreen";
 import ExaminationManageScreen from "./examinations/ExaminationManageScreen";
 import VaultScreen from "./vault/VaultScreen";
 import AiAssistantScreen from "./assistant/AiAssistantScreen";
+import CertificationScreen from "./about/CertificationScreen";
+import AboutScreen from "./about/AboutScreen";
 
 export const moduleScreens = {
   Settings: SettingsScreen,
@@ -41,6 +43,8 @@ export const moduleScreens = {
   "Marks Management": ExaminationManageScreen,
   Vault: VaultScreen,
   "Feature Page": AiAssistantScreen,
+  Certification: CertificationScreen,
+  "About Us": AboutScreen,
 };
 
 export function resolveModuleScreen(title) {

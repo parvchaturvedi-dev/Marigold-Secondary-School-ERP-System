@@ -67,6 +67,8 @@ export const adminModules = [
   { title: "Users Management", icon: "people-circle-outline", color: "#8B5CF6" },
   { title: "Vault", icon: "lock-closed-outline", color: "#10B981" },
   { title: "Subject Management", icon: "book-outline", color: "#4F46E5" },
+  { title: "Certification", icon: "ribbon-outline", color: "#EAB308" },
+  { title: "About Us", icon: "information-circle-outline", color: "#0EA5E9" },
   { title: "Settings", icon: "settings-outline", color: "#64748B" }
 ];
 

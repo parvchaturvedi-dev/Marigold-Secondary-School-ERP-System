@@ -32,7 +32,9 @@ import {
   PenTool,
   Plus,
   Search,
-  UserPlus
+  UserPlus,
+  Award,
+  Info
 } from 'lucide-react';
 import Logo from '../../assets/logo.png';
 
@@ -207,6 +209,8 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
     { name: 'Users Management', icon: Lock },
     { name: 'Vault', icon: Lock },
     { name: 'Subject Management', icon: BookOpen },
+    { name: 'Certification', icon: Award, badge: 'Soon' },
+    { name: 'About Us', icon: Info },
     { name: 'Settings', icon: Settings }
   ];
 
@@ -267,6 +271,8 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
     { name: 'My Salary', icon: Wallet },
     { name: 'Vault', icon: Lock },
     { name: 'Subject Management', icon: BookOpen },
+    { name: 'Certification', icon: Award, badge: 'Soon' },
+    { name: 'About Us', icon: Info },
     { name: 'Settings', icon: Settings },
   ];
 
@@ -287,6 +293,8 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
     { name: 'Notices', icon: Bell },
     { name: 'Profile', icon: User },
     { name: 'Vault', icon: Lock },
+    { name: 'Certification', icon: Award, badge: 'Soon' },
+    { name: 'About Us', icon: Info },
     { name: 'Settings', icon: Settings },
   ];
 
@@ -315,6 +323,8 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
     { name: 'Profile', icon: User },
     { name: 'My Salary', icon: Wallet },
     { name: 'Vault', icon: Lock },
+    { name: 'Certification', icon: Award, badge: 'Soon' },
+    { name: 'About Us', icon: Info },
     { name: 'Settings', icon: Settings },
   ];
 
@@ -368,6 +378,13 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
             `}>
               {item.name}
             </span>
+            {item.badge && (
+              <span className={`ml-2 text-[9px] font-black uppercase bg-amber-100 text-amber-700 border border-amber-300 px-1.5 py-0.5 rounded-md shrink-0 transition-opacity duration-200
+                ${isCollapsed ? 'opacity-0 lg:group-hover/sidebar:opacity-100' : 'opacity-100'}
+              `}>
+                {item.badge}
+              </span>
+            )}
           </div>
 
           {item.hasSub && (
