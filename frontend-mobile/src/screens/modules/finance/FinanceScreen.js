@@ -358,6 +358,7 @@ export default function FinanceScreen({ user }) {
   const preferencesState = useModuleState(PREFERENCES_NS);
 
   const [search, setSearch] = useState("");
+  const [selectedClassName, setSelectedClassName] = useState(""); // class drill-down (like web)
   const [selectedAdmission, setSelectedAdmission] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -395,6 +396,34 @@ export default function FinanceScreen({ user }) {
       return haystack.includes(needle);
     });
   }, [search, students]);
+
+  // Class-first drill-down (like the web): summarise every class, then list its students.
+  const classSummaries = useMemo(() => {
+    const byClass = new Map();
+    students.forEach((student) => {
+      const cn = getStudentClassName(student) || "Unassigned";
+      const totals = studentFeeTotals(student);
+      const cur = byClass.get(cn) || { className: cn, count: 0, collected: 0, pending: 0 };
+      cur.count += 1;
+      cur.collected += totals.paid;
+      cur.pending += totals.pending;
+      byClass.set(cn, cur);
+    });
+    const ordered = [];
+    classNameOptions.forEach((cn) => {
+      if (byClass.has(cn)) {
+        ordered.push(byClass.get(cn));
+        byClass.delete(cn);
+      }
+    });
+    byClass.forEach((v) => ordered.push(v));
+    return ordered;
+  }, [students, classNameOptions]);
+
+  const classStudents = useMemo(() => {
+    if (!selectedClassName) return [];
+    return students.filter((student) => (getStudentClassName(student) || "Unassigned") === selectedClassName);
+  }, [students, selectedClassName]);
 
   const selectedStudent = useMemo(
     () => students.find((student) => student.admissionNumber === selectedAdmission) || null,
@@ -628,6 +657,33 @@ export default function FinanceScreen({ user }) {
     );
   }
 
+  const renderStudentCard = (student) => {
+    const totals = studentFeeTotals(student);
+    return (
+      <Card key={student.admissionNumber}>
+        <View style={styles.rowHead}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.name, { color: palette.ink }]}>{student.name}</Text>
+            <Text style={[styles.sub, { color: palette.inkSoft }]}>
+              {student.admissionNumber} · {student.className}
+              {student.fatherName ? ` · ${student.fatherName}` : ""}
+            </Text>
+          </View>
+          <StatusPill status={totals.pending > 0 ? (totals.paid > 0 ? "Partial" : "Due") : "Paid"} />
+        </View>
+        <Divider />
+        <View style={styles.metaRow}>
+          <Meta label="Assigned" value={formatCurrency(totals.assigned)} />
+          <Meta label="Paid" value={formatCurrency(totals.paid)} tone="#15803D" />
+          <Meta label="Pending" value={formatCurrency(totals.pending)} tone="#DC2626" />
+        </View>
+        <ButtonRow>
+          <SmallButton label="Open Ledger" icon="eye-outline" onPress={() => openLedger(student)} />
+        </ButtonRow>
+      </Card>
+    );
+  };
+
   return (
     <ScreenShell title="Finance" refreshing={loading} onRefresh={() => {
       studentsState.reload();
@@ -645,49 +701,61 @@ export default function FinanceScreen({ user }) {
       {!selectedStudent ? (
         <>
           <Card>
-            <SectionTitle>Find Student</SectionTitle>
+            <SectionTitle right={selectedClassName ? (
+              <SmallButton label="All Classes" icon="grid-outline" onPress={() => setSelectedClassName("")} />
+            ) : null}>
+              {search.trim() ? "Search Results" : selectedClassName || "Classes"}
+            </SectionTitle>
             <TextField
-              label="Search"
+              label="Search any student"
               value={search}
               onChangeText={setSearch}
-              placeholder="Name, admission no., father, phone or class"
+              placeholder="Name, admission no., father or phone"
               autoCapitalize="none"
             />
           </Card>
 
-          {!filteredStudents.length ? (
-            <EmptyState
-              icon="wallet-outline"
-              title="No students found"
-              text={students.length ? "Adjust your search to find a student." : "No student records synced yet."}
-            />
+          {search.trim() ? (
+            // Global search across all classes
+            !filteredStudents.length ? (
+              <EmptyState icon="wallet-outline" title="No students found" text="Adjust your search." />
+            ) : (
+              filteredStudents.slice(0, 60).map(renderStudentCard)
+            )
+          ) : selectedClassName ? (
+            // Students inside the chosen class
+            !classStudents.length ? (
+              <EmptyState icon="people-outline" title="No students" text={`No students in ${selectedClassName}.`} />
+            ) : (
+              classStudents.map(renderStudentCard)
+            )
           ) : (
-            filteredStudents.slice(0, 60).map((student) => {
-              const totals = studentFeeTotals(student);
-              return (
-                <Card key={student.admissionNumber}>
+            // Class list first (like the web)
+            !classSummaries.length ? (
+              <EmptyState icon="school-outline" title="No classes yet" text="No student records synced yet." />
+            ) : (
+              classSummaries.map((cls) => (
+                <Card key={cls.className}>
                   <View style={styles.rowHead}>
                     <View style={{ flex: 1 }}>
-                      <Text style={[styles.name, { color: palette.ink }]}>{student.name}</Text>
+                      <Text style={[styles.name, { color: palette.ink }]}>{cls.className}</Text>
                       <Text style={[styles.sub, { color: palette.inkSoft }]}>
-                        {student.admissionNumber} · {student.className}
-                        {student.fatherName ? ` · ${student.fatherName}` : ""}
+                        {cls.count} student{cls.count === 1 ? "" : "s"}
                       </Text>
                     </View>
-                    <StatusPill status={totals.pending > 0 ? (totals.paid > 0 ? "Partial" : "Due") : "Paid"} />
+                    <StatusPill status={cls.pending > 0 ? "Due" : "Paid"} />
                   </View>
                   <Divider />
                   <View style={styles.metaRow}>
-                    <Meta label="Assigned" value={formatCurrency(totals.assigned)} />
-                    <Meta label="Paid" value={formatCurrency(totals.paid)} tone="#15803D" />
-                    <Meta label="Pending" value={formatCurrency(totals.pending)} tone="#DC2626" />
+                    <Meta label="Collected" value={formatCurrency(cls.collected)} tone="#15803D" />
+                    <Meta label="Pending" value={formatCurrency(cls.pending)} tone="#DC2626" />
                   </View>
                   <ButtonRow>
-                    <SmallButton label="Open Ledger" icon="eye-outline" onPress={() => openLedger(student)} />
+                    <SmallButton label="View Students" icon="arrow-forward-outline" onPress={() => setSelectedClassName(cls.className)} />
                   </ButtonRow>
                 </Card>
-              );
-            })
+              ))
+            )
           )}
         </>
       ) : (
