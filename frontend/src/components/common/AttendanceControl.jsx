@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   CalendarDays,
   ChevronLeft,
@@ -22,11 +23,20 @@ import {
   useAttendanceOverview,
 } from './attendanceStore';
 
-const todayKey = () => new Date().toISOString().slice(0, 10);
+// Format a Date as a LOCAL YYYY-MM-DD. Never use toISOString() here — it converts
+// to UTC, which in ahead-of-UTC zones (e.g. IST +5:30) shifts the day, making the
+// prev arrow jump 2 days and the next arrow appear to do nothing.
+const toLocalKey = (d) => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+const todayKey = () => toLocalKey(new Date());
 const addDays = (date, days) => {
   const next = new Date(`${date}T00:00:00`);
   next.setDate(next.getDate() + days);
-  return next.toISOString().slice(0, 10);
+  return toLocalKey(next);
 };
 const statusFromLog = (log) => (log?.status === 'absent' ? 'absent' : log ? 'present' : 'present');
 const bssidPlaceholder = 'AA:BB:CC:DD:EE:FF';
@@ -460,19 +470,25 @@ const AttendanceControl = ({ role = 'admin' }) => {
         </div>
       </section>
 
-      <div className="fixed -bottom-full left-0 right-0 z-30 border-t border-white/70 bg-white/70 px-6 py-3 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-5xl justify-end gap-2">
-          <button type="button" onClick={resetDraft} className="h-11 px-4 rounded-2xl btn-ghost text-xs font-black inline-flex items-center gap-2">
-            <X className="w-4 h-4" /> Cancel
-          </button>
-          <button type="button" onClick={resetDraft} className="h-11 px-4 rounded-2xl btn-ghost text-xs font-black inline-flex items-center gap-2">
-            <RotateCcw className="w-4 h-4" /> Reset
-          </button>
-          <button type="button" onClick={saveRegister} className="h-11 px-5 rounded-2xl btn-primary text-xs font-black inline-flex items-center gap-2">
-            <Save className="w-4 h-4" /> {isAdmin ? 'Save' : 'Save Attendance'}
-          </button>
-        </div>
-      </div>
+      {/* Rendered via a portal to <body> so its `fixed` positioning is relative to
+          the viewport — the glass UI's backdrop-blur/transform ancestors would
+          otherwise re-anchor a plain `fixed` element and float it mid-content. */}
+      {createPortal(
+        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-white/70 bg-white/80 px-6 py-3 backdrop-blur-xl">
+          <div className="mx-auto flex max-w-5xl justify-end gap-2">
+            <button type="button" onClick={resetDraft} className="h-11 px-4 rounded-2xl btn-ghost text-xs font-black inline-flex items-center gap-2">
+              <X className="w-4 h-4" /> Cancel
+            </button>
+            <button type="button" onClick={resetDraft} className="h-11 px-4 rounded-2xl btn-ghost text-xs font-black inline-flex items-center gap-2">
+              <RotateCcw className="w-4 h-4" /> Reset
+            </button>
+            <button type="button" onClick={saveRegister} className="h-11 px-5 rounded-2xl btn-primary text-xs font-black inline-flex items-center gap-2">
+              <Save className="w-4 h-4" /> {isAdmin ? 'Save' : 'Save Attendance'}
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 };
