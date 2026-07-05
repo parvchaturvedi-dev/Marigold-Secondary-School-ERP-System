@@ -9,6 +9,32 @@ import { sendExpoPush } from './push.js';
 
 const NOTIFICATIONS_UPDATED_EVENT = 'mgps-erp-notifications-updated';
 
+// Per-type presentation for the push (NOT the stored notification): a leading
+// emoji makes the tray/heads-up banner instantly scannable, and categoryId maps
+// to the in-app action-button set registered in the mobile app (registerPush.js).
+const TYPE_META = {
+  fee: { emoji: '💰', categoryId: 'fee' },
+  assignment: { emoji: '📝', categoryId: 'assignment' },
+  attendance: { emoji: '✅', categoryId: 'attendance' },
+  notice: { emoji: '📢', categoryId: 'notice' },
+  event: { emoji: '📅', categoryId: 'event' },
+  leave: { emoji: '🗓️', categoryId: 'general' },
+  application: { emoji: '📨', categoryId: 'general' },
+  result: { emoji: '🎓', categoryId: 'general' },
+  meeting: { emoji: '👥', categoryId: 'general' },
+  salary: { emoji: '💵', categoryId: 'general' },
+  timetable: { emoji: '🕒', categoryId: 'general' },
+  general: { emoji: '🔔', categoryId: 'general' },
+};
+
+const metaForType = (type) => TYPE_META[type] || TYPE_META.general;
+
+// Prepend the type emoji to the push title once (idempotent — never double it).
+const decorateTitle = (title, emoji) => {
+  const clean = (title || 'Notification').trim();
+  return emoji && !clean.startsWith(emoji) ? `${emoji} ${clean}` : clean;
+};
+
 // Resolve the User docs that should receive a push for this notification,
 // mirroring the notification's targeting fields.
 const resolveRecipientUsers = async ({
@@ -83,6 +109,7 @@ export async function createNotification({
   recipientUsername = '',
   recipientClassName = '',
   recipientStudentId = '',
+  image = '',
 }) {
   const notification = await Notification.create({
     title,
@@ -107,10 +134,13 @@ export async function createNotification({
     const tokens = collectTokens(users);
 
     if (tokens.length) {
+      const { emoji, categoryId } = metaForType(type);
       await sendExpoPush(tokens, {
-        title,
+        title: decorateTitle(title, emoji),
         body: description || title,
         data: { type, linkPage },
+        categoryId,
+        image,
       });
     }
   } catch (error) {

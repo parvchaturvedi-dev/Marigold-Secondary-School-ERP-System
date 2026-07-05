@@ -15,6 +15,35 @@ export function clearLastRegisteredToken() {
   lastRegisteredToken = null;
 }
 
+// Action-button sets, keyed by the categoryId the backend sends per notification
+// type (notify.js -> TYPE_META). Every button opens the app to the foreground.
+const OPEN = { opensAppToForeground: true };
+const NOTIFICATION_CATEGORIES = {
+  fee: [
+    { identifier: "PAY", buttonTitle: "Pay Now", options: OPEN },
+    { identifier: "VIEW", buttonTitle: "View", options: OPEN },
+  ],
+  notice: [{ identifier: "READ", buttonTitle: "Read", options: OPEN }],
+  assignment: [{ identifier: "VIEW", buttonTitle: "View", options: OPEN }],
+  attendance: [{ identifier: "VIEW", buttonTitle: "View", options: OPEN }],
+  event: [{ identifier: "VIEW", buttonTitle: "View", options: OPEN }],
+  general: [{ identifier: "OPEN", buttonTitle: "Open", options: OPEN }],
+};
+
+// Register the interactive action-button categories (best-effort). Safe to call
+// repeatedly — setNotificationCategoryAsync overwrites the same identifier.
+async function registerNotificationCategories() {
+  try {
+    await Promise.all(
+      Object.entries(NOTIFICATION_CATEGORIES).map(([id, actions]) =>
+        Notifications.setNotificationCategoryAsync(id, actions)
+      )
+    );
+  } catch (error) {
+    console.warn("registerNotificationCategories failed:", error?.message || error);
+  }
+}
+
 export function setupNotificationHandler() {
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
@@ -38,6 +67,9 @@ export async function registerForPushNotifications() {
         sound: "default",
       });
     }
+
+    // Register action-button categories so notifications show tap buttons.
+    await registerNotificationCategories();
 
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;

@@ -16,7 +16,7 @@ const chunk = (list, size) => {
   return out;
 };
 
-export async function sendExpoPush(tokens = [], { title, body, data } = {}) {
+export async function sendExpoPush(tokens = [], { title, body, data, image, categoryId } = {}) {
   const unique = [...new Set((Array.isArray(tokens) ? tokens : []).filter(isExpoToken))];
 
   if (!unique.length) {
@@ -38,6 +38,11 @@ export async function sendExpoPush(tokens = [], { title, body, data } = {}) {
       // (registerPush.js -> "default"). Without this, Android delivers straight
       // to the tray with no heads-up banner. iOS ignores channelId.
       channelId: 'default',
+      // categoryId ties the notification to an in-app action-button set
+      // (registerPush.js -> setNotificationCategoryAsync), e.g. "Pay Now".
+      ...(categoryId ? { categoryId } : {}),
+      // richContent.image renders a large banner image (Zomato-style) on Android.
+      ...(image ? { richContent: { image } } : {}),
     }));
 
     try {
