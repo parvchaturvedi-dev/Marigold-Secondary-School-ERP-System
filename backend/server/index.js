@@ -1,4 +1,5 @@
 import cors from 'cors';
+import compression from 'compression';
 import express from 'express';
 import { createServer } from 'node:http';
 import { Server } from 'socket.io';
@@ -89,6 +90,9 @@ const corsMiddleware = cors({
 });
 
 app.set('trust proxy', 1);
+// gzip every response — the ModuleState blobs (with base64 photos/docs) compress
+// ~5-10x, which is the single biggest win for slow mobile loads.
+app.use(compression());
 app.use(corsMiddleware);
 app.options(/.*/, corsMiddleware);
 app.use(sessionMiddleware);
