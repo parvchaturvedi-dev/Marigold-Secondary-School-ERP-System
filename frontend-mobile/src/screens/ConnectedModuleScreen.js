@@ -49,7 +49,12 @@ import { exportIdCardPdf, exportManyIdCards } from "./modules/idcard/exportIdCar
 
 // Module titles whose bespoke screen already renders its own PageHeader — these
 // must NOT be wrapped again, or the back/home bar would be duplicated.
-const SELF_HEADED = new Set(["Academic Calendar", "Examinations", "Meetings"]);
+// Almost every module screen renders its OWN header (via formKit's ScreenShell,
+// which includes AuroraBackground + PageHeader, or a direct PageHeader). Only a
+// few bare screens have no header of their own and need to be wrapped — listing
+// THOSE is far less error-prone than trying to list every self-headed screen
+// (wrapping a self-headed screen produces a duplicate back/home header).
+const NEEDS_WRAPPER = new Set(["Certification", "About Us"]);
 
 const hiddenKeys = new Set([
   "_id",
@@ -532,8 +537,9 @@ export default function ConnectedModuleScreen() {
     (canManage(user) && title === "Teacher Assignment") ||
     (canManage(user) && (title === "Events" || title === "Notices"));
 
-  // Give every bespoke module screen a consistent back/home header. Screens in
-  // SELF_HEADED already render their own PageHeader, so they are left untouched.
+  // Wrap only the few bare screens (NEEDS_WRAPPER) that have no header of their
+  // own. Every other module screen already renders its own header via ScreenShell
+  // / PageHeader — wrapping those would duplicate the back/home bar.
   const wrapWithHeader = (node) => (
     <View style={{ flex: 1 }}>
       <AuroraBackground />
@@ -545,7 +551,7 @@ export default function ConnectedModuleScreen() {
   const RegisteredScreen = resolveModuleScreen(title);
   if (RegisteredScreen) {
     const node = <RegisteredScreen user={user} />;
-    return SELF_HEADED.has(title) ? node : wrapWithHeader(node);
+    return NEEDS_WRAPPER.has(title) ? wrapWithHeader(node) : node;
   }
 
   if (title === "Fees") {
