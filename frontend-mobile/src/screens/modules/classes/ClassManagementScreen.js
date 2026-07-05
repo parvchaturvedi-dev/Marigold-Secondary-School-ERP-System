@@ -493,6 +493,7 @@ export default function ClassManagementScreen({ user }) {
     return (
       <ClassDetailView
         classContext={selectedClassContext}
+        user={user}
         banner={banner}
         allTeachers={allTeachers}
         globalSubjects={globalSubjects}
@@ -589,6 +590,7 @@ export default function ClassManagementScreen({ user }) {
 
 function ClassDetailView({
   classContext,
+  user,
   banner,
   allTeachers,
   globalSubjects,
@@ -633,9 +635,74 @@ function ClassDetailView({
   const [subjectPickerOpen, setSubjectPickerOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // ---- Board-class flag (mirrors ClassDetail board toggle) -----------------
+  // A class is "board" when its name is present in the Examination state's
+  // `boardClasses` array (read/written via /examinations/state read-modify-write).
+  const [isBoard, setIsBoard] = useState(false);
+  const [boardSaving, setBoardSaving] = useState(false);
+
+  const loadBoardFlag = useCallback(async () => {
+    try {
+      const data = await apiRequest("/examinations/state");
+      const boardClasses = Array.isArray(data?.boardClasses) ? data.boardClasses : [];
+      setIsBoard(boardClasses.includes(classContext.name));
+    } catch {
+      // Non-fatal: leave the flag as-is if the state can't be read.
+    }
+  }, [classContext.name]);
+
   useEffect(() => {
     if (persistedSubjectNames.length) setAssignedSubjects(persistedSubjectNames);
   }, [persistedSubjectNames]);
+
+  useEffect(() => {
+    loadBoardFlag();
+  }, [loadBoardFlag]);
+
+  // ---- Toggle board-class status (optimistic, reverts on failure) ----------
+  const persistBoardClass = async (next) => {
+    const previous = isBoard;
+    setIsBoard(next); // optimistic
+    setBoardSaving(true);
+    banner.clear();
+    try {
+      const updatedBy = user?.username || user?.displayName || "mobile";
+      // Read-modify-write the WHOLE examination state so we don't clobber other keys.
+      const current = (await apiRequest("/examinations/state")) || {};
+      const existing = Array.isArray(current.boardClasses) ? current.boardClasses : [];
+      const set = new Set(existing);
+      if (next) set.add(classContext.name);
+      else set.delete(classContext.name);
+      const updatedState = { ...current, boardClasses: [...set] };
+      await apiRequest("/examinations/state", {
+        method: "PUT",
+        body: JSON.stringify({ state: updatedState, updatedBy }),
+      });
+      banner.showSuccess(
+        next
+          ? `${classContext.name} marked as a Board Class.`
+          : `Board Class status removed from ${classContext.name}.`
+      );
+      await loadBoardFlag(); // refetch to confirm
+    } catch (err) {
+      setIsBoard(previous); // revert
+      banner.showError(err);
+    } finally {
+      setBoardSaving(false);
+    }
+  };
+
+  const handleToggleBoardClass = () => {
+    const next = !isBoard;
+    banner.clear();
+    const message = next
+      ? `Mark ${classContext.name} as a BOARD CLASS?\n\nBoard classes take their FINAL exam at an external board centre, controlled from the Board Examination desk (external timetable + student-wise result upload). School exams stay the same for this class.`
+      : `Remove BOARD CLASS status from ${classContext.name}?\n\nIts final exam will go back to being handled inside School Examination.`;
+    Alert.alert(next ? "Mark as Board Class" : "Remove Board Class", message, [
+      { text: "Cancel", style: "cancel" },
+      { text: "Confirm", onPress: () => persistBoardClass(next) },
+    ]);
+  };
 
   const studentsList = allStudents.filter(
     (student) => student.class === classContext.name || student.className === classContext.name
@@ -789,6 +856,29 @@ function ClassDetailView({
         title={currentClassTeacher.name && currentClassTeacher.name !== "N/A" ? currentClassTeacher.name : "No class mentor"}
         subtitle={`${classContext.name} dashboard${currentClassTeacher.id ? ` · ID: ${currentClassTeacher.id}` : ""}`}
       />
+
+      <Card>
+        <View style={styles.rowHead}>
+          <View style={{ flex: 1 }}>
+            <SectionTitle>Board Examination</SectionTitle>
+            <Text style={[styles.sub, { color: palette.inkSoft }]}>
+              Board classes take their final exam at an external board centre, controlled from the Board Examination desk.
+            </Text>
+          </View>
+          {isBoard && (
+            <View style={styles.boardPill}>
+              <Text style={styles.boardPillText}>BOARD CLASS</Text>
+            </View>
+          )}
+        </View>
+        <SmallButton
+          label={isBoard ? "Board Class ✓" : "Mark as Board Class"}
+          icon="school-outline"
+          active={isBoard}
+          disabled={boardSaving}
+          onPress={handleToggleBoardClass}
+        />
+      </Card>
 
       <Card>
         <SectionTitle>Assignments</SectionTitle>
@@ -1190,4 +1280,13 @@ const styles = {
   assignLabel: { color: "#94A3B8", fontSize: 10, fontWeight: "900", letterSpacing: 0.5, marginBottom: 4 },
   repeatPill: { backgroundColor: "#FEF3C7", borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5 },
   repeatPillText: { color: "#B45309", fontWeight: "900", fontSize: 10, textTransform: "uppercase" },
+  boardPill: {
+    backgroundColor: "#FEF3C7",
+    borderWidth: 1,
+    borderColor: "#FCD34D",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  boardPillText: { color: "#B45309", fontWeight: "900", fontSize: 10, textTransform: "uppercase" },
 };

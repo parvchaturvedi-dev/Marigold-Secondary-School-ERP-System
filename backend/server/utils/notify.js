@@ -111,6 +111,13 @@ export async function createNotification({
   recipientStudentId = '',
   image = '',
 }) {
+  // Use the rupee symbol (₹) in notification text instead of "Rs.". Note: the
+  // notification framework can't colour individual words (Expo/OS limitation),
+  // so amounts can't be shown in green — ₹ is the cleanest we can do.
+  const rupeeText = (value) => String(value || '').replace(/Rs\.?\s?/gi, '₹');
+  title = rupeeText(title);
+  description = rupeeText(description);
+
   const notification = await Notification.create({
     title,
     description,

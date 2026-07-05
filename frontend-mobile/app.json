@@ -49,7 +49,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/images/mgps-notification-icon.png",
+          "icon": "./assets/images/mgps-noti-logo.png",
           "color": "#E4002B"
         }
       ],
