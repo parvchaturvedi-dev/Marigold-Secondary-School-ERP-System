@@ -1,8 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, User, CheckCircle, BookOpen, Users, Square, CheckSquare, Trash2 } from 'lucide-react';
+import { ArrowLeft, User, CheckCircle, BookOpen, Users, Square, CheckSquare, Trash2, GraduationCap } from 'lucide-react';
 import StudentProfile from './StudentProfile'; // Profile preview screen navigation target
 import { useMongoState } from '../../components/common/mongoState';
 import { studentHasPending } from '../../components/common/financeData';
+import {
+  readExaminationState,
+  fetchExaminationState,
+  isBoardClass as isClassMarkedBoard,
+  setBoardClassEnabled,
+  EXAMINATION_UPDATED_EVENT,
+} from '../../components/common/examinationStore';
 
 const getTeacherId = (teacher = {}) => teacher.id || teacher.teacherId || teacher.empId || teacher.employeeId || '';
 
@@ -49,6 +56,38 @@ const ClassDetail = ({ classContext, onBack }) => {
   
   const [isTeacherModalOpen, setIsTeacherModalOpen] = useState(false);
   const [isSubjectModalOpen, setIsSubjectModalOpen] = useState(false);
+
+  // Board-class flag lives in the shared Examination state (state.boardClasses),
+  // so the whole Examination module (school vs board exams) reads it from one place.
+  const [isBoard, setIsBoard] = useState(() => isClassMarkedBoard(readExaminationState(), classContext.name));
+
+  useEffect(() => {
+    let alive = true;
+    const sync = () => {
+      if (alive) setIsBoard(isClassMarkedBoard(readExaminationState(), classContext.name));
+    };
+    fetchExaminationState().then(sync).catch(() => {});
+    window.addEventListener(EXAMINATION_UPDATED_EVENT, sync);
+    return () => {
+      alive = false;
+      window.removeEventListener(EXAMINATION_UPDATED_EVENT, sync);
+    };
+  }, [classContext.name]);
+
+  const handleToggleBoardClass = () => {
+    const next = !isBoard;
+    const message = next
+      ? `Mark ${classContext.name} as a BOARD CLASS?\n\nIts final examination will be controlled from the Board Examination desk (external centre timetable + student-wise result upload). School exams stay the same for this class.`
+      : `Remove BOARD CLASS status from ${classContext.name}?\n\nIts final exam will go back to being handled inside School Examination.`;
+    if (!window.confirm(message)) return;
+    setIsBoard(next); // optimistic
+    try {
+      setBoardClassEnabled(classContext.name, next);
+    } catch (error) {
+      setIsBoard(!next);
+      window.alert('Could not update board-class status. Please try again.');
+    }
+  };
 
   // Live Student Roster state containing the new retention flag rule
   const [allStudents, setAllStudents] = useMongoState('admin-student-management-students', []);
@@ -219,6 +258,18 @@ const ClassDetail = ({ classContext, onBack }) => {
           >
             Map Subjects
           </button>
+          <button
+            onClick={handleToggleBoardClass}
+            className={`flex items-center gap-1.5 px-4 py-2 font-bold text-xs rounded-full transition-all border ${
+              isBoard
+                ? 'bg-amber-500 text-white border-amber-500 hover:bg-amber-600'
+                : 'bg-white/50 text-slate-900 border-slate-200/70 hover:bg-white/70'
+            }`}
+            title="Board classes take their FINAL exam at an external board centre, controlled from the Board Examination desk."
+          >
+            <GraduationCap className="w-3.5 h-3.5" />
+            {isBoard ? 'Board Class ✓' : 'Mark as Board Class'}
+          </button>
         </div>
       </div>
 
@@ -235,6 +286,11 @@ const ClassDetail = ({ classContext, onBack }) => {
               {currentClassTeacher.name !== 'N/A' && (
                 <span className="text-[9px] bg-indigo-100 text-indigo-700 border border-indigo-200 font-black px-2 py-0.5 rounded-md uppercase tracking-wider">
                   CLASS MENTOR
+                </span>
+              )}
+              {isBoard && (
+                <span className="text-[9px] bg-amber-100 text-amber-700 border border-amber-300 font-black px-2 py-0.5 rounded-md uppercase tracking-wider">
+                  BOARD CLASS
                 </span>
               )}
             </div>
