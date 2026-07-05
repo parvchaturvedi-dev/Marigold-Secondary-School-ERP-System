@@ -17,6 +17,7 @@ import { useTheme } from "../../../theme/ThemeContext";
 import AuroraBackground from "../../../shared/components/AuroraBackground";
 import { useAuth } from "../../../auth/AuthContext";
 import { useDashboardSummary } from "../../../hooks/useDashboardSummary";
+import { useUnreadNotifications } from "../../../hooks/useUnreadNotifications";
 import { adminModules, adminBottomTabs } from "../data/adminModules";
 import ModuleCard from "../../../components/cards/ModuleCard";
 import OverviewCard from "../../../components/cards/OverviewCard";
@@ -29,6 +30,7 @@ export default function AdminDashboardScreen() {
   const { palette } = useTheme();
   const { user, logout, openConnectedModule } = useAuth();
   const { summary, loading, error } = useDashboardSummary();
+  const unreadCount = useUnreadNotifications();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("home");
   const [selectedParentModule, setSelectedParentModule] = useState(null);
@@ -102,23 +104,26 @@ export default function AdminDashboardScreen() {
             <TouchableOpacity onPress={() => openConnectedModule("Notifications")}>
               <View>
                 <Ionicons name="notifications-outline" size={28} color={palette.headerInk} />
-                <View
-                  style={{
-                    position: "absolute",
-                    right: -4,
-                    top: -6,
-                    width: 20,
-                    height: 20,
-                    borderRadius: 10,
-                    backgroundColor: glassColors.danger,
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Text style={{ color: "#fff", fontSize: 11, fontWeight: "900" }}>
-                    5
-                  </Text>
-                </View>
+                {unreadCount > 0 && (
+                  <View
+                    style={{
+                      position: "absolute",
+                      right: -6,
+                      top: -6,
+                      minWidth: 20,
+                      height: 20,
+                      borderRadius: 10,
+                      paddingHorizontal: 5,
+                      backgroundColor: glassColors.danger,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Text style={{ color: "#fff", fontSize: 11, fontWeight: "900" }}>
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </Text>
+                  </View>
+                )}
               </View>
             </TouchableOpacity>
           </View>
