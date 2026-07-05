@@ -28,7 +28,18 @@ export default function StudentModuleScreen() {
   if (selectedModule === "My Class") return <MyClass student={student} />;
   if (selectedModule === "Timetable") return <TimetableScreen />;
   if (selectedModule === "Attendance") return <AttendanceScreen role="student" />;
-  if (selectedModule === "Fees") return <FeesScreen user={user} />;
+  // FeesScreen has no header of its own — wrap it so the student can navigate
+  // back/home instead of getting stuck on the fees page.
+  if (selectedModule === "Fees")
+    return (
+      <View style={{ flex: 1 }}>
+        <AuroraBackground />
+        <PageHeader title="Fees" />
+        <View style={{ flex: 1 }}>
+          <FeesScreen user={user} />
+        </View>
+      </View>
+    );
   if (selectedModule === "Examinations") return <ExaminationsScreen user={user} />;
 
   return <ConnectedModuleScreen />;
