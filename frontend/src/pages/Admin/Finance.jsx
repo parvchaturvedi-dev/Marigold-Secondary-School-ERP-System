@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   ArrowRight,
   ArrowUpDown,
+  Bell,
   CreditCard,
   DollarSign,
   Eye,
@@ -348,6 +349,87 @@ const Finance = ({ setActivePage }) => {
     }
   };
 
+  // Print ONLY a clean receipt (not the whole page) by opening a compact,
+  // print-styled window for the current receipt.
+  const printReceipt = (receipt) => {
+    if (!receipt) return;
+    const esc = (value) =>
+      String(value ?? '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
+    const rows = (receipt.breakdown || [])
+      .map(
+        (item) =>
+          `<tr><td>${esc(item.className || '-')}${item.name ? ' — ' + esc(item.name) : ''}</td><td class="amt">${esc(formatCurrency(item.amount))}</td></tr>`
+      )
+      .join('');
+    const win = window.open('', '_blank', 'width=430,height=680');
+    if (!win) {
+      alert('Please allow pop-ups to print the receipt.');
+      return;
+    }
+    win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Receipt ${esc(receipt.receiptNo)}</title>
+    <style>
+      *{box-sizing:border-box} body{font-family:'Segoe UI',Arial,sans-serif;color:#111827;margin:0;padding:24px;background:#fff}
+      .r{max-width:360px;margin:0 auto;border:1px solid #e5e7eb;border-radius:14px;padding:20px}
+      .h{text-align:center;border-bottom:2px dashed #e5e7eb;padding-bottom:12px;margin-bottom:12px}
+      .h h1{font-size:16px;margin:0 0 2px;color:#3730a3}.h p{font-size:11px;margin:0;color:#6b7280}
+      .meta{font-size:11px;color:#6b7280;margin-bottom:10px}.meta b{color:#111827}
+      table{width:100%;border-collapse:collapse;font-size:12px;margin:8px 0}
+      td{padding:6px 4px;border-bottom:1px solid #f3f4f6}.amt{text-align:right;font-variant-numeric:tabular-nums}
+      .tot{display:flex;justify-content:space-between;font-weight:800;font-size:14px;border-top:2px solid #111827;padding-top:8px;margin-top:6px}
+      .ft{text-align:center;font-size:10px;color:#9ca3af;margin-top:14px}
+      @media print{body{padding:0}.r{border:none}}
+    </style></head>
+    <body onload="window.print(); setTimeout(function(){window.close();}, 300);">
+      <div class="r">
+        <div class="h"><h1>Marigold Secondary School</h1><p>Behror · Fee Receipt</p></div>
+        <div class="meta">
+          <div>Receipt No: <b>${esc(receipt.receiptNo)}</b></div>
+          <div>Date: <b>${esc(receipt.timestamp)}</b></div>
+          <div>Payer: <b>${esc(receipt.payerName || '-')}</b></div>
+          ${receipt.admissionNumber ? `<div>Admission No: <b>${esc(receipt.admissionNumber)}</b></div>` : ''}
+          ${receipt.contact ? `<div>Mobile: <b>${esc(receipt.contact)}</b></div>` : ''}
+          <div>Mode: <b>${esc(receipt.mode || 'School Desk')}</b></div>
+        </div>
+        <table><tbody>${rows || '<tr><td colspan="2">Payment received</td></tr>'}</tbody></table>
+        <div class="tot"><span>Total Paid</span><span>${esc(formatCurrency(receipt.amountPaid))}</span></div>
+        <div class="ft">This is a computer-generated receipt.<br/>Thank you.</div>
+      </div>
+    </body></html>`);
+    win.document.close();
+  };
+
+  // Send an in-app + push fee reminder to EVERY student with a pending balance,
+  // each with their own pending amount, in a single bulk request.
+  const sendFeeReminderToAll = async () => {
+    const recipients = students.filter((student) => student.pendingFees > 0);
+    if (!recipients.length) {
+      alert('No students have a pending fee balance.');
+      return;
+    }
+    if (!window.confirm(`Send an app fee reminder to ${recipients.length} student(s) with pending fees?`)) return;
+
+    setIsSendingReminder(true);
+    try {
+      const items = recipients.map((student) => ({
+        title: 'Fee Reminder',
+        description: `You have a pending fee of ${formatCurrency(student.pendingFees)}. Please clear it at the earliest.`,
+        type: 'fee',
+        linkPage: 'Fees',
+        recipientStudentId: getStudentAdmissionNumber(student),
+      }));
+      await apiFetch('/notifications/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items }),
+      });
+      alert(`Fee reminder sent to ${recipients.length} student(s).`);
+    } catch (error) {
+      alert(`Failed to send reminders: ${error.message}`);
+    } finally {
+      setIsSendingReminder(false);
+    }
+  };
+
   const openAssignModal = () => {
     if (!ledgerStudent) return;
     setAssignClassName(ledgerStudent.className || classOrder[0] || '');
@@ -670,6 +752,14 @@ const Finance = ({ setActivePage }) => {
                 className="flex items-center gap-1 text-[10px] font-black bg-neutral-100 hover:bg-neutral-200 px-3 py-2 rounded-xl transition-all disabled:opacity-60"
               >
                 <MessageSquare className="w-3.5 h-3.5 text-emerald-600" /> WhatsApp
+              </button>
+              <button
+                type="button"
+                onClick={sendFeeReminderToAll}
+                disabled={isSendingReminder}
+                className="flex items-center gap-1 text-[10px] font-black bg-indigo-600 text-white hover:bg-indigo-700 px-3 py-2 rounded-xl transition-all disabled:opacity-60"
+              >
+                <Bell className="w-3.5 h-3.5" /> App: Remind All
               </button>
             </div>
           </div>
@@ -1291,7 +1381,7 @@ const Finance = ({ setActivePage }) => {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <button type="button" onClick={() => window.print()} className="flex items-center justify-center gap-1.5 text-[10px] font-black bg-neutral-100 border border-neutral-300 p-2.5 rounded-xl"><Printer className="w-3.5 h-3.5" /> Print</button>
+            <button type="button" onClick={() => printReceipt(latestReceipt)} className="flex items-center justify-center gap-1.5 text-[10px] font-black bg-neutral-100 border border-neutral-300 p-2.5 rounded-xl"><Printer className="w-3.5 h-3.5" /> Print</button>
             <button type="button" onClick={() => alert(`WhatsApp alert queued for ${latestReceipt.contact || 'guardian'}.`)} className="flex items-center justify-center gap-1.5 text-[10px] font-black bg-neutral-100 border border-neutral-300 p-2.5 rounded-xl"><MessageSquare className="w-3.5 h-3.5 text-emerald-600" /> WhatsApp</button>
             <button type="button" onClick={() => sendReceiptMail(latestReceipt)} disabled={isSendingReceiptMail} className="flex items-center justify-center gap-1.5 text-[10px] font-black bg-neutral-100 border border-neutral-300 p-2.5 rounded-xl disabled:opacity-60"><Mail className="w-3.5 h-3.5 text-red-500" /> {isSendingReceiptMail ? 'Sending...' : 'Email'}</button>
           </div>

@@ -4,7 +4,7 @@ import User from '../models/User.js';
 import { isMongoConnected } from '../db.js';
 import { emitRealtimeEvent } from '../realtime.js';
 import { resolveDisplayName } from '../utils/nameLookup.js';
-import { createNotification } from '../utils/notify.js';
+import { createNotification, notifyMany } from '../utils/notify.js';
 import { requireRole } from '../middleware/auth.js';
 
 export const NOTIFICATIONS_UPDATED_EVENT = 'mgps-erp-notifications-updated';
@@ -185,6 +185,39 @@ router.post('/', ensureMongo, requireRole('admin', 'clerk', 'teacher'), async (r
   });
 
   response.status(201).json(await toPayload(notification, request.auth?.username || ''));
+});
+
+// Bulk send — one scoped notification per item. Used by "Send fee reminder to
+// all" so each pending student gets their own amount in one request (each item
+// still fans out an in-app + push notification via createNotification).
+router.post('/bulk', ensureMongo, requireRole('admin', 'clerk'), async (request, response) => {
+  const items = Array.isArray(request.body?.items) ? request.body.items : [];
+  // Every item must target a specific recipient — no whole-role broadcast here.
+  const valid = items.filter(
+    (item) =>
+      item &&
+      item.title &&
+      (item.recipientStudentId || item.recipientUsername || item.recipientClassName)
+  );
+
+  if (!valid.length) {
+    response.status(400).json({ message: 'No valid notification items to send.' });
+    return;
+  }
+
+  await notifyMany(
+    valid.map((item) => ({
+      title: item.title,
+      description: item.description || '',
+      type: item.type || 'fee',
+      linkPage: item.linkPage || '',
+      recipientStudentId: item.recipientStudentId || '',
+      recipientUsername: item.recipientUsername || '',
+      recipientClassName: item.recipientClassName || '',
+    }))
+  );
+
+  response.status(201).json({ sent: valid.length });
 });
 
 export default router;

@@ -460,6 +460,42 @@ export default function FinanceScreen({ user }) {
     );
   }
 
+  // Send an app fee reminder to EVERY student with a pending balance, each with
+  // their own pending amount (one bulk request).
+  function handleRemindAll() {
+    const recipients = students.filter((student) => studentFeeTotals(student).pending > 0);
+    if (!recipients.length) return banner.showError("No students have a pending fee balance.");
+    Alert.alert(
+      "Send Fee Reminder to All",
+      `Send an app reminder to ${recipients.length} student(s) with pending fees?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Send",
+          onPress: async () => {
+            setSaving(true);
+            banner.clear();
+            try {
+              const items = recipients.map((student) => ({
+                title: "Fee Reminder",
+                description: `You have a pending fee of ${formatCurrency(studentFeeTotals(student).pending)}. Please clear it at the earliest.`,
+                type: "fee",
+                linkPage: "Fees",
+                recipientStudentId: getStudentAdmissionNumber(student),
+              }));
+              await apiRequest("/notifications/bulk", { method: "POST", body: JSON.stringify({ items }) });
+              banner.showSuccess(`Fee reminder sent to ${recipients.length} student(s).`);
+            } catch (err) {
+              banner.showError(err);
+            } finally {
+              setSaving(false);
+            }
+          },
+        },
+      ]
+    );
+  }
+
   // ---- render -------------------------------------------------------------
 
   if (loading) {
@@ -525,6 +561,12 @@ export default function FinanceScreen({ user }) {
               onChangeText={setSearch}
               placeholder="Name, admission no., father or phone"
               autoCapitalize="none"
+            />
+            <PrimaryButton
+              icon="notifications-outline"
+              label="Send Fee Reminder to All Pending"
+              onPress={handleRemindAll}
+              loading={saving}
             />
           </Card>
 
