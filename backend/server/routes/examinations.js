@@ -63,8 +63,89 @@ router.get('/state', ensureMongo, async (_request, response) => {
   response.json(record ? normalizeState(record.state) : EMPTY_EXAMINATION_STATE);
 });
 
+// Diff the previous vs next examination state and fire student-facing
+// notifications for the two events that a bulk state save otherwise swallows:
+//   • marks entered/updated for a class  → "Results Updated"
+//   • exam schedule published/changed     → "Exam Schedule"
+// Deduped per (exam, class) so a student is paged once, not once per subject.
+// Best-effort: never let a notify failure break the state save.
+const notifyExamStateChanges = async (prevState, nextState) => {
+  const examName = (examId) =>
+    (nextState.exams || []).find((exam) => exam && exam.id === examId)?.name || 'Examination';
+
+  // --- Marks: notify classes whose marks records are new or changed ---
+  const prevMarksById = new Map((prevState.marks || []).map((record) => [record.id, record]));
+  const marksSeen = new Set();
+  for (const record of nextState.marks || []) {
+    if (!record || !record.className || !record.examId) continue;
+    const prev = prevMarksById.get(record.id);
+    if (prev && prev.updatedAt === record.updatedAt) continue; // unchanged
+    const key = `${record.examId}|${record.className}`;
+    if (marksSeen.has(key)) continue;
+    marksSeen.add(key);
+    createNotification({
+      title: 'Results Updated',
+      description: `Your ${examName(record.examId)} marks have been updated. Tap to view your results.`,
+      type: 'result',
+      linkPage: 'Examinations',
+      recipientRole: 'student',
+      recipientClassName: record.className,
+    }).catch(() => {});
+  }
+
+  // --- Schedule: notify classes whose schedule content changed ---
+  const scheduleSignature = (rows = []) =>
+    rows
+      .map((row) => `${row.subject}@${row.date}#${row.startTime}-${row.endTime}`)
+      .sort()
+      .join('|');
+  const groupSchedules = (rows = []) => {
+    const groups = new Map();
+    for (const row of rows) {
+      if (!row || !row.className || !row.examId) continue;
+      const key = `${row.examId}|${row.className}`;
+      if (!groups.has(key)) groups.set(key, { examId: row.examId, className: row.className, rows: [] });
+      groups.get(key).rows.push(row);
+    }
+    return groups;
+  };
+  const prevGroups = groupSchedules(prevState.schedules);
+  for (const [key, group] of groupSchedules(nextState.schedules)) {
+    const prevGroup = prevGroups.get(key);
+    if (prevGroup && scheduleSignature(prevGroup.rows) === scheduleSignature(group.rows)) continue;
+    createNotification({
+      title: 'Exam Schedule',
+      description: `The ${examName(group.examId)} schedule for ${group.className} has been published.`,
+      type: 'general',
+      linkPage: 'Examinations',
+      recipientRole: 'student',
+      recipientClassName: group.className,
+    }).catch(() => {});
+  }
+
+  // --- Papers: notify the assigned teacher when a paper is routed to them ---
+  const prevPapersById = new Map((prevState.papers || []).map((paper) => [paper.id, paper]));
+  for (const paper of nextState.papers || []) {
+    if (!paper || paper.status !== 'teacher_review' || !paper.teacherUsername) continue;
+    const prev = prevPapersById.get(paper.id);
+    if (prev && prev.status === 'teacher_review') continue; // already awaiting review — not a new routing
+    createNotification({
+      title: 'Paper Ready for Review',
+      description: `A paper "${paper.title || paper.subject || 'Paper'}" needs your review and approval.`,
+      type: 'general',
+      linkPage: 'Examinations',
+      recipientUsername: paper.teacherUsername,
+    }).catch(() => {});
+  }
+};
+
 router.put('/state', ensureMongo, requireRole('admin', 'clerk', 'teacher'), async (request, response) => {
   const nextState = normalizeState(request.body.state);
+
+  // Snapshot the previous state so we can detect newly-entered marks / schedules.
+  const existing = await ExaminationState.findOne().sort({ updatedAt: -1 });
+  const prevState = existing ? normalizeState(existing.state) : { ...EMPTY_EXAMINATION_STATE };
+
   const record = await ExaminationState.findOneAndUpdate(
     {},
     {
@@ -77,6 +158,13 @@ router.put('/state', ensureMongo, requireRole('admin', 'clerk', 'teacher'), asyn
       setDefaultsOnInsert: true,
     }
   );
+
+  // Fire event notifications after the save (best-effort, non-blocking).
+  try {
+    await notifyExamStateChanges(prevState, nextState);
+  } catch (error) {
+    console.error('[examinations] state-change notify failed:', error?.message || error);
+  }
 
   emitRealtimeEvent('mgps-erp-examination-updated');
   response.json(normalizeState(record.state));
