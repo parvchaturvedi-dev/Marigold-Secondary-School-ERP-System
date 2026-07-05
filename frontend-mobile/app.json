@@ -22,6 +22,7 @@
     ],
     "android": {
       "package": "com.parvchaturvediofficial.mgpserpmobile",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/logo.png",
         "backgroundColor": "#eef2ff"

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "672194647766",
+    "project_id": "mghub-marigold",
+    "storage_bucket": "mghub-marigold.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:672194647766:android:10166a3fcc7da4949e1b77",
+        "android_client_info": {
+          "package_name": "com.parvchaturvediofficial.mgpserpmobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAX6b1giP2kavEKVHXrrE-sCvupCZBfVh0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
