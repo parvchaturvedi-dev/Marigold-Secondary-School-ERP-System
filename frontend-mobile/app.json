@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "scheme": "mgpserp",
     "userInterfaceStyle": "automatic",
-    "icon": "./assets/images/logo.png",
+    "icon": "./assets/images/logo-icon.png",
     "splash": {
       "image": "./assets/images/logo.png",
       "resizeMode": "contain",
@@ -24,7 +24,7 @@
       "package": "com.parvchaturvediofficial.mgpserpmobile",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/logo.png",
+        "foregroundImage": "./assets/images/logo-adaptive.png",
         "backgroundColor": "#eef2ff"
       }
     },

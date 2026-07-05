@@ -47,6 +47,10 @@ import MeetingsScreen from "./modules/meetings/MeetingsScreen";
 import { resolveModuleScreen } from "./modules/registry";
 import { exportIdCardPdf, exportManyIdCards } from "./modules/idcard/exportIdCard";
 
+// Module titles whose bespoke screen already renders its own PageHeader — these
+// must NOT be wrapped again, or the back/home bar would be duplicated.
+const SELF_HEADED = new Set(["Academic Calendar", "Examinations", "Meetings"]);
+
 const hiddenKeys = new Set([
   "_id",
   "id",
@@ -241,7 +245,7 @@ function getDefaultAssignmentTargets(user = {}) {
 
 function initialForm(title, user = {}) {
   if (title === "Application") {
-    return { title: "", category: "General", kind: "simple", audienceMode: "individual", message: "" };
+    return { title: "", category: APPLICATION_CATEGORIES[0], kind: "simple", audienceMode: "individual", message: "" };
   }
   if (title === "Leave Requests") {
     return { title: "", description: "", leaveMode: "single", startDate: todayIsoDate(), endDate: todayIsoDate() };
@@ -526,13 +530,24 @@ export default function ConnectedModuleScreen() {
     (canManage(user) && title === "Teacher Assignment") ||
     (canManage(user) && (title === "Events" || title === "Notices"));
 
+  // Give every bespoke module screen a consistent back/home header. Screens in
+  // SELF_HEADED already render their own PageHeader, so they are left untouched.
+  const wrapWithHeader = (node) => (
+    <View style={{ flex: 1 }}>
+      <AuroraBackground />
+      <PageHeader title={title} />
+      <View style={{ flex: 1 }}>{node}</View>
+    </View>
+  );
+
   const RegisteredScreen = resolveModuleScreen(title);
   if (RegisteredScreen) {
-    return <RegisteredScreen user={user} />;
+    const node = <RegisteredScreen user={user} />;
+    return SELF_HEADED.has(title) ? node : wrapWithHeader(node);
   }
 
   if (title === "Fees") {
-    return <FeesScreen user={user} />;
+    return wrapWithHeader(<FeesScreen user={user} />);
   }
   if (title === "Examinations" || title === "Marks Management") {
     return <ExaminationsScreen user={user} />;
@@ -762,6 +777,16 @@ function EventContent({ row, expanded, setExpanded }) {
 const ALL_CLASSES_OPTION = "ALL CLASSES";
 const GENDER_OPTIONS = ["Male", "Female", "Other"];
 const CATEGORY_OPTIONS = ["General", "OBC", "SC", "ST", "EWS"];
+// Application-type options — kept in sync with the web portal (applicationStore.js).
+const APPLICATION_CATEGORIES = [
+  "General Problem",
+  "Infrastructure Problem",
+  "Violence / Safety Concern",
+  "Event / Farewell",
+  "Resource Request",
+  "Discipline Concern",
+  "Other",
+];
 
 function ActionForm({ title, form, updateForm, onSubmit, acting, user }) {
   const { palette } = useTheme();
@@ -887,7 +912,10 @@ function ActionForm({ title, form, updateForm, onSubmit, acting, user }) {
         {title === "Application" ? "New Application" : title === "Leave Requests" ? "New Leave Request" : title === "Events" ? "Create Event" : title === "Assignment" || title === "Assignments" ? "Issue Assignment" : "Publish Notice"}
       </Text>
       <TextInput style={styles.input} value={form.title} onChangeText={(value) => updateForm("title", value)} placeholder="Title" />
-      {(title === "Application" || title === "Notices") && (
+      {title === "Application" && (
+        <Select label="Application Type" value={form.category} onChange={(value) => updateForm("category", value)} options={APPLICATION_CATEGORIES} placeholder="Select application type" />
+      )}
+      {title === "Notices" && (
         <TextInput style={styles.input} value={form.category} onChangeText={(value) => updateForm("category", value)} placeholder="Category" />
       )}
       {(title === "Assignment" || title === "Assignments") && (
