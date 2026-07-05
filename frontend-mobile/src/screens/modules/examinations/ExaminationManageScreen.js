@@ -17,7 +17,7 @@
 //   admin-class-management-classes, admin-student-management-students,
 //   admin-subjects-global, admin-subjects-class-mapping
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, Linking, Platform, Text, TouchableOpacity, View } from "react-native";
+import { Alert, BackHandler, Linking, Platform, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as FileSystem from "expo-file-system/legacy";
 import * as IntentLauncher from "expo-intent-launcher";
@@ -153,6 +153,25 @@ export default function ExaminationManageScreen({ user }) {
   const [desk, setDesk] = useState("school");
   const role = user?.role || "";
   const isBoardManager = role === "admin" || role === "clerk";
+
+  // Hardware Back: step back through the desk/section toggles before the app-level
+  // handler goes to the dashboard. Board desk → School desk first, then a non-default
+  // section → the first ("Exam") section.
+  useEffect(() => {
+    const onBack = () => {
+      if (desk === "board") {
+        setDesk("school"); // board desk open → back to the school examination desk
+        return true;
+      }
+      if (section !== "exam") {
+        setSection("exam"); // a non-default section is open → back to the Exam section
+        return true;
+      }
+      return false; // top level → let the app go to the dashboard
+    };
+    const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
+    return () => sub.remove();
+  }, [desk, section]);
 
   // ---- REST examination state (read-modify-write) --------------------------
   const [state, setState] = useState(EMPTY_STATE);

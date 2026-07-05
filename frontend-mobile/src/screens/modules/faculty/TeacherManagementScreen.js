@@ -1,8 +1,8 @@
 // Teacher Management — full parity with web Admin/TeacherManagement.jsx +
 // TeacherAssignment.jsx. View, create, edit, delete teachers. Class-teacher
 // links are mirrored into `admin-class-management-classes` exactly like the web.
-import React, { useMemo, useState } from "react";
-import { Alert, Text, View } from "react-native";
+import React, { useEffect, useMemo, useState } from "react";
+import { Alert, BackHandler, Text, View } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system";
 
@@ -112,6 +112,25 @@ export default function TeacherManagementScreen({ user }) {
   const [form, setForm] = useState(emptyForm());
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState(null);
+
+  // Hardware Back: close whichever inline form is open (edit first, then create)
+  // before letting the app-level handler take the user to the dashboard.
+  useEffect(() => {
+    const onBack = () => {
+      if (editingId) {
+        setEditingId(null);
+        setEditForm(null);
+        return true;
+      }
+      if (showCreate) {
+        setShowCreate(false);
+        return true;
+      }
+      return false;
+    };
+    const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
+    return () => sub.remove();
+  }, [editingId, showCreate]);
 
   const classNames = useMemo(() => {
     const names = (Array.isArray(classes) ? classes : []).map(getClassName).filter(Boolean);

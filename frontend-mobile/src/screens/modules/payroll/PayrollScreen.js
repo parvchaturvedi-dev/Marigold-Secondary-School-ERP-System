@@ -11,8 +11,8 @@
 //   salaryPayments : [{ id, month:'YYYY-MM', amount, paidOn:ISO, mode, note }]
 //   joinMonth      : 'YYYY-MM'
 //   + mirrors dueSalary / paidSalary / pendingSalary
-import React, { useCallback, useMemo, useState } from "react";
-import { Alert, Text, View } from "react-native";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { Alert, BackHandler, Text, View } from "react-native";
 
 import { apiRequest } from "../../../api/apiClient";
 import { useTheme } from "../../../theme/ThemeContext";
@@ -306,6 +306,29 @@ export default function PayrollScreen({ user }) {
   const [payNote, setPayNote] = useState("");
   const [payMonth, setPayMonth] = useState("");
   const [salarySlip, setSalarySlip] = useState(null);
+
+  // Hardware Back: close an open inline panel one at a time (pay form → salary form
+  // → expanded ledger) before the app-level handler goes to the dashboard.
+  useEffect(() => {
+    const onBack = () => {
+      if (payStaffId) {
+        setPayStaffId("");
+        setSalarySlip(null);
+        return true;
+      }
+      if (salaryStaffId) {
+        setSalaryStaffId("");
+        return true;
+      }
+      if (expandedId) {
+        setExpandedId("");
+        return true;
+      }
+      return false;
+    };
+    const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
+    return () => sub.remove();
+  }, [payStaffId, salaryStaffId, expandedId]);
 
   const state = activeTab === "teachers" ? teacherState : clerkState;
   const list = state.items;

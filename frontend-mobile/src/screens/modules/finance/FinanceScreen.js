@@ -5,8 +5,8 @@
 // components/common/financeData.js) so the persisted student.feeLedger shape stays
 // IDENTICAL to web (so /api/fees and the web page keep working unchanged). The AI
 // Assistant screen reuses the same feeCore helpers.
-import React, { useCallback, useMemo, useState } from "react";
-import { Alert, Text, View } from "react-native";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { Alert, BackHandler, Text, View } from "react-native";
 
 import { apiRequest } from "../../../api/apiClient";
 import { useTheme } from "../../../theme/ThemeContext";
@@ -105,6 +105,24 @@ export default function FinanceScreen({ user }) {
   const [editingPaymentId, setEditingPaymentId] = useState("");
   const [editPayAmount, setEditPayAmount] = useState("");
   const [editPayDate, setEditPayDate] = useState("");
+
+  // Hardware Back: pop ONE internal drill-down level before falling through to the
+  // app-level handler (which goes to the dashboard). Student ledger → class list → all classes.
+  useEffect(() => {
+    const onBack = () => {
+      if (selectedAdmission) {
+        setSelectedAdmission(""); // student ledger open → back to that class's student list
+        return true;
+      }
+      if (selectedClassName) {
+        setSelectedClassName(""); // a class is drilled → back to the class list
+        return true;
+      }
+      return false; // top level → let the app go to the dashboard
+    };
+    const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
+    return () => sub.remove();
+  }, [selectedAdmission, selectedClassName]);
 
   const loading = studentsState.loading || classesState.loading || preferencesState.loading;
 

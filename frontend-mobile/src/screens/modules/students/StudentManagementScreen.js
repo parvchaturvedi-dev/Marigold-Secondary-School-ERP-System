@@ -1,8 +1,8 @@
 // Student Management — full parity with web StudentManagement + StudentAssigning
 // + StudentProfile: list/search/filter, single admission (create), edit, delete,
 // photo & document upload, and Excel/CSV bulk import.
-import React, { useMemo, useState } from "react";
-import { Alert, Image, Text, View } from "react-native";
+import React, { useEffect, useMemo, useState } from "react";
+import { Alert, BackHandler, Image, Text, View } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system";
 import * as XLSX from "@e965/xlsx";
@@ -136,6 +136,20 @@ export default function StudentManagementScreen() {
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+
+  // Hardware Back: if the add/edit form is open, close it back to the list first;
+  // only at the list (top) level does Back fall through to the app (dashboard).
+  useEffect(() => {
+    const onBack = () => {
+      if (mode === "form") {
+        setMode("list");
+        return true;
+      }
+      return false;
+    };
+    const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
+    return () => sub.remove();
+  }, [mode]);
 
   const classNames = useMemo(
     () => classes.map((c) => c.name || c.className || c.id).filter(Boolean),
