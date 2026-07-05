@@ -385,6 +385,21 @@ const Finance = ({ setActivePage }) => {
 
     const updated = assignClassFeeToStudent(ledgerStudent, target, amount, assignNote);
     persistStudentUpdate(updated);
+    // Notify the student that a fee was assigned.
+    apiFetch('/notifications', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: 'Fee Assigned',
+        description: `A fee of ${formatCurrency(amount)} has been assigned for ${target}.`,
+        type: 'fee',
+        linkPage: 'Fees',
+        recipientRole: 'student',
+        recipientStudentId: getStudentAdmissionNumber(updated),
+      }),
+    }).catch((error) => {
+      console.warn('Failed to send fee assign notification', error);
+    });
     setShowAssignModal(false);
     setAssignAmount('');
     setAssignNote('');

@@ -3,6 +3,7 @@ import Timetable from '../models/Timetable.js';
 import { isMongoConnected } from '../db.js';
 import { requireRole } from '../middleware/auth.js';
 import { emitRealtimeEvent } from '../realtime.js';
+import { createNotification } from '../utils/notify.js';
 
 const router = express.Router();
 const TIMETABLE_UPDATED_EVENT = 'mgps-timetable-updated';
@@ -141,6 +142,19 @@ router.post('/', ensureMongo, requireRole('admin', 'clerk'), async (request, res
   }
 
   emitRealtimeEvent(TIMETABLE_UPDATED_EVENT, toPayload(record));
+
+  // Notify students of each class in the saved timetable. Non-blocking.
+  for (const className of Array.isArray(record.classes) ? record.classes : []) {
+    createNotification({
+      title: 'Timetable Updated',
+      description: `The timetable for ${className} has been updated.`,
+      type: 'timetable',
+      linkPage: 'Timetable',
+      recipientRole: 'student',
+      recipientClassName: className,
+    }).catch(() => {});
+  }
+
   response.status(request.body.id ? 200 : 201).json({ timetable: toPayload(record) });
 });
 

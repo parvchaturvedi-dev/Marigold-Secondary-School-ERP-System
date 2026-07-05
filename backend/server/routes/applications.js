@@ -179,6 +179,19 @@ router.post('/', ensureMongo, async (request, response) => {
   });
 
   emitRealtimeEvent('mgps-erp-applications-updated');
+
+  // Notify admin when the application goes straight to admin review (best-effort,
+  // non-blocking). The 'collecting_consensus' path goes to classmates, not admin.
+  if (application.status === 'pending') {
+    createNotification({
+      title: 'New Application',
+      description: `${application.title || 'Application'} from ${application.senderName || application.senderUsername}.`,
+      type: 'application',
+      linkPage: 'Application',
+      recipientRole: 'admin',
+    }).catch(() => {});
+  }
+
   response.status(201).json(await normalizeApplication(application));
 });
 

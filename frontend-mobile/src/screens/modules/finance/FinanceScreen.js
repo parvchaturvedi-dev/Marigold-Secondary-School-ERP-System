@@ -260,6 +260,18 @@ export default function FinanceScreen({ user }) {
       const updated = assignClassFeeToStudent(selectedStudent, target, amount, assignNote);
       const map = new Map([[getStudentAdmissionNumber(updated), updated]]);
       await persistUpdatedStudents(map);
+      // Notify the student that a fee was assigned.
+      apiRequest("/notifications", {
+        method: "POST",
+        body: JSON.stringify({
+          title: "Fee Assigned",
+          description: `A fee of ${formatCurrency(amount)} has been assigned for ${target}.`,
+          type: "fee",
+          linkPage: "Fees",
+          recipientRole: "student",
+          recipientStudentId: getStudentAdmissionNumber(updated),
+        }),
+      }).catch(() => {});
       setAssignAmount("");
       setAssignNote("");
       banner.showSuccess(`Fee of ${formatCurrency(amount)} set for ${target}.`);

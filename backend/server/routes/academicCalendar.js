@@ -4,6 +4,7 @@ import AcademicCalendar from '../models/AcademicCalendar.js';
 import { isMongoConnected } from '../db.js';
 import { emitRealtimeEvent } from '../realtime.js';
 import { requireRole } from '../middleware/auth.js';
+import { createNotification } from '../utils/notify.js';
 
 const router = express.Router();
 const upload = multer({
@@ -70,6 +71,25 @@ router.post('/', ensureMongo, requireRole('admin', 'clerk'), upload.single('cale
   });
 
   emitRealtimeEvent('mgps-academic-calendar-updated');
+
+  // Notify all students and all teachers that a new calendar is published. Non-blocking.
+  createNotification({
+    title: 'Academic Calendar Updated',
+    description: 'A new academic calendar has been published.',
+    type: 'calendar',
+    linkPage: 'Academic Calendar',
+    recipientRole: 'student',
+    recipientClassName: '',
+  }).catch(() => {});
+  createNotification({
+    title: 'Academic Calendar Updated',
+    description: 'A new academic calendar has been published.',
+    type: 'calendar',
+    linkPage: 'Academic Calendar',
+    recipientRole: 'teacher',
+    recipientClassName: '',
+  }).catch(() => {});
+
   response.status(201).json(toCalendarPayload(calendar));
 });
 

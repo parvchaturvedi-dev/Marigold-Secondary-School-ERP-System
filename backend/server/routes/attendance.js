@@ -8,6 +8,7 @@ import User from '../models/User.js';
 import { isMongoConnected } from '../db.js';
 import { requireRole } from '../middleware/auth.js';
 import { emitRealtimeEvent } from '../realtime.js';
+import { createNotification } from '../utils/notify.js';
 
 const router = express.Router();
 const STUDENTS_NAMESPACE = 'admin-student-management-students';
@@ -536,6 +537,7 @@ router.post('/students/batch', requireRole('admin', 'clerk', 'teacher'), async (
   );
   const scannedAt = new Date();
   const writes = [];
+  const notifyTargets = [];
 
   for (const record of request.body.records) {
     const entityId = upper(record.entityId || record.admissionNumber);
@@ -543,6 +545,9 @@ router.post('/students/batch', requireRole('admin', 'clerk', 'teacher'), async (
     if (!person) continue;
 
     const status = clean(record.status).toLowerCase() === 'absent' ? 'absent' : 'present';
+    if (status === 'absent' || status === 'half-day') {
+      notifyTargets.push({ admissionNumber: person.admissionNumber, status });
+    }
     const logPayload = buildLogPayload(
       person,
       {
@@ -567,6 +572,19 @@ router.post('/students/batch', requireRole('admin', 'clerk', 'teacher'), async (
   }
 
   if (writes.length) await AttendanceLog.bulkWrite(writes);
+
+  // Notify each absent / half-day student (never present ones). Non-blocking.
+  for (const target of notifyTargets) {
+    createNotification({
+      title: 'Attendance Marked',
+      description: `Marked ${target.status} on ${attendanceDate} for ${className}.`,
+      type: 'attendance',
+      linkPage: 'Attendance',
+      recipientRole: 'student',
+      recipientStudentId: target.admissionNumber,
+    }).catch(() => {});
+  }
+
   const logs = await AttendanceLog.find({ attendanceDate, className, entityType: 'student' }).lean();
   emitRealtimeEvent(eventName, { type: 'student-batch', attendanceDate, className });
   response.json({ message: `Saved ${writes.length} attendance records.`, count: writes.length, logs });

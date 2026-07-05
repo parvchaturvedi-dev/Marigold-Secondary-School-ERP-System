@@ -141,6 +141,30 @@ router.post('/', ensureMongo, async (request, response) => {
   });
 
   emitRealtimeEvent('mgps-erp-leave-requests-updated');
+
+  // Notify the approver about the new leave request (best-effort, non-blocking).
+  try {
+    if (isStudent && leaveRequest.classTeacherUsername) {
+      await createNotification({
+        title: 'New Leave Request',
+        description: `${leaveRequest.applicantName || 'A student'} applied for leave.`,
+        type: 'leave',
+        linkPage: 'Leave Requests',
+        recipientUsername: leaveRequest.classTeacherUsername,
+      });
+    } else {
+      await createNotification({
+        title: 'New Leave Request',
+        description: `${leaveRequest.applicantName || 'Someone'} applied for leave.`,
+        type: 'leave',
+        linkPage: 'Leave Requests',
+        recipientRole: 'admin',
+      });
+    }
+  } catch (error) {
+    console.error('[leaveRequests] create notify failed:', error?.message || error);
+  }
+
   response.status(201).json(toLeavePayload(leaveRequest));
 });
 
@@ -203,11 +227,26 @@ router.patch('/:id/teacher-action', ensureMongo, requireRole('teacher', 'admin',
 
   emitRealtimeEvent('mgps-erp-leave-requests-updated');
 
-  // Notify the requester that their leave request status changed (best-effort).
-  try {
-    await notifyLeaveRequester(leaveRequest);
-  } catch (error) {
-    console.error('[leaveRequests] teacher-action notify failed:', error?.message || error);
+  if (request.body.action === 'forward') {
+    // Forwarded to admin — notify admin that a request needs review (best-effort).
+    try {
+      await createNotification({
+        title: 'Leave Request Forwarded',
+        description: 'A leave request needs admin review.',
+        type: 'leave',
+        linkPage: 'Leave Requests',
+        recipientRole: 'admin',
+      });
+    } catch (error) {
+      console.error('[leaveRequests] forward notify failed:', error?.message || error);
+    }
+  } else {
+    // Approve/reject — notify the applicant that their request status changed (best-effort).
+    try {
+      await notifyLeaveRequester(leaveRequest);
+    } catch (error) {
+      console.error('[leaveRequests] teacher-action notify failed:', error?.message || error);
+    }
   }
 
   response.json(toLeavePayload(leaveRequest));
