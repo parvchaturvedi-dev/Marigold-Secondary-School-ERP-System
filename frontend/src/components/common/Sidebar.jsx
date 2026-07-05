@@ -138,6 +138,7 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
   // Master menu configuration
   const adminMenuItems = [
     { name: 'Dashboard', icon: LayoutGrid },
+    { name: 'AI Assistant', icon: Sparkles },
     { name: 'Academic Calender', icon: Calendar },
     { name: 'Application', icon: FileText },
     { name: 'Assignment', icon: ClipboardList },
