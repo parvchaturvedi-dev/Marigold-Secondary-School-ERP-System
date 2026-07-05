@@ -34,6 +34,10 @@ export async function sendExpoPush(tokens = [], { title, body, data } = {}) {
       data: data || {},
       sound: 'default',
       priority: 'high',
+      // Route to the HIGH-importance Android channel the app creates on launch
+      // (registerPush.js -> "default"). Without this, Android delivers straight
+      // to the tray with no heads-up banner. iOS ignores channelId.
+      channelId: 'default',
     }));
 
     try {
