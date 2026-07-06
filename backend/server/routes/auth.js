@@ -617,6 +617,7 @@ router.post('/change-password', ensureMongo, requireAuth, async (request, respon
     ...(user.profile || {}),
     initialPassword: '',
     forcePasswordChange: false,
+    passwordChanged: true,
   };
   await user.save();
 

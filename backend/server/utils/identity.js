@@ -120,19 +120,34 @@ const upsertGeneratedUser = async ({ username, role, displayName, profile, isAct
   if (!username) return;
 
   const existing = await User.findOne({ username });
-  const initialPassword = existing?.profile?.initialPassword || initialPasswordFor(username);
+  // If the user has ALREADY set their own password, never regenerate the initial
+  // password or re-force a change — otherwise the "Change your password" gate
+  // reappears on every identity sync (which runs on many admin actions).
+  const hasChangedPassword =
+    Boolean(existing) &&
+    (existing.profile?.passwordChanged === true || existing.profile?.initialPassword === '');
+  const initialPassword = hasChangedPassword
+    ? ''
+    : existing?.profile?.initialPassword || initialPasswordFor(username);
+
+  const mergedProfile = {
+    ...(existing?.profile || {}),
+    ...profile,
+    initialPassword,
+    managedByIdentitySync: true,
+  };
+  // Preserve the user's post-change state so sync can't undo it.
+  if (hasChangedPassword) {
+    mergedProfile.forcePasswordChange = false;
+    mergedProfile.passwordChanged = true;
+  }
 
   await User.findOneAndUpdate(
     { username },
     {
       role,
       displayName,
-      profile: {
-        ...(existing?.profile || {}),
-        ...profile,
-        initialPassword,
-        managedByIdentitySync: true,
-      },
+      profile: mergedProfile,
       passwordHash: existing?.passwordHash || createPasswordHash(initialPassword),
       isActive,
     },

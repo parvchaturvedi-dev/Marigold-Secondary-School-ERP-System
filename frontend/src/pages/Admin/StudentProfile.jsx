@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { getStoredSession } from '../../components/common/auth';
 import { 
   ArrowLeft, User, Phone, MapPin, Calendar, 
   FileText, BarChart3, GraduationCap, Download, Eye, PlusCircle, Save, UploadCloud, Camera, CreditCard, Users
@@ -152,6 +153,8 @@ const getClassSnapshot = (student = {}, className = '') =>
 const StudentProfile = ({ studentContext, onBack }) => {
   // Active Tab Controller State
   const [activeTab, setActiveTab] = useState('analytics');
+  // Finance is admin-only — clerks reuse this same profile and must NOT see fees.
+  const canViewFinance = getStoredSession()?.role === 'admin';
 
   const [studentsDb, setStudentsDb] = useMongoState('admin-student-management-students', []);
   const [roleDocuments] = useMongoState('admin-document-requirements', { Student: [] });
@@ -759,12 +762,14 @@ const StudentProfile = ({ studentContext, onBack }) => {
             >
               <FileText className="w-3.5 h-3.5" /> Document Vault
             </button>
-            <button
-              onClick={() => setActiveTab('finance')}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl transition-all ${activeTab === 'finance' ? 'btn-primary' : 'text-slate-500 hover:bg-white/70'}`}
-            >
-              <CreditCard className="w-3.5 h-3.5" /> Finance
-            </button>
+            {canViewFinance && (
+              <button
+                onClick={() => setActiveTab('finance')}
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-xl transition-all ${activeTab === 'finance' ? 'btn-primary' : 'text-slate-500 hover:bg-white/70'}`}
+              >
+                <CreditCard className="w-3.5 h-3.5" /> Finance
+              </button>
+            )}
           </div>
 
           {/* DYNAMIC CONTENT SWITCHBOARD VIEWER PANELS */}
@@ -1109,7 +1114,7 @@ const StudentProfile = ({ studentContext, onBack }) => {
               </div>
             )}
 
-            {activeTab === 'finance' && (
+            {canViewFinance && activeTab === 'finance' && (
               <div className="space-y-4 animate-fadeIn text-xs font-bold">
                 <div className="border-b border-slate-100/80 pb-2">
                   <h4 className="text-sm font-black text-slate-900">Class-wise Finance Records</h4>
