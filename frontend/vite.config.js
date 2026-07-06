@@ -3,20 +3,18 @@ import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 
+// Only group third-party libs into a single `vendor` chunk (keeping the heavy,
+// lazy-loaded 3D libs out so they stay in their own async chunk). App code is
+// left to Rollup's automatic chunking, which respects the module dependency
+// order. Manually splitting app code into portal-common / portal-admin created a
+// chunk cycle (portal-common -> export-tools -> portal-admin) whose init order
+// left module-level consts (e.g. LEAVE_STATUS) uninitialised — a
+// "Cannot access X before initialization" TDZ crash that blanked the whole app.
 const chunkNameFor = (id) => {
   if (id.includes('/node_modules/')) {
-    if (id.includes('/recharts/')) return 'charts';
-    if (id.includes('/jspdf/') || id.includes('/html2canvas/')) return 'export-tools';
-    if (id.includes('/@e965/xlsx/')) return 'xlsx';
-    if (id.includes('/lucide-react/')) return 'icons';
+    if (id.includes('/three/') || id.includes('/@react-three/')) return undefined;
     return 'vendor';
   }
-
-  if (id.includes('/src/pages/Admin/')) return 'portal-admin';
-  if (id.includes('/src/pages/Clerk/')) return 'portal-clerk';
-  if (id.includes('/src/pages/Student/')) return 'portal-student';
-  if (id.includes('/src/pages/Teacher/')) return 'portal-teacher';
-  if (id.includes('/src/components/common/')) return 'portal-common';
   return undefined;
 };
 

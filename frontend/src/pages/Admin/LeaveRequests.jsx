@@ -21,15 +21,10 @@ import {
   getLeaveRequestsForSession,
 } from '../../components/common/leaveRequestStore';
 
-const statusTone = {
-  [LEAVE_STATUS.pendingAdmin]: 'bg-amber-50 text-amber-700 border-amber-200',
-  [LEAVE_STATUS.pendingClassTeacher]: 'bg-blue-50 text-blue-700 border-blue-200',
-  [LEAVE_STATUS.forwardedAdmin]: 'bg-purple-50 text-purple-700 border-purple-200',
-  [LEAVE_STATUS.approvedByAdmin]: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  [LEAVE_STATUS.rejectedByAdmin]: 'bg-red-50 text-red-700 border-red-200',
-  [LEAVE_STATUS.approvedByTeacher]: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  [LEAVE_STATUS.rejectedByTeacher]: 'bg-red-50 text-red-700 border-red-200',
-};
+// NOTE: statusTone is defined INSIDE the component (not at module scope) because
+// it reads LEAVE_STATUS (from a separate chunk). At module-eval time a fragile
+// chunk-load order can leave LEAVE_STATUS uninitialised, which crashed the whole
+// admin bundle with a "Cannot access ... before initialization" TDZ error.
 
 const roleTone = {
   student: 'bg-indigo-50 text-indigo-700 border-indigo-200',
@@ -52,6 +47,15 @@ const roleLabels = {
 const tabs = ['All', 'Teacher', 'Clerk', 'Student'];
 
 const LeaveRequests = ({ session }) => {
+  const statusTone = {
+    [LEAVE_STATUS.pendingAdmin]: 'bg-amber-50 text-amber-700 border-amber-200',
+    [LEAVE_STATUS.pendingClassTeacher]: 'bg-blue-50 text-blue-700 border-blue-200',
+    [LEAVE_STATUS.forwardedAdmin]: 'bg-purple-50 text-purple-700 border-purple-200',
+    [LEAVE_STATUS.approvedByAdmin]: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    [LEAVE_STATUS.rejectedByAdmin]: 'bg-red-50 text-red-700 border-red-200',
+    [LEAVE_STATUS.approvedByTeacher]: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    [LEAVE_STATUS.rejectedByTeacher]: 'bg-red-50 text-red-700 border-red-200',
+  };
   const [, setRequestVersion] = useState(0);
   const [activeTab, setActiveTab] = useState('All');
   const [searchTerm, setSearchTerm] = useState('');
