@@ -228,6 +228,22 @@ const AiAssistant = () => {
 
     const studentName = getStudentDisplayName(list[index]);
     const collected = amount - Math.max(0, remaining);
+
+    // Notify the student — same payload the Finance page sends on a payment.
+    apiFetch('/notifications', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: 'Fee Payment Received',
+        description: `A payment of ${formatCurrency(collected > 0 ? collected : amount)} was recorded to your account.`,
+        type: 'fee',
+        linkPage: 'Fees',
+        recipientRole: 'student',
+        recipientStudentId: getStudentAdmissionNumber(list[index]),
+      }),
+    }).catch((error) => {
+      console.warn('Failed to send fee payment notification', error);
+    });
     const breakdownLines = (breakdown || [])
       .map((row) => `  • ${row.className}: ${formatCurrency(row.amount)}`)
       .join('\n');
@@ -270,6 +286,22 @@ const AiAssistant = () => {
     const targetClass = String(args?.className || '').trim() || getStudentClassName(list[index]);
     const updatedStudent = assignClassFeeToStudent(list[index], targetClass, amount, note);
     setStudents(list.map((student, i) => (i === index ? updatedStudent : student)));
+
+    // Notify the student — same payload the Finance page sends on fee assignment.
+    apiFetch('/notifications', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: 'Fee Assigned',
+        description: `A fee of ${formatCurrency(amount)} has been assigned for ${targetClass}.`,
+        type: 'fee',
+        linkPage: 'Fees',
+        recipientRole: 'student',
+        recipientStudentId: getStudentAdmissionNumber(list[index]),
+      }),
+    }).catch((error) => {
+      console.warn('Failed to send fee assign notification', error);
+    });
 
     appendModelMessage(
       `Fee assigned successfully.\n\nStudent: ${getStudentDisplayName(list[index])} (${admissionNumber})\nClass: ${targetClass}\nAssigned fee: ${formatCurrency(amount)}${note ? `\nNote: ${note}` : ''}`
