@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
   BellRing,
@@ -7,7 +7,7 @@ import {
   ClipboardList,
   FileCheck2,
   IdCard,
-  MessageSquare,
+  Inbox,
   Send,
   TrendingUp,
   Users,
@@ -16,73 +16,136 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Cell,
-  Pie,
-  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts';
-import { readApplications } from '../../components/common/applicationStore';
-import { readAssignments } from '../../components/common/assignmentStore';
-import { readEvents } from '../../components/common/eventStore';
-import {
-  LEAVE_STATUS,
-  readLeaveRequests,
-} from '../../components/common/leaveRequestStore';
-import {
-  CLERK_ATTENDANCE_REGISTERS,
-  CLERK_DOCUMENT_QUEUE,
-  CLERK_TASKS,
-  formatShortDate,
-  getClerkProfile,
-} from './clerkPortalData';
+import { apiFetch } from '../../components/common/api';
+import { useAttendanceOverview } from '../../components/common/attendanceStore';
+import { useMongoState } from '../../components/common/mongoState';
+import { LEAVE_STATUS } from '../../components/common/leaveRequestStore';
+import { getClerkProfile } from './clerkPortalData';
 
-const priorityTone = {
-  High: 'bg-red-50 text-red-700 border-red-100',
-  Normal: 'bg-blue-50 text-blue-700 border-blue-100',
-};
+const PENDING_LEAVE_STATUSES = [
+  LEAVE_STATUS.pendingAdmin,
+  LEAVE_STATUS.pendingClassTeacher,
+  LEAVE_STATUS.forwardedAdmin,
+];
 
-const statusTone = {
-  Submitted: 'bg-emerald-50 text-emerald-700 border-emerald-100',
-  Review: 'bg-amber-50 text-amber-700 border-amber-100',
-  Pending: 'bg-red-50 text-red-700 border-red-100',
+const asArray = (value) => (Array.isArray(value) ? value : []);
+const asCount = (value) => (Array.isArray(value) ? value.length : 0);
+
+const shortClassLabel = (className = '', section = '') => {
+  const cls = String(className || '').replace(/^Class\s+/i, 'C').trim() || '—';
+  return section ? `${cls}-${section}` : cls;
 };
 
 const Dashboard = ({ session, setActivePage }) => {
   const profile = getClerkProfile(session);
 
-  const metrics = useMemo(() => {
-    const assignments = readAssignments();
-    const events = readEvents();
-    const leaveRequests = readLeaveRequests();
-    const applications = readApplications();
-    const pendingLeaveStatuses = [LEAVE_STATUS.pendingAdmin, LEAVE_STATUS.forwardedAdmin];
-    const pendingDocuments = CLERK_DOCUMENT_QUEUE.filter((item) => item.status !== 'Verified');
-    const totalStudents = CLERK_ATTENDANCE_REGISTERS.reduce((sum, item) => sum + item.total, 0);
-    const presentStudents = CLERK_ATTENDANCE_REGISTERS.reduce((sum, item) => sum + item.present, 0);
+  // Real attendance overview (today, all classes) — same source the Attendance page uses.
+  const { overview, isLoading: attendanceLoading, error: attendanceError } = useAttendanceOverview({});
 
-    return {
-      activeAssignments: assignments.length,
-      upcomingEvents: events.length,
-      pendingApplications: applications.filter((application) => application.status === 'pending').length,
-      pendingLeaves: leaveRequests.filter((request) => pendingLeaveStatuses.includes(request.status)).length,
-      documentPackets: pendingDocuments.length,
-      attendanceRate: Math.round((presentStudents / totalStudents) * 100),
-      attendanceChart: CLERK_ATTENDANCE_REGISTERS.map((item) => ({
-        name: `${item.className.replace('Class ', 'C')}-${item.section}`,
-        Present: item.present,
-        Absent: item.absent,
-        Late: item.late,
-      })),
-      documentChart: [
-        { name: 'Verified', value: CLERK_DOCUMENT_QUEUE.filter((item) => item.status === 'Verified').length, color: '#10b981' },
-        { name: 'Review', value: CLERK_DOCUMENT_QUEUE.filter((item) => item.status === 'Review').length, color: '#f59e0b' },
-        { name: 'Hold', value: CLERK_DOCUMENT_QUEUE.filter((item) => item.status === 'Hold').length, color: '#f43f5e' },
-      ],
+  // Real headcounts straight from the shared module-state collections.
+  const [students, , studentsMeta] = useMongoState('admin-student-management-students', []);
+  const [teachers, , teachersMeta] = useMongoState('admin-teacher-management-list', []);
+  const [clerks] = useMongoState('admin-clerk-management-list', []);
+  const [requirements] = useMongoState('admin-document-requirements', { Student: [], Teacher: [] });
+
+  // Real staff summary (notices unread, vault records) from the dashboard summary endpoint.
+  const [summary, setSummary] = useState(null);
+
+  // Real pending queues the clerk can act on.
+  const [applications, setApplications] = useState([]);
+  const [leaveRequests, setLeaveRequests] = useState([]);
+  const [queueError, setQueueError] = useState('');
+
+  useEffect(() => {
+    let alive = true;
+
+    const load = async () => {
+      const params = new URLSearchParams({
+        role: session?.role || 'clerk',
+        username: session?.username || '',
+      }).toString();
+
+      const [summaryData, applicationData, leaveData] = await Promise.all([
+        apiFetch('/dashboard/summary').catch(() => null),
+        apiFetch(`/applications?${params}`).catch(() => []),
+        apiFetch(`/leave-requests?${params}`).catch(() => []),
+      ]);
+
+      if (!alive) return;
+
+      setSummary(summaryData || null);
+      setApplications(asArray(applicationData));
+      setLeaveRequests(asArray(leaveData));
+      if (!summaryData) {
+        setQueueError('Some live counters could not be loaded right now.');
+      }
     };
-  }, []);
+
+    load();
+
+    return () => {
+      alive = false;
+    };
+  }, [session?.role, session?.username]);
+
+  const stats = asArray(summary?.stats);
+  const noticesStat = stats.find((stat) => stat.title === 'Notices');
+  const documentsVaultStat = stats.find((stat) => stat.title === 'Documents');
+
+  const studentCount = asCount(students);
+  const teacherCount = asCount(teachers);
+  const clerkCount = asCount(clerks);
+
+  const requiredStudentDocs = asCount(requirements?.Student);
+  const requiredTeacherDocs = asCount(requirements?.Teacher);
+  // A real, cheap "documents to verify" figure: the number of required document
+  // slots across the whole school (people x required doc types per role).
+  const documentSlots = studentCount * requiredStudentDocs + teacherCount * requiredTeacherDocs;
+  const requiredDocTypes = requiredStudentDocs + requiredTeacherDocs;
+
+  const pendingApplications = useMemo(
+    () => applications.filter((application) => application.status === 'pending'),
+    [applications]
+  );
+  const pendingLeaves = useMemo(
+    () => leaveRequests.filter((request) => PENDING_LEAVE_STATUSES.includes(request.status)),
+    [leaveRequests]
+  );
+
+  // Real attendance metrics from the overview endpoint.
+  const attendance = useMemo(() => {
+    const counts = overview?.counts || {};
+    const roster = asArray(overview?.roster);
+    const present = (counts.present || 0) + (counts.manual || 0);
+    const late = counts['half-day'] || 0;
+    const marked = present + late + (counts.absent || 0);
+    const total = counts.total || roster.length || 0;
+    const rate = marked ? Math.round((present / marked) * 100) : 0;
+
+    // Per-class present/absent/late chart, built from the real roster.
+    const byClass = new Map();
+    roster.forEach((entry) => {
+      const key = shortClassLabel(entry.className, entry.section);
+      const bucket = byClass.get(key) || { name: key, Present: 0, Absent: 0, Late: 0 };
+      const status = entry.todayLog?.status;
+      if (status === 'present' || status === 'manual') bucket.Present += 1;
+      else if (status === 'half-day') bucket.Late += 1;
+      else bucket.Absent += 1;
+      byClass.set(key, bucket);
+    });
+    const classChart = Array.from(byClass.values())
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
+      .slice(0, 12);
+
+    return { rate, present, late, marked, total, classChart };
+  }, [overview]);
+
+  const roleSummary = overview?.roleSummary || {};
 
   const quickActions = [
     { label: 'Attendance', page: 'Attendance', icon: CheckCircle2 },
@@ -90,6 +153,39 @@ const Dashboard = ({ session, setActivePage }) => {
     { label: 'ID Cards', page: 'Id Card', icon: IdCard },
     { label: 'Documents', page: 'Documents Management', icon: FileCheck2 },
   ];
+
+  const attentionItems = [
+    {
+      key: 'applications',
+      label: 'Applications pending review',
+      count: pendingApplications.length,
+      page: 'Application',
+      icon: Send,
+    },
+    {
+      key: 'leaves',
+      label: 'Leave requests awaiting action',
+      count: pendingLeaves.length,
+      page: 'Leave Requests',
+      icon: AlertCircle,
+    },
+    {
+      key: 'attendance',
+      label: 'Students not marked today',
+      count: (overview?.counts?.unmarked || 0),
+      page: 'Attendance',
+      icon: CheckCircle2,
+    },
+    {
+      key: 'documents',
+      label: 'Document types to verify',
+      count: requiredDocTypes,
+      page: 'Documents Management',
+      icon: FileCheck2,
+    },
+  ];
+
+  const headcountsLoading = studentsMeta.isLoading || teachersMeta.isLoading;
 
   return (
     <div className="space-y-6 pb-8 select-none font-sans text-slate-900 animate-fadeIn">
@@ -105,9 +201,11 @@ const Dashboard = ({ session, setActivePage }) => {
           </div>
 
           <div>
-            <h2 className="text-2xl font-black tracking-tight text-gradient">{profile.name}</h2>
+            <h2 className="text-2xl font-black tracking-tight text-gradient">
+              {summary?.profile?.displayName || profile.name}
+            </h2>
             <p className="text-xs font-bold text-slate-500 mt-1">
-              {profile.department} | {profile.shift} | {profile.deskWindow}
+              {summary?.profile?.designation || profile.department} | {profile.shift} | {profile.deskWindow}
             </p>
           </div>
 
@@ -135,12 +233,47 @@ const Dashboard = ({ session, setActivePage }) => {
         </div>
       </section>
 
+      {(queueError || attendanceError) && (
+        <section className="glass-card rounded-3xl p-4 text-xs font-bold text-amber-600">
+          {attendanceError || queueError}
+        </section>
+      )}
+
       <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 stagger">
-        <MetricCard icon={Users} label="Attendance" value={`${metrics.attendanceRate}%`} note="Across submitted registers" />
-        <MetricCard icon={ClipboardList} label="Assignments" value={metrics.activeAssignments} note="Visible to office desk" />
-        <MetricCard icon={Send} label="Applications" value={metrics.pendingApplications} note="Pending admin review" />
-        <MetricCard icon={AlertCircle} label="Leave Queue" value={metrics.pendingLeaves} note="Needs approval tracking" />
-        <MetricCard icon={FileCheck2} label="Documents" value={metrics.documentPackets} note="Packets still open" />
+        <MetricCard
+          icon={Users}
+          label="Attendance"
+          value={attendanceLoading ? '…' : `${attendance.rate}%`}
+          note={
+            attendanceLoading
+              ? 'Loading today’s registers'
+              : `${attendance.present}/${attendance.marked || 0} present today`
+          }
+        />
+        <MetricCard
+          icon={Users}
+          label="Students"
+          value={headcountsLoading ? '…' : studentCount}
+          note="Enrolled on record"
+        />
+        <MetricCard
+          icon={Users}
+          label="Staff"
+          value={headcountsLoading ? '…' : teacherCount + clerkCount}
+          note={`${teacherCount} teachers | ${clerkCount} clerks`}
+        />
+        <MetricCard
+          icon={Send}
+          label="Applications"
+          value={pendingApplications.length}
+          note="Pending your review"
+        />
+        <MetricCard
+          icon={AlertCircle}
+          label="Leave Queue"
+          value={pendingLeaves.length}
+          note="Awaiting action"
+        />
       </section>
 
       <section className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -148,9 +281,11 @@ const Dashboard = ({ session, setActivePage }) => {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100/80 pb-3">
             <div>
               <h3 className="text-sm font-black flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4" /> Attendance Registers
+                <CheckCircle2 className="w-4 h-4" /> Today’s Attendance by Class
               </h3>
-              <p className="text-[10px] font-bold text-slate-500 mt-1">Today&apos;s section submission health</p>
+              <p className="text-[10px] font-bold text-slate-500 mt-1">
+                Live student registers for {overview?.date || 'today'}
+              </p>
             </div>
             <button
               type="button"
@@ -162,55 +297,57 @@ const Dashboard = ({ session, setActivePage }) => {
           </div>
 
           <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={metrics.attendanceChart} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
-                <Tooltip />
-                <Bar dataKey="Present" fill="#6366f1" radius={[8, 8, 0, 0]} />
-                <Bar dataKey="Absent" fill="#f43f5e" radius={[8, 8, 0, 0]} />
-                <Bar dataKey="Late" fill="#f59e0b" radius={[8, 8, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            {attendanceLoading ? (
+              <div className="h-full rounded-2xl skeleton" />
+            ) : attendance.classChart.length ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={attendance.classChart} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <Tooltip />
+                  <Bar dataKey="Present" fill="#6366f1" radius={[8, 8, 0, 0]} />
+                  <Bar dataKey="Absent" fill="#f43f5e" radius={[8, 8, 0, 0]} />
+                  <Bar dataKey="Late" fill="#f59e0b" radius={[8, 8, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center text-center gap-2">
+                <Inbox className="w-8 h-8 text-slate-300" />
+                <p className="text-xs font-bold text-slate-500">No student registers found for today.</p>
+                <button
+                  type="button"
+                  onClick={() => setActivePage?.('Attendance')}
+                  className="text-[11px] font-black text-indigo-600"
+                >
+                  Go to Attendance
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
         <div className="glass-card rounded-3xl p-5 space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100/80 pb-3">
             <h3 className="text-sm font-black flex items-center gap-2">
-              <FileCheck2 className="w-4 h-4" /> Document Flow
+              <Users className="w-4 h-4" /> Staff Presence Today
             </h3>
-            <span className="text-[10px] font-black text-slate-500">Live desk packets</span>
+            <span className="text-[10px] font-black text-slate-500">{overview?.date || 'Today'}</span>
           </div>
 
-          <div className="h-40 relative">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={metrics.documentChart} dataKey="value" innerRadius={42} outerRadius={62} paddingAngle={4}>
-                  {metrics.documentChart.map((entry) => (
-                    <Cell key={entry.name} fill={entry.color} />
-                  ))}
-                </Pie>
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <span className="text-xl font-black">{CLERK_DOCUMENT_QUEUE.length}</span>
-              <span className="text-[9px] font-black text-slate-500 uppercase">Packets</span>
+          {attendanceLoading ? (
+            <div className="space-y-3">
+              {[0, 1, 2].map((key) => (
+                <div key={key} className="h-16 rounded-2xl skeleton" />
+              ))}
             </div>
-          </div>
-
-          <div className="space-y-2">
-            {metrics.documentChart.map((item) => (
-              <div key={item.name} className="flex items-center justify-between text-xs font-bold">
-                <span className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
-                  {item.name}
-                </span>
-                <span>{item.value}</span>
-              </div>
-            ))}
-          </div>
+          ) : (
+            <div className="space-y-3">
+              <RolePresenceRow label="Teachers" summary={roleSummary.teacher} />
+              <RolePresenceRow label="Clerks" summary={roleSummary.clerk} />
+              <RolePresenceRow label="Students" summary={roleSummary.student} />
+            </div>
+          )}
         </div>
       </section>
 
@@ -218,64 +355,75 @@ const Dashboard = ({ session, setActivePage }) => {
         <div className="xl:col-span-2 glass-card rounded-3xl p-5 space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100/80 pb-3">
             <h3 className="text-sm font-black flex items-center gap-2">
-              <ClipboardList className="w-4 h-4" /> Clerk Work Queue
+              <ClipboardList className="w-4 h-4" /> Needs Attention
             </h3>
             <TrendingUp className="w-4 h-4 text-slate-500" />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {CLERK_TASKS.map((task) => (
-              <button
-                key={task.id}
-                type="button"
-                onClick={() => setActivePage?.(task.page)}
-                className="glass-soft glass-hover hover:bg-white/60 hover:border-indigo-200 rounded-2xl p-4 text-left transition-all min-h-28"
-              >
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <span className="text-[9px] font-mono font-black bg-white/60 border border-slate-100/80 px-2 py-0.5 rounded-md">
-                    {task.id}
-                  </span>
-                  <span className={`text-[9px] font-black px-2 py-0.5 rounded-md border ${priorityTone[task.priority]}`}>
-                    {task.priority}
-                  </span>
-                </div>
-                <p className="text-xs font-black leading-snug">{task.label}</p>
-                <p className="text-[10px] font-bold text-slate-500 mt-2">{task.owner}</p>
-              </button>
-            ))}
+            {attentionItems.map((item) => {
+              const Icon = item.icon;
+              const isEmpty = !item.count;
+
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => setActivePage?.(item.page)}
+                  className="glass-soft glass-hover hover:bg-white/60 hover:border-indigo-200 rounded-2xl p-4 text-left transition-all min-h-28 flex flex-col justify-between"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="w-9 h-9 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white flex items-center justify-center">
+                      <Icon className="w-4 h-4" />
+                    </span>
+                    <span
+                      className={`text-lg font-black ${isEmpty ? 'text-slate-400' : 'text-slate-900'}`}
+                    >
+                      {item.count}
+                    </span>
+                  </div>
+                  <p className="text-xs font-black leading-snug mt-2">{item.label}</p>
+                </button>
+              );
+            })}
           </div>
         </div>
 
         <div className="glass-card rounded-3xl p-5 space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100/80 pb-3">
             <h3 className="text-sm font-black flex items-center gap-2">
-              <CalendarDays className="w-4 h-4" /> Register Status
+              <FileCheck2 className="w-4 h-4" /> Office Records
             </h3>
-            <span className="text-[10px] font-black text-slate-500">{formatShortDate(new Date())}</span>
+            <button
+              type="button"
+              onClick={() => setActivePage?.('Documents Management')}
+              className="text-[10px] font-black text-indigo-600"
+            >
+              Manage
+            </button>
           </div>
 
           <div className="space-y-3">
-            {CLERK_ATTENDANCE_REGISTERS.map((register) => (
-              <div key={register.id} className="glass-soft rounded-2xl p-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-black">{register.className}-{register.section}</p>
-                    <p className="text-[10px] font-bold text-slate-500 mt-0.5">{register.teacher}</p>
-                  </div>
-                  <span className={`text-[9px] font-black px-2 py-0.5 rounded-md border ${statusTone[register.status]}`}>
-                    {register.status}
-                  </span>
-                </div>
-              </div>
-            ))}
+            <RecordRow label="Required document types" value={requiredDocTypes} hint={`${requiredStudentDocs} student · ${requiredTeacherDocs} staff`} />
+            <RecordRow label="Document slots to track" value={documentSlots} hint="Across all students & teachers" />
+            <RecordRow label="Vault records (yours)" value={documentsVaultStat ? documentsVaultStat.value : '—'} hint="Personal office vault" />
+            <RecordRow label="Unread notices" value={noticesStat ? noticesStat.value : '—'} hint="For your desk" />
           </div>
+
+          <button
+            type="button"
+            onClick={() => setActivePage?.('Documents Management')}
+            className="w-full px-3 py-2.5 btn-primary rounded-xl text-[11px] font-black flex items-center justify-center gap-2"
+          >
+            <FileCheck2 className="w-4 h-4" /> Open Document Verification
+          </button>
         </div>
       </section>
 
       <section className="glass-card rounded-3xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h3 className="text-sm font-black flex items-center gap-2">
-            <MessageSquare className="w-4 h-4" /> Office Broadcasts
+            <CalendarDays className="w-4 h-4" /> Office Broadcasts
           </h3>
           <p className="text-xs font-bold text-slate-500 mt-1">
             Send quick class, parent, or staff updates from Notices.
@@ -306,6 +454,40 @@ const MetricCard = ({ icon, label, value, note }) => (
       <p className="text-2xl font-black mt-1">{value}</p>
       <p className="text-[10px] font-semibold text-slate-500 mt-1">{note}</p>
     </div>
+  </div>
+);
+
+const RolePresenceRow = ({ label, summary }) => {
+  const total = summary?.total || 0;
+  const present = (summary?.present || 0);
+  const late = summary?.late || 0;
+  const rate = total ? Math.round((present / total) * 100) : 0;
+
+  return (
+    <div className="glass-soft rounded-2xl p-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-black">{label}</p>
+          <p className="text-[10px] font-bold text-slate-500 mt-0.5">
+            {present} present{late ? ` · ${late} late` : ''} of {total}
+          </p>
+        </div>
+        <span className="text-sm font-black text-indigo-600">{rate}%</span>
+      </div>
+      <div className="mt-2 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+        <div className="h-full bg-gradient-to-r from-indigo-500 to-violet-500" style={{ width: `${rate}%` }} />
+      </div>
+    </div>
+  );
+};
+
+const RecordRow = ({ label, value, hint }) => (
+  <div className="flex items-center justify-between gap-3">
+    <div>
+      <p className="text-xs font-bold">{label}</p>
+      {hint && <p className="text-[10px] font-semibold text-slate-500 mt-0.5">{hint}</p>}
+    </div>
+    <span className="text-lg font-black">{value}</span>
   </div>
 );
 
