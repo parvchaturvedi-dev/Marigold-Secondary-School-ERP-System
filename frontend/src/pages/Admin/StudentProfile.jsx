@@ -161,6 +161,9 @@ const StudentProfile = ({ studentContext, onBack }) => {
   const [documentMessage, setDocumentMessage] = useState('');
   const [customDocumentName, setCustomDocumentName] = useState('');
   const [liveAttendanceLogs, setLiveAttendanceLogs] = useState([]);
+  const [isEditingDetails, setIsEditingDetails] = useState(false);
+  const [editForm, setEditForm] = useState({});
+  const [detailMessage, setDetailMessage] = useState('');
   const studentAdmissionId =
     studentContext?.admissionNumber ||
     studentContext?.id ||
@@ -181,29 +184,29 @@ const StudentProfile = ({ studentContext, onBack }) => {
   const profileData = {
     ...(matchedStudent.rawProfile || {}),
     admissionNumber: matchedStudent.admissionNumber || matchedStudent.id || studentAdmissionId,
-    rollNo: matchedStudent.rollNo || '',
-    studentName: matchedStudent.studentName || matchedStudent.name || matchedStudent.displayName || '',
-    gender: matchedStudent.gender || '',
-    dob: matchedStudent.dob || '',
-    category: matchedStudent.category || '',
-    religion: matchedStudent.religion || '',
-    mobileNo: matchedStudent.mobileNo || matchedStudent.mobile || '',
-    altMobileNo: matchedStudent.altMobileNo || '',
-    email: matchedStudent.email || '',
-    dateOfAdmission: matchedStudent.dateOfAdmission || '',
+    rollNo: matchedStudent.rollNo || matchedStudent.rawProfile?.rollNo || '',
+    studentName: matchedStudent.studentName || matchedStudent.rawProfile?.studentName || matchedStudent.name || matchedStudent.displayName || '',
+    gender: matchedStudent.gender || matchedStudent.rawProfile?.gender || '',
+    dob: matchedStudent.dob || matchedStudent.rawProfile?.dob || '',
+    category: matchedStudent.category || matchedStudent.rawProfile?.category || '',
+    religion: matchedStudent.religion || matchedStudent.rawProfile?.religion || '',
+    mobileNo: matchedStudent.mobileNo || matchedStudent.rawProfile?.mobileNo || matchedStudent.mobile || '',
+    altMobileNo: matchedStudent.altMobileNo || matchedStudent.rawProfile?.altMobileNo || '',
+    email: matchedStudent.email || matchedStudent.rawProfile?.email || '',
+    dateOfAdmission: matchedStudent.dateOfAdmission || matchedStudent.rawProfile?.dateOfAdmission || '',
     targetClass: selectedClassName || matchedStudent.targetClass || matchedStudent.class || matchedStudent.className || '',
-    lastSchoolName: matchedStudent.lastSchoolName || '',
-    penNumber: matchedStudent.penNumber || '',
-    aadharNumber: matchedStudent.aadharNumber || matchedStudent.aadhaarNumber || matchedStudent.rawProfile?.aadharNumber || matchedStudent.rawProfile?.aadhaarNumber || '',
-    fatherName: matchedStudent.fatherName || '',
-    motherName: matchedStudent.motherName || '',
-    fatherAadhar: matchedStudent.fatherAadhar || '',
-    motherAadhar: matchedStudent.motherAadhar || '',
-    livingWith: matchedStudent.livingWith || '',
+    lastSchoolName: matchedStudent.lastSchoolName || matchedStudent.rawProfile?.lastSchoolName || '',
+    penNumber: matchedStudent.penNumber || matchedStudent.rawProfile?.penNumber || '',
+    aadharNumber: matchedStudent.rawProfile?.studentAadhar || matchedStudent.studentAadhar || matchedStudent.aadharNumber || matchedStudent.aadhaarNumber || matchedStudent.rawProfile?.aadharNumber || matchedStudent.rawProfile?.aadhaarNumber || '',
+    fatherName: matchedStudent.fatherName || matchedStudent.rawProfile?.fatherName || '',
+    motherName: matchedStudent.motherName || matchedStudent.rawProfile?.motherName || '',
+    fatherAadhar: matchedStudent.fatherAadhar || matchedStudent.rawProfile?.fatherAadhar || '',
+    motherAadhar: matchedStudent.motherAadhar || matchedStudent.rawProfile?.motherAadhar || '',
+    livingWith: matchedStudent.livingWith || matchedStudent.rawProfile?.livingWith || '',
     guardianName: matchedStudent.guardianName || matchedStudent.rawProfile?.guardianName || '',
     guardianAadhar: matchedStudent.guardianAadhar || matchedStudent.rawProfile?.guardianAadhar || '',
-    tempAddress: matchedStudent.tempAddress || '',
-    permAddress: matchedStudent.permAddress || '',
+    tempAddress: matchedStudent.tempAddress || matchedStudent.rawProfile?.tempAddress || '',
+    permAddress: matchedStudent.permAddress || matchedStudent.rawProfile?.permAddress || '',
     attendancePercentage: Number(matchedStudent.attendancePercentage) || 0,
     totalWorkingDays: Number(matchedStudent.totalWorkingDays) || 0,
     presentDays: Number(matchedStudent.presentDays) || 0,
@@ -486,6 +489,119 @@ const StudentProfile = ({ studentContext, onBack }) => {
     );
   };
 
+  const handleStartEditDetails = () => {
+    setEditForm({
+      studentName: profileData.studentName || '',
+      rollNo: profileData.rollNo || '',
+      gender: profileData.gender || '',
+      dob: profileData.dob || '',
+      category: profileData.category || '',
+      religion: profileData.religion || '',
+      mobileNo: profileData.mobileNo || '',
+      altMobileNo: profileData.altMobileNo || '',
+      email: profileData.email || '',
+      dateOfAdmission: profileData.dateOfAdmission || '',
+      lastSchoolName: profileData.lastSchoolName || '',
+      penNumber: profileData.penNumber || '',
+      aadharNumber: profileData.aadharNumber || '',
+      fatherName: profileData.fatherName || '',
+      motherName: profileData.motherName || '',
+      fatherAadhar: profileData.fatherAadhar || '',
+      motherAadhar: profileData.motherAadhar || '',
+      livingWith: profileData.livingWith || '',
+      guardianName: profileData.guardianName || '',
+      guardianAadhar: profileData.guardianAadhar || '',
+      tempAddress: profileData.tempAddress || '',
+      permAddress: profileData.permAddress || '',
+    });
+    setDetailMessage('');
+    setIsEditingDetails(true);
+  };
+
+  const handleEditFieldChange = (field, value) => {
+    setEditForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleCancelEditDetails = () => {
+    setIsEditingDetails(false);
+    setDetailMessage('');
+  };
+
+  const handleSaveDetails = () => {
+    // Write every edited value to BOTH the top-level field AND the matching
+    // rawProfile key so every reader (roster tables + this profile) stays
+    // consistent. Student Aadhaar maps to rawProfile.studentAadhar (+ top-level
+    // studentAadhar), not a new key. Same setStudentsDb pattern as
+    // handleSaveDocuments — spread the existing record + rawProfile, overlay only
+    // the edited fields.
+    setStudentsDb((students) =>
+      students.map((student) => {
+        const isMatch =
+          student.admissionNumber === profileData.admissionNumber ||
+          student.id === profileData.admissionNumber;
+
+        if (!isMatch) return student;
+
+        return {
+          ...student,
+          studentName: editForm.studentName,
+          name: editForm.studentName,
+          displayName: editForm.studentName,
+          rollNo: editForm.rollNo,
+          gender: editForm.gender,
+          dob: editForm.dob,
+          category: editForm.category,
+          religion: editForm.religion,
+          mobileNo: editForm.mobileNo,
+          mobile: editForm.mobileNo,
+          altMobileNo: editForm.altMobileNo,
+          email: editForm.email,
+          dateOfAdmission: editForm.dateOfAdmission,
+          lastSchoolName: editForm.lastSchoolName,
+          penNumber: editForm.penNumber,
+          studentAadhar: editForm.aadharNumber,
+          aadharNumber: editForm.aadharNumber,
+          fatherName: editForm.fatherName,
+          motherName: editForm.motherName,
+          fatherAadhar: editForm.fatherAadhar,
+          motherAadhar: editForm.motherAadhar,
+          livingWith: editForm.livingWith,
+          guardianName: editForm.guardianName,
+          guardianAadhar: editForm.guardianAadhar,
+          tempAddress: editForm.tempAddress,
+          permAddress: editForm.permAddress,
+          rawProfile: {
+            ...(student.rawProfile || {}),
+            studentName: editForm.studentName,
+            rollNo: editForm.rollNo,
+            gender: editForm.gender,
+            dob: editForm.dob,
+            category: editForm.category,
+            religion: editForm.religion,
+            mobileNo: editForm.mobileNo,
+            altMobileNo: editForm.altMobileNo,
+            email: editForm.email,
+            dateOfAdmission: editForm.dateOfAdmission,
+            lastSchoolName: editForm.lastSchoolName,
+            penNumber: editForm.penNumber,
+            studentAadhar: editForm.aadharNumber,
+            fatherName: editForm.fatherName,
+            motherName: editForm.motherName,
+            fatherAadhar: editForm.fatherAadhar,
+            motherAadhar: editForm.motherAadhar,
+            livingWith: editForm.livingWith,
+            guardianName: editForm.guardianName,
+            guardianAadhar: editForm.guardianAadhar,
+            tempAddress: editForm.tempAddress,
+            permAddress: editForm.permAddress,
+          },
+        };
+      })
+    );
+    setIsEditingDetails(false);
+    setDetailMessage('Student details saved successfully.');
+  };
+
   // Native clean window navigation step-back
   const handleBackNavigation = () => {
     if (typeof onBack === 'function') {
@@ -698,18 +814,103 @@ const StudentProfile = ({ studentContext, onBack }) => {
             {activeTab === 'details' && (
               <div className="space-y-6 animate-fadeIn text-xs font-bold text-slate-900">
 
+                {/* Edit / Save action header */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100/80 pb-2">
+                  <div>
+                    <h4 className="text-sm font-black text-slate-900">Personal Matrix Records</h4>
+                    {detailMessage && (
+                      <p className="text-[10px] font-bold text-emerald-600 mt-1">{detailMessage}</p>
+                    )}
+                  </div>
+                  {isEditingDetails ? (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleSaveDetails}
+                        className="btn-primary px-4 py-2 rounded-xl text-[10px] font-black flex items-center justify-center gap-1.5"
+                      >
+                        <Save className="w-3.5 h-3.5" /> Save
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCancelEditDetails}
+                        className="px-4 py-2 bg-white/60 hover:bg-slate-900 hover:text-white border border-slate-200/70 rounded-xl text-[10px] font-black transition-all"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleStartEditDetails}
+                      className="btn-primary px-4 py-2 rounded-xl text-[10px] font-black flex items-center justify-center gap-1.5"
+                    >
+                      <User className="w-3.5 h-3.5" /> Edit Details
+                    </button>
+                  )}
+                </div>
+
+                {/* Core Identity Block */}
+                <div>
+                  <h5 className="text-[11px] uppercase text-slate-500 tracking-wider border-b border-slate-100/80 pb-1.5 mb-3 flex items-center gap-1">
+                    <span className="w-1 h-2 bg-indigo-400 inline-block rounded-xs"></span> Student Identity
+                  </h5>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {isEditingDetails ? (
+                      <>
+                        <label className="glass-soft p-3 rounded-xl block"><span className="text-slate-500 block text-[10px] mb-1">Student Name:</span><input type="text" value={editForm.studentName} onChange={(e) => handleEditFieldChange('studentName', e.target.value)} className="w-full p-2 bg-white/60 border border-white/80 rounded-lg text-xs font-bold outline-none focus:border-indigo-400" /></label>
+                        <label className="glass-soft p-3 rounded-xl block"><span className="text-slate-500 block text-[10px] mb-1">Roll Number:</span><input type="text" value={editForm.rollNo} onChange={(e) => handleEditFieldChange('rollNo', e.target.value)} className="w-full p-2 bg-white/60 border border-white/80 rounded-lg text-xs font-bold outline-none focus:border-indigo-400" /></label>
+                        <label className="glass-soft p-3 rounded-xl block"><span className="text-slate-500 block text-[10px] mb-1">Gender:</span><input type="text" value={editForm.gender} onChange={(e) => handleEditFieldChange('gender', e.target.value)} className="w-full p-2 bg-white/60 border border-white/80 rounded-lg text-xs font-bold outline-none focus:border-indigo-400" /></label>
+                        <label className="glass-soft p-3 rounded-xl block"><span className="text-slate-500 block text-[10px] mb-1">Date of Birth:</span><input type="text" value={editForm.dob} onChange={(e) => handleEditFieldChange('dob', e.target.value)} className="w-full p-2 bg-white/60 border border-white/80 rounded-lg text-xs font-bold outline-none focus:border-indigo-400" /></label>
+                        <label className="glass-soft p-3 rounded-xl block"><span className="text-slate-500 block text-[10px] mb-1">Category:</span><input type="text" value={editForm.category} onChange={(e) => handleEditFieldChange('category', e.target.value)} className="w-full p-2 bg-white/60 border border-white/80 rounded-lg text-xs font-bold outline-none focus:border-indigo-400" /></label>
+                        <label className="glass-soft p-3 rounded-xl block"><span className="text-slate-500 block text-[10px] mb-1">Religion:</span><input type="text" value={editForm.religion} onChange={(e) => handleEditFieldChange('religion', e.target.value)} className="w-full p-2 bg-white/60 border border-white/80 rounded-lg text-xs font-bold outline-none focus:border-indigo-400" /></label>
+                        <label className="glass-soft p-3 rounded-xl block"><span className="text-slate-500 block text-[10px] mb-1">Mobile Number:</span><input type="text" value={editForm.mobileNo} onChange={(e) => handleEditFieldChange('mobileNo', e.target.value)} className="w-full p-2 bg-white/60 border border-white/80 rounded-lg text-xs font-bold outline-none focus:border-indigo-400" /></label>
+                        <label className="glass-soft p-3 rounded-xl block"><span className="text-slate-500 block text-[10px] mb-1">Alternate Mobile:</span><input type="text" value={editForm.altMobileNo} onChange={(e) => handleEditFieldChange('altMobileNo', e.target.value)} className="w-full p-2 bg-white/60 border border-white/80 rounded-lg text-xs font-bold outline-none focus:border-indigo-400" /></label>
+                        <label className="glass-soft p-3 rounded-xl block"><span className="text-slate-500 block text-[10px] mb-1">Email:</span><input type="text" value={editForm.email} onChange={(e) => handleEditFieldChange('email', e.target.value)} className="w-full p-2 bg-white/60 border border-white/80 rounded-lg text-xs font-bold outline-none focus:border-indigo-400" /></label>
+                      </>
+                    ) : (
+                      <>
+                        <p className="glass-soft p-3 rounded-xl"><span className="text-slate-500 block text-[10px]">Student Name:</span>{profileData.studentName || 'Not provided'}</p>
+                        <p className="glass-soft p-3 rounded-xl"><span className="text-slate-500 block text-[10px]">Roll Number:</span>{profileData.rollNo || 'Not provided'}</p>
+                        <p className="glass-soft p-3 rounded-xl"><span className="text-slate-500 block text-[10px]">Gender:</span>{profileData.gender || 'Not provided'}</p>
+                        <p className="glass-soft p-3 rounded-xl"><span className="text-slate-500 block text-[10px]">Date of Birth:</span>{profileData.dob || 'Not provided'}</p>
+                        <p className="glass-soft p-3 rounded-xl"><span className="text-slate-500 block text-[10px]">Category:</span>{profileData.category || 'Not provided'}</p>
+                        <p className="glass-soft p-3 rounded-xl"><span className="text-slate-500 block text-[10px]">Religion:</span>{profileData.religion || 'Not provided'}</p>
+                        <p className="glass-soft p-3 rounded-xl font-mono"><span className="text-slate-500 block text-[10px]">Mobile Number:</span>{profileData.mobileNo || 'Not provided'}</p>
+                        <p className="glass-soft p-3 rounded-xl font-mono"><span className="text-slate-500 block text-[10px]">Alternate Mobile:</span>{profileData.altMobileNo || 'Not provided'}</p>
+                        <p className="glass-soft p-3 rounded-xl"><span className="text-slate-500 block text-[10px]">Email:</span>{profileData.email || 'Not provided'}</p>
+                      </>
+                    )}
+                  </div>
+                </div>
+
                 {/* Academic Parent Nodes Block */}
                 <div>
                   <h5 className="text-[11px] uppercase text-slate-500 tracking-wider border-b border-slate-100/80 pb-1.5 mb-3 flex items-center gap-1">
                     <span className="w-1 h-2 bg-indigo-400 inline-block rounded-xs"></span> Lineage Parent Details
                   </h5>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <p className="glass-soft p-3 rounded-xl"><span className="text-slate-500 block text-[10px]">Father Name:</span>{profileData.fatherName}</p>
-                    <p className="glass-soft p-3 rounded-xl"><span className="text-slate-500 block text-[10px]">Mother Name:</span>{profileData.motherName}</p>
-                    <p className="glass-soft p-3 rounded-xl font-mono"><span className="text-slate-500 block text-[10px]">Father Aadhaar ID:</span>{profileData.fatherAadhar}</p>
-                    <p className="glass-soft p-3 rounded-xl font-mono"><span className="text-slate-500 block text-[10px]">Mother Aadhaar ID:</span>{profileData.motherAadhar}</p>
-                    <p className="glass-soft p-3 rounded-xl"><span className="text-slate-500 block text-[10px]">Guardian Name:</span>{profileData.guardianName || profileData.livingWith || 'Not provided'}</p>
-                    <p className="glass-soft p-3 rounded-xl font-mono"><span className="text-slate-500 block text-[10px]">Guardian Aadhaar:</span>{profileData.guardianAadhar || 'Not provided'}</p>
+                    {isEditingDetails ? (
+                      <>
+                        <label className="glass-soft p-3 rounded-xl block"><span className="text-slate-500 block text-[10px] mb-1">Father Name:</span><input type="text" value={editForm.fatherName} onChange={(e) => handleEditFieldChange('fatherName', e.target.value)} className="w-full p-2 bg-white/60 border border-white/80 rounded-lg text-xs font-bold outline-none focus:border-indigo-400" /></label>
+                        <label className="glass-soft p-3 rounded-xl block"><span className="text-slate-500 block text-[10px] mb-1">Mother Name:</span><input type="text" value={editForm.motherName} onChange={(e) => handleEditFieldChange('motherName', e.target.value)} className="w-full p-2 bg-white/60 border border-white/80 rounded-lg text-xs font-bold outline-none focus:border-indigo-400" /></label>
+                        <label className="glass-soft p-3 rounded-xl block"><span className="text-slate-500 block text-[10px] mb-1">Father Aadhaar ID:</span><input type="text" value={editForm.fatherAadhar} onChange={(e) => handleEditFieldChange('fatherAadhar', e.target.value)} className="w-full p-2 bg-white/60 border border-white/80 rounded-lg text-xs font-bold font-mono outline-none focus:border-indigo-400" /></label>
+                        <label className="glass-soft p-3 rounded-xl block"><span className="text-slate-500 block text-[10px] mb-1">Mother Aadhaar ID:</span><input type="text" value={editForm.motherAadhar} onChange={(e) => handleEditFieldChange('motherAadhar', e.target.value)} className="w-full p-2 bg-white/60 border border-white/80 rounded-lg text-xs font-bold font-mono outline-none focus:border-indigo-400" /></label>
+                        <label className="glass-soft p-3 rounded-xl block"><span className="text-slate-500 block text-[10px] mb-1">Living With:</span><input type="text" value={editForm.livingWith} onChange={(e) => handleEditFieldChange('livingWith', e.target.value)} className="w-full p-2 bg-white/60 border border-white/80 rounded-lg text-xs font-bold outline-none focus:border-indigo-400" /></label>
+                        <label className="glass-soft p-3 rounded-xl block"><span className="text-slate-500 block text-[10px] mb-1">Guardian Name:</span><input type="text" value={editForm.guardianName} onChange={(e) => handleEditFieldChange('guardianName', e.target.value)} className="w-full p-2 bg-white/60 border border-white/80 rounded-lg text-xs font-bold outline-none focus:border-indigo-400" /></label>
+                        <label className="glass-soft p-3 rounded-xl block"><span className="text-slate-500 block text-[10px] mb-1">Guardian Aadhaar:</span><input type="text" value={editForm.guardianAadhar} onChange={(e) => handleEditFieldChange('guardianAadhar', e.target.value)} className="w-full p-2 bg-white/60 border border-white/80 rounded-lg text-xs font-bold font-mono outline-none focus:border-indigo-400" /></label>
+                      </>
+                    ) : (
+                      <>
+                        <p className="glass-soft p-3 rounded-xl"><span className="text-slate-500 block text-[10px]">Father Name:</span>{profileData.fatherName}</p>
+                        <p className="glass-soft p-3 rounded-xl"><span className="text-slate-500 block text-[10px]">Mother Name:</span>{profileData.motherName}</p>
+                        <p className="glass-soft p-3 rounded-xl font-mono"><span className="text-slate-500 block text-[10px]">Father Aadhaar ID:</span>{profileData.fatherAadhar}</p>
+                        <p className="glass-soft p-3 rounded-xl font-mono"><span className="text-slate-500 block text-[10px]">Mother Aadhaar ID:</span>{profileData.motherAadhar}</p>
+                        <p className="glass-soft p-3 rounded-xl"><span className="text-slate-500 block text-[10px]">Living With:</span>{profileData.livingWith || 'Not provided'}</p>
+                        <p className="glass-soft p-3 rounded-xl"><span className="text-slate-500 block text-[10px]">Guardian Name:</span>{profileData.guardianName || profileData.livingWith || 'Not provided'}</p>
+                        <p className="glass-soft p-3 rounded-xl font-mono"><span className="text-slate-500 block text-[10px]">Guardian Aadhaar:</span>{profileData.guardianAadhar || 'Not provided'}</p>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -719,11 +920,23 @@ const StudentProfile = ({ studentContext, onBack }) => {
                     <span className="w-1 h-2 bg-indigo-400 inline-block rounded-xs"></span> Institutional Tracking Parameters
                   </h5>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <p className="glass-soft p-3 rounded-xl font-mono"><span className="text-slate-500 block text-[10px]">PEN ID Code:</span>{profileData.penNumber || 'NOT REQUIRED / PROVIDED'}</p>
-                    <p className="glass-soft p-3 rounded-xl font-mono"><span className="text-slate-500 block text-[10px]">Aadhaar Number:</span>{profileData.aadharNumber || 'Not provided'}</p>
-                    <p className="glass-soft p-3 rounded-xl"><span className="text-slate-500 block text-[10px]">Religion Metric:</span>{profileData.religion}</p>
-                    <p className="glass-soft p-3 rounded-xl"><span className="text-slate-500 block text-[10px]">Previous Institute:</span>{profileData.lastSchoolName || 'None Specified'}</p>
-                    <p className="glass-soft p-3 rounded-xl"><span className="text-slate-500 block text-[10px]">Email:</span>{profileData.email || 'Not provided'}</p>
+                    {isEditingDetails ? (
+                      <>
+                        <label className="glass-soft p-3 rounded-xl block"><span className="text-slate-500 block text-[10px] mb-1">PEN ID Code:</span><input type="text" value={editForm.penNumber} onChange={(e) => handleEditFieldChange('penNumber', e.target.value)} className="w-full p-2 bg-white/60 border border-white/80 rounded-lg text-xs font-bold font-mono outline-none focus:border-indigo-400" /></label>
+                        <label className="glass-soft p-3 rounded-xl block"><span className="text-slate-500 block text-[10px] mb-1">Aadhaar Number:</span><input type="text" value={editForm.aadharNumber} onChange={(e) => handleEditFieldChange('aadharNumber', e.target.value)} className="w-full p-2 bg-white/60 border border-white/80 rounded-lg text-xs font-bold font-mono outline-none focus:border-indigo-400" /></label>
+                        <label className="glass-soft p-3 rounded-xl block"><span className="text-slate-500 block text-[10px] mb-1">Date of Admission:</span><input type="text" value={editForm.dateOfAdmission} onChange={(e) => handleEditFieldChange('dateOfAdmission', e.target.value)} className="w-full p-2 bg-white/60 border border-white/80 rounded-lg text-xs font-bold outline-none focus:border-indigo-400" /></label>
+                        <label className="glass-soft p-3 rounded-xl block"><span className="text-slate-500 block text-[10px] mb-1">Previous Institute:</span><input type="text" value={editForm.lastSchoolName} onChange={(e) => handleEditFieldChange('lastSchoolName', e.target.value)} className="w-full p-2 bg-white/60 border border-white/80 rounded-lg text-xs font-bold outline-none focus:border-indigo-400" /></label>
+                      </>
+                    ) : (
+                      <>
+                        <p className="glass-soft p-3 rounded-xl font-mono"><span className="text-slate-500 block text-[10px]">PEN ID Code:</span>{profileData.penNumber || 'NOT REQUIRED / PROVIDED'}</p>
+                        <p className="glass-soft p-3 rounded-xl font-mono"><span className="text-slate-500 block text-[10px]">Aadhaar Number:</span>{profileData.aadharNumber || 'Not provided'}</p>
+                        <p className="glass-soft p-3 rounded-xl"><span className="text-slate-500 block text-[10px]">Date of Admission:</span>{profileData.dateOfAdmission || 'Not provided'}</p>
+                        <p className="glass-soft p-3 rounded-xl"><span className="text-slate-500 block text-[10px]">Religion Metric:</span>{profileData.religion}</p>
+                        <p className="glass-soft p-3 rounded-xl"><span className="text-slate-500 block text-[10px]">Previous Institute:</span>{profileData.lastSchoolName || 'None Specified'}</p>
+                        <p className="glass-soft p-3 rounded-xl"><span className="text-slate-500 block text-[10px]">Email:</span>{profileData.email || 'Not provided'}</p>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -733,8 +946,17 @@ const StudentProfile = ({ studentContext, onBack }) => {
                     <span className="w-1 h-2 bg-indigo-400 inline-block rounded-xs"></span> Residential Addresses Coordinates
                   </h5>
                   <div className="space-y-2">
-                    <p className="glass-soft p-3 rounded-xl"><span className="text-slate-500 block text-[10px]">Current Location Location (Temporary):</span>{profileData.tempAddress}</p>
-                    <p className="glass-soft p-3 rounded-xl"><span className="text-slate-500 block text-[10px]">Home Registration Node (Permanent):</span>{profileData.permAddress}</p>
+                    {isEditingDetails ? (
+                      <>
+                        <label className="glass-soft p-3 rounded-xl block"><span className="text-slate-500 block text-[10px] mb-1">Current Location (Temporary):</span><input type="text" value={editForm.tempAddress} onChange={(e) => handleEditFieldChange('tempAddress', e.target.value)} className="w-full p-2 bg-white/60 border border-white/80 rounded-lg text-xs font-bold outline-none focus:border-indigo-400" /></label>
+                        <label className="glass-soft p-3 rounded-xl block"><span className="text-slate-500 block text-[10px] mb-1">Home Registration (Permanent):</span><input type="text" value={editForm.permAddress} onChange={(e) => handleEditFieldChange('permAddress', e.target.value)} className="w-full p-2 bg-white/60 border border-white/80 rounded-lg text-xs font-bold outline-none focus:border-indigo-400" /></label>
+                      </>
+                    ) : (
+                      <>
+                        <p className="glass-soft p-3 rounded-xl"><span className="text-slate-500 block text-[10px]">Current Location Location (Temporary):</span>{profileData.tempAddress}</p>
+                        <p className="glass-soft p-3 rounded-xl"><span className="text-slate-500 block text-[10px]">Home Registration Node (Permanent):</span>{profileData.permAddress}</p>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>

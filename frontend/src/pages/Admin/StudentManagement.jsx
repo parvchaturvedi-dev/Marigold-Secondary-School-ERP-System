@@ -6,6 +6,7 @@ import {
   ArrowUpDown,
   Download,
   FileSpreadsheet,
+  Hash,
   Search,
   SlidersHorizontal,
   Upload,
@@ -26,6 +27,8 @@ const templateColumns = [
   'email',
   'dateOfAdmission',
   'targetClass',
+  'section',
+  'rollNo',
   'lastSchoolName',
   'studentAadhar',
   'penNumber',
@@ -52,6 +55,8 @@ const sampleRows = [
     email: 'aarav.parent@example.com',
     dateOfAdmission: '2026-04-01',
     targetClass: 'Class 6',
+    section: 'A',
+    rollNo: '12',
     lastSchoolName: 'Sunrise Public School',
     studentAadhar: '1234 5678 9012',
     penNumber: 'PEN123456',
@@ -89,6 +94,8 @@ const buildStudentRecord = (row, selectedClassView) => {
     tempAddress: normalizeCell(row.tempAddress || row['Temporary Address']),
     permAddress: normalizeCell(row.permAddress || row['Permanent Address']),
     admissionNumber,
+    section: normalizeCell(row.section || row['Section']),
+    rollNo: normalizeCell(row.rollNo || row['Roll No'] || row['Roll Number']),
     studentAadhar: normalizeCell(row.studentAadhar || row['Student Aadhaar']),
     fatherAadhar: normalizeCell(row.fatherAadhar || row['Father Aadhaar']),
     motherAadhar: normalizeCell(row.motherAadhar || row['Mother Aadhaar']),
@@ -193,6 +200,58 @@ const mergeRowIntoStudent = (existing, row) => {
   return { record, changed };
 };
 
+const studentDisplayName = (student = {}) =>
+  student.name || student.displayName || student.studentName || student.rawProfile?.studentName || '';
+
+const studentClassKey = (student = {}) => student.class || student.className || '';
+
+const withRollNo = (student, rollNo) => ({
+  ...student,
+  rollNo,
+  rawProfile: {
+    ...(student.rawProfile || {}),
+    rollNo,
+  },
+});
+
+// Re-sequence roll numbers CLASS-WISE, alphabetically by student name. Within
+// each class, sort by name (case-insensitive, localeCompare), ties broken by
+// admission number for stability, then assign rollNo = 1..N. Writes to BOTH the
+// top-level field and rawProfile. Re-runnable: running it again after adding
+// students re-sequences each class from scratch. `onlyClass` limits the rewrite
+// to a single class (others untouched). Students with no class share an
+// "Unassigned" bucket that is also sequenced.
+const assignRollNumbersByClass = (students, onlyClass = null) => {
+  const list = Array.isArray(students) ? students : [];
+
+  // Group student indices by class bucket.
+  const buckets = new Map();
+  list.forEach((student, index) => {
+    const key = studentClassKey(student) || 'Unassigned';
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push(index);
+  });
+
+  const rollByIndex = new Map();
+  buckets.forEach((indices, key) => {
+    if (onlyClass && key !== onlyClass) return;
+    const sorted = [...indices].sort((a, b) => {
+      const nameA = studentDisplayName(list[a]).trim().toLowerCase();
+      const nameB = studentDisplayName(list[b]).trim().toLowerCase();
+      const byName = nameA.localeCompare(nameB);
+      if (byName !== 0) return byName;
+      return String(list[a].admissionNumber || '').localeCompare(String(list[b].admissionNumber || ''));
+    });
+    sorted.forEach((studentIndex, position) => {
+      rollByIndex.set(studentIndex, position + 1);
+    });
+  });
+
+  return list.map((student, index) =>
+    rollByIndex.has(index) ? withRollNo(student, rollByIndex.get(index)) : student
+  );
+};
+
 const StudentManagement = ({ setActivePage }) => {
   // Phase 1 Context: Track selected class card
   const [selectedClassView, setSelectedClassView] = useState(null);
@@ -269,6 +328,35 @@ const StudentManagement = ({ setActivePage }) => {
     const workbook = utils.book_new();
     utils.book_append_sheet(workbook, sheet, 'Students');
     writeFile(workbook, 'mgps-student-bulk-import-template.xlsx');
+  };
+
+  const handleAutoRollAllClasses = () => {
+    const confirmed = window.confirm(
+      'Auto-generate roll numbers for ALL classes?\n\nThis re-sequences every class alphabetically by student name (A→Z) and OVERWRITES all existing roll numbers.'
+    );
+    if (!confirmed) return;
+    let count = 0;
+    setStudentsDb((students) => {
+      count = Array.isArray(students) ? students.length : 0;
+      return assignRollNumbersByClass(students);
+    });
+    alert(`Roll numbers regenerated class-wise (A→Z) for ${count} student${count === 1 ? '' : 's'}.`);
+  };
+
+  const handleAutoRollForClass = () => {
+    if (!selectedClassView) return;
+    const confirmed = window.confirm(
+      `Auto-generate roll numbers for ${selectedClassView}?\n\nThis re-sequences this class alphabetically by student name (A→Z) and OVERWRITES existing roll numbers for ${selectedClassView} only.`
+    );
+    if (!confirmed) return;
+    let count = 0;
+    setStudentsDb((students) => {
+      count = (Array.isArray(students) ? students : []).filter(
+        (student) => studentClassKey(student) === selectedClassView
+      ).length;
+      return assignRollNumbersByClass(students, selectedClassView);
+    });
+    alert(`Roll numbers regenerated (A→Z) for ${count} student${count === 1 ? '' : 's'} in ${selectedClassView}.`);
   };
 
   const handleBulkImport = async (event) => {
@@ -487,6 +575,26 @@ const StudentManagement = ({ setActivePage }) => {
                 onChange={handleBulkImport}
                 className="hidden"
               />
+
+              <button
+                type="button"
+                onClick={handleAutoRollForClass}
+                className="flex items-center gap-1.5 bg-white/60 hover:bg-slate-900 hover:text-white transition-all px-3 py-1.5 rounded-xl border border-slate-200/70"
+                title={`Assign roll numbers alphabetically for ${selectedClassView || 'this class'}`}
+              >
+                <Hash className="w-3.5 h-3.5" />
+                <span>Auto Roll Numbers (A→Z)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleAutoRollAllClasses}
+                className="flex items-center gap-1.5 bg-white/60 hover:bg-slate-900 hover:text-white transition-all px-3 py-1.5 rounded-xl border border-slate-200/70"
+                title="Assign roll numbers alphabetically for every class"
+              >
+                <Hash className="w-3.5 h-3.5" />
+                <span>Auto Roll Numbers — All Classes</span>
+              </button>
 
               <div className="flex items-center gap-1.5 bg-white/50 px-2 py-1.5 rounded-xl border border-slate-200/70">
                 <SlidersHorizontal className="w-3.5 h-3.5 text-slate-500" />
