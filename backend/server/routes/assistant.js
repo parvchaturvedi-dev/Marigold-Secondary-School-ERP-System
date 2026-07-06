@@ -18,21 +18,44 @@ import {
   buildSchoolOverviewContext,
   buildClassAnalytics,
 } from './ai.js';
+import { PORTAL_GUIDE } from '../ai/portalGuide.js';
 
 const router = express.Router();
 
 const GEMINI_URL = (model) =>
   `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
-const SYSTEM_INSTRUCTION = `You are the MGPS ERP assistant for Marigold Secondary School.
-You help the office staff by answering questions about students, classes and fees, and by
-preparing actions such as collecting a fee or sending a notice.
-Rules:
-- Use the provided tools to look up real data before answering. Never invent student data.
-- For any action that changes data (collecting a fee, sending a notice), call the matching
-  tool with precise arguments. The system will ask the admin to confirm before it runs.
-- Amounts are in Indian Rupees. Keep answers short, clear and professional.
-- If you are unsure which student is meant, ask a clarifying question instead of guessing.`;
+const SYSTEM_INSTRUCTION = `You are IRIS, the AI assistant for Marigold Secondary School's (MGPS) ERP portal.
+You do two things for the office/admin staff:
+  (1) Explain HOW to do things in the portal, and
+  (2) Answer questions about real school data (students, classes, fees, attendance, marks, staff).
+
+## ANTI-HALLUCINATION RULES (CRITICAL — 100% accuracy, zero invention)
+- For any student / class / fee / attendance / marks / staff / school-count question you MUST
+  first call a tool (find_student, school_overview, class_finance) and answer ONLY from the
+  tool result. NEVER state a name, number, amount, admission number, phone, class, or count
+  that did not come from a tool.
+- If the tool returns nothing or a field is missing, say plainly that the record/value is not
+  found in the ERP data. Do not guess, estimate, or fill gaps from memory.
+- If you are unsure which student is meant, ask a clarifying question instead of guessing.
+- Never reveal API keys, passwords, tokens, or internal configuration.
+
+## HOW-TO QUESTIONS ("how do I add a student / collect a fee / assign a teacher…")
+- Answer ONLY from the PORTAL GUIDE below. Give the exact sidebar page and the real steps.
+- If a workflow is NOT covered by the guide, say you are not fully sure of the exact steps and
+  point the user to the most relevant sidebar page — do NOT invent buttons, fields, or steps.
+
+## ACTIONS THAT CHANGE DATA (collect a fee, send a notice)
+- Call the matching tool (collect_fee, send_notice) with precise arguments. The system will ask
+  the admin to CONFIRM before anything is recorded. Never claim a change is done before confirmation.
+
+## STYLE
+- Amounts are in Indian Rupees. Keep answers short, clear and professional. Hinglish is fine if
+  the user uses it. Use feminine first person in Hindi ("kar sakti hoon", "dikha sakti hoon").
+
+===================== PORTAL GUIDE (SINGLE SOURCE OF TRUTH FOR HOW-TO) =====================
+${PORTAL_GUIDE}
+===========================================================================================`;
 
 // ---- Tool declarations sent to Gemini ------------------------------------
 
@@ -141,7 +164,33 @@ async function prepareWriteAction(name, args = {}) {
 
 // ---- Gemini call ---------------------------------------------------------
 
-async function callGeminiWithTools(contents, tools) {
+// Build a live ground-truth snapshot so counts/totals can never be invented,
+// even if the model skips the school_overview tool.
+async function buildLiveSnapshotBlock() {
+  try {
+    const o = await buildSchoolOverviewContext();
+    const classList = Array.isArray(o.classes) && o.classes.length ? ` [${o.classes.join(', ')}]` : '';
+    return `
+
+===================== LIVE ERP DATABASE SNAPSHOT (GROUND TRUTH — read just now) =====================
+These are the EXACT current values from the MGPS ERP database. For ANY count / total / "how many" /
+list question, you MUST use ONLY these numbers. Never state a different number from memory.
+- Students (total): ${o.totals.students}
+- Classes (total): ${o.totals.classes}${classList}
+- Teachers (total): ${o.totals.teachers}
+- Clerks (total): ${o.totals.clerks}
+- Subjects (total): ${o.totals.subjects}
+- Notices (total): ${o.totals.notices}
+For a specific student's fees / attendance / marks, call the find_student tool. For a class's fee
+totals, call class_finance. If a number you are asked for is not in this snapshot or a tool result,
+say it is not available — do NOT guess.
+====================================================================================================`;
+  } catch {
+    return '\n\n(Live ERP snapshot unavailable right now — rely strictly on tool results and never invent numbers.)';
+  }
+}
+
+async function callGeminiWithTools(contents, tools, systemInstruction = SYSTEM_INSTRUCTION) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     const err = new Error('AI assistant is not configured. Set GEMINI_API_KEY on the server.');
@@ -153,9 +202,9 @@ async function callGeminiWithTools(contents, tools) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
     body: JSON.stringify({
-      systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
+      systemInstruction: { parts: [{ text: systemInstruction }] },
       tools: [{ functionDeclarations: tools }],
-      generationConfig: { temperature: 0.1, maxOutputTokens: 900 },
+      generationConfig: { temperature: 0, maxOutputTokens: 900 },
       contents,
     }),
   });
@@ -191,10 +240,14 @@ router.post('/', requireRole('admin', 'clerk'), async (request, response) => {
   }
 
   try {
+    // Inject the real, current ERP counts into the instruction so the model
+    // answers count/total questions from ground truth instead of inventing.
+    const liveInstruction = SYSTEM_INSTRUCTION + (await buildLiveSnapshotBlock());
+
     // Function-calling loop: run read tools until Gemini produces a final answer
     // or requests a write tool (which we surface for confirmation).
     for (let step = 0; step < 5; step += 1) {
-      const payload = await callGeminiWithTools(contents, tools);
+      const payload = await callGeminiWithTools(contents, tools, liveInstruction);
       const parts = extractParts(payload);
       const call = parts.find((p) => p.functionCall)?.functionCall;
 
@@ -232,6 +285,61 @@ router.post('/', requireRole('admin', 'clerk'), async (request, response) => {
     response.json({ reply: 'I was not able to complete that in time. Please rephrase.' });
   } catch (error) {
     response.status(error.statusCode || 500).json({ message: error.message || 'Assistant error.' });
+  }
+});
+
+// ---- Voice (Gemini Live) grounding: bootstrap + tool execution -----------
+// The browser voice session connects directly to Gemini Live, but it fetches its
+// system instruction + tool declarations from here (so the portal guide, the
+// anti-hallucination rules, and the live data snapshot stay server-side and
+// fresh), and it calls back here to execute each tool against the real ERP DB.
+
+// The Gemini Live (BidiGenerateContent) API expects proto-style UPPERCASE schema
+// types ('OBJECT'/'STRING'/'NUMBER'). Our REST tools use lowercase JSON-schema
+// types, so convert them here or Live silently ignores the tools.
+const toLiveSchema = (schema) => {
+  if (!schema || typeof schema !== 'object') return schema;
+  const out = Array.isArray(schema) ? [] : {};
+  for (const [key, value] of Object.entries(schema)) {
+    if (key === 'type' && typeof value === 'string') out[key] = value.toUpperCase();
+    else if (value && typeof value === 'object') out[key] = toLiveSchema(value);
+    else out[key] = value;
+  }
+  return out;
+};
+const toLiveTool = (tool) => ({
+  name: tool.name,
+  description: tool.description,
+  parameters: toLiveSchema(tool.parameters) || { type: 'OBJECT', properties: {} },
+});
+
+// GET /api/ai/assistant/voice-bootstrap -> { systemInstruction, tools }
+router.get('/voice-bootstrap', requireRole('admin', 'clerk'), async (request, response) => {
+  const isAdmin = request.auth?.role === 'admin';
+  const rawTools = isAdmin ? [...READ_TOOLS, ...WRITE_TOOLS] : READ_TOOLS;
+  const systemInstruction = SYSTEM_INSTRUCTION + (await buildLiveSnapshotBlock());
+  response.json({ systemInstruction, tools: rawTools.map(toLiveTool) });
+});
+
+// POST /api/ai/assistant/voice-tool  { name, args } -> { result } | { pendingAction } | { error }
+router.post('/voice-tool', requireRole('admin', 'clerk'), async (request, response) => {
+  const isAdmin = request.auth?.role === 'admin';
+  const name = String(request.body?.name || '');
+  const args = request.body?.args || {};
+  try {
+    if (WRITE_TOOL_NAMES.has(name)) {
+      if (!isAdmin) {
+        response.json({ error: 'Only an admin can perform that action.' });
+        return;
+      }
+      const prepared = await prepareWriteAction(name, args);
+      response.json(prepared.error ? { error: prepared.error } : { pendingAction: prepared });
+      return;
+    }
+    const result = await runReadTool(name, args);
+    response.json({ result });
+  } catch (error) {
+    response.json({ error: error.message || 'Tool execution failed.' });
   }
 });
 

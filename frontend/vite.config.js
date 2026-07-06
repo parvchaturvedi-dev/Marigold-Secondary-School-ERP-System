@@ -26,6 +26,16 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react(), tailwindcss()],
+    // The workspace hoists a second React copy to the repo root, and
+    // @react-three/fiber resolves against it. Dedupe so the orb and the app
+    // share ONE React instance (otherwise r3f's <Canvas> throws
+    // "Invalid hook call / Cannot read properties of null (reading 'useMemo')").
+    resolve: {
+      dedupe: ['react', 'react-dom'],
+    },
+    optimizeDeps: {
+      include: ['three', '@react-three/fiber'],
+    },
     server: {
       proxy: {
         '/api': devApiTarget,
