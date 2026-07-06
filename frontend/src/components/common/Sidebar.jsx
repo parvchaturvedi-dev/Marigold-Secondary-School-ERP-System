@@ -178,7 +178,6 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
         { name: 'Marks Management', icon: BarChart3 },
       ]
     },
-    { name: 'Feature Page', icon: Sparkles },
     { name: 'Finance', icon: Wallet },
     { name: 'Payroll', icon: Wallet },
     { name: 'Timetable', icon: CalendarClock },
