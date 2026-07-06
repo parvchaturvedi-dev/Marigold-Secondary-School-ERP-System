@@ -25,6 +25,7 @@ import notificationRoutes from './routes/notifications.js';
 import payrollRoutes from './routes/payroll.js';
 import searchRoutes from './routes/search.js';
 import studentDocumentRoutes from './routes/studentDocuments.js';
+import teacherDocumentRoutes from './routes/teacherDocuments.js';
 import timetableRoutes from './routes/timetable.js';
 import vaultRoutes from './routes/vault.js';
 import { connectMongo, getDbStatus } from './db.js';
@@ -175,6 +176,7 @@ app.use('/api/payroll', payrollRoutes);
 app.use('/api/admin', adminResetRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/student-documents', studentDocumentRoutes);
+app.use('/api/teacher-documents', teacherDocumentRoutes);
 app.use('/api/timetable', timetableRoutes);
 app.use('/api/vault', vaultRoutes);
 

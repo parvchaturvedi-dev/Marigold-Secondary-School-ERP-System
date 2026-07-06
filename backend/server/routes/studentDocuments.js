@@ -4,6 +4,9 @@ import StudentDocumentFile from '../models/StudentDocumentFile.js';
 import ModuleState from '../models/ModuleState.js';
 import { isMongoConnected } from '../db.js';
 import { requireRole } from '../middleware/auth.js';
+import { createNotification } from '../utils/notify.js';
+
+const REVIEW_STATUSES = ['approved', 'rejected', 'locked'];
 
 const router = express.Router();
 
@@ -62,7 +65,7 @@ const resolveOwnedAdmissionNumbers = (auth = {}) => {
 router.post(
   '/',
   ensureMongo,
-  requireRole('admin', 'clerk'),
+  requireRole('admin', 'clerk', 'student'),
   studentDocumentUpload.single('file'),
   async (request, response) => {
     const file = request.file;
@@ -87,8 +90,30 @@ router.post(
       return;
     }
 
+    const role = request.auth?.role;
+
+    // A student may only upload against an admission number they own, and never
+    // over a locked/approved doc (that's an admin-only "replace" power).
+    if (role === 'student') {
+      const owned = resolveOwnedAdmissionNumbers(request.auth || {});
+      if (!owned.includes(admissionNumber)) {
+        response.status(403).json({ message: 'You do not have permission to upload this document.' });
+        return;
+      }
+
+      const existing = await StudentDocumentFile.findOne({ admissionNumber, docName }).select('status');
+      if (existing && (existing.status === 'locked' || existing.status === 'approved')) {
+        response
+          .status(403)
+          .json({ message: 'This document is locked/approved and can no longer be changed.' });
+        return;
+      }
+    }
+
     const uploadedByName = request.auth?.displayName || request.auth?.username || 'Admin';
 
+    // Any fresh upload (student self-service OR admin/clerk replace) resets the
+    // review workflow back to 'pending' and clears prior review metadata.
     const record = await StudentDocumentFile.findOneAndUpdate(
       { admissionNumber, docName },
       {
@@ -100,6 +125,10 @@ router.post(
         data: file.buffer,
         uploadedByName,
         uploadedAt: new Date(),
+        status: 'pending',
+        reviewNote: '',
+        reviewedByName: '',
+        reviewedAt: null,
       },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
@@ -111,6 +140,10 @@ router.post(
       mimeType: record.mimeType,
       size: record.size,
       uploadedAt: record.uploadedAt,
+      status: record.status,
+      reviewNote: record.reviewNote,
+      reviewedByName: record.reviewedByName,
+      reviewedAt: record.reviewedAt,
     });
   }
 );
@@ -138,6 +171,10 @@ router.get(
         mimeType: record.mimeType,
         size: record.size,
         uploadedAt: record.uploadedAt,
+        status: record.status,
+        reviewNote: record.reviewNote,
+        reviewedByName: record.reviewedByName,
+        reviewedAt: record.reviewedAt,
       }))
     );
   }
@@ -266,6 +303,65 @@ router.get('/:admissionNumber/:docName', ensureMongo, async (request, response) 
   response.setHeader('Content-Disposition', `inline; filename="${file.fileName || docName}"`);
   response.send(file.data);
 });
+
+// Verification decision: approve / reject / lock a student's document, record who
+// reviewed it and any note, then notify that student. Admin/clerk only.
+router.patch(
+  '/:admissionNumber/:docName/status',
+  ensureMongo,
+  requireRole('admin', 'clerk'),
+  async (request, response) => {
+    const admissionNumber = String(request.params.admissionNumber || '').trim().toUpperCase();
+    const docName = String(request.params.docName || '').trim();
+    const status = String(request.body?.status || '').trim().toLowerCase();
+    const note = String(request.body?.note || '').trim();
+
+    if (!REVIEW_STATUSES.includes(status)) {
+      response.status(400).json({ message: `status must be one of: ${REVIEW_STATUSES.join(', ')}.` });
+      return;
+    }
+
+    const reviewedByName = request.auth?.displayName || request.auth?.username || 'Admin';
+
+    const record = await StudentDocumentFile.findOneAndUpdate(
+      { admissionNumber, docName },
+      {
+        status,
+        reviewNote: note,
+        reviewedByName,
+        reviewedAt: new Date(),
+      },
+      { new: true }
+    ).select('-data');
+
+    if (!record) {
+      response.status(404).json({ message: 'Document not found.' });
+      return;
+    }
+
+    // Best-effort notify the owning student — never let a push failure fail the review.
+    createNotification({
+      title: `Document ${status}`,
+      description: `Your "${docName}" was ${status}${note ? ': ' + note : ''}.`,
+      type: 'general',
+      linkPage: 'Profile',
+      recipientStudentId: admissionNumber,
+    }).catch(() => {});
+
+    response.json({
+      admissionNumber: record.admissionNumber,
+      docName: record.docName,
+      fileName: record.fileName,
+      mimeType: record.mimeType,
+      size: record.size,
+      uploadedAt: record.uploadedAt,
+      status: record.status,
+      reviewNote: record.reviewNote,
+      reviewedByName: record.reviewedByName,
+      reviewedAt: record.reviewedAt,
+    });
+  }
+);
 
 router.delete(
   '/:admissionNumber/:docName',

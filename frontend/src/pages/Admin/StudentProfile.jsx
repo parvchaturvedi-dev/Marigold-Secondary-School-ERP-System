@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { getStoredSession } from '../../components/common/auth';
 import { 
-  ArrowLeft, User, Phone, MapPin, Calendar, 
-  FileText, BarChart3, GraduationCap, Download, Eye, PlusCircle, Save, UploadCloud, Camera, CreditCard, Users
+  ArrowLeft, User, Phone, MapPin, Calendar,
+  FileText, BarChart3, GraduationCap, Download, Eye, PlusCircle, Save, UploadCloud, Camera, CreditCard, Users, Lock
 } from 'lucide-react';
 import { useMongoState } from '../../components/common/mongoState';
 import { API_BASE_URL, getAuthToken } from '../../components/common/api';
@@ -24,6 +24,32 @@ const formatFileSize = (bytes = 0) => {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+// Clerk verification workflow: each document carries a status the clerk sets
+// from the Document Management page. Students see the decision here (and a
+// rejection reason), and cannot replace a doc the school has locked/approved.
+const VERIFICATION_STATUSES = ['pending', 'approved', 'rejected', 'locked'];
+
+const normalizeVerificationStatus = (raw) => {
+  const value = String(raw || '').trim().toLowerCase();
+  return VERIFICATION_STATUSES.includes(value) ? value : '';
+};
+
+const isDocumentLocked = (status) => status === 'locked' || status === 'approved';
+
+const VERIFICATION_CHIP_STYLES = {
+  pending: 'bg-amber-50 text-amber-700 border-amber-200',
+  approved: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  rejected: 'bg-red-50 text-red-700 border-red-200',
+  locked: 'bg-slate-100 text-slate-600 border-slate-300',
+};
+
+const VERIFICATION_CHIP_LABELS = {
+  pending: 'Pending',
+  approved: 'Approved',
+  rejected: 'Rejected',
+  locked: 'Locked',
 };
 
 const fileToDataUrl = (file) =>
@@ -55,9 +81,31 @@ const studentDocumentsApi = {
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error(payload.message || 'Document upload failed.');
+      const error = new Error(payload.message || 'Document upload failed.');
+      // Surface the HTTP status so the caller can show the friendly "locked"
+      // message on a 403 (backend blocks students re-uploading locked/approved).
+      error.status = response.status;
+      throw error;
     }
     return payload;
+  },
+  async fetchStatuses({ admissionNumber }) {
+    // Per-doc verification metadata: status ('pending'|'approved'|'rejected'|
+    // 'locked'), reviewNote (rejection reason), reviewer info. Returns an array;
+    // we key it by docName so the vault rows can show the clerk's decision.
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_BASE_URL}/student-documents?admissionNumber=${encodeURIComponent(admissionNumber)}`,
+      {
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      }
+    );
+    if (!response.ok) {
+      throw new Error('Could not load document statuses.');
+    }
+    const payload = await response.json().catch(() => []);
+    return Array.isArray(payload) ? payload : payload?.documents || [];
   },
   async fetchBlob({ admissionNumber, docName }) {
     const token = getAuthToken();
@@ -161,6 +209,8 @@ const StudentProfile = ({ studentContext, onBack }) => {
   const [financeRecords] = useMongoState('admin-finance-class-ledgers', []);
   const [examinationState, setExaminationState] = useState(() => readExaminationState());
   const [documentDraftState, setDocumentDraftState] = useState({ key: '', documents: [] });
+  // Clerk verification metadata, keyed by lower-cased docName.
+  const [documentStatuses, setDocumentStatuses] = useState({});
   const [documentMessage, setDocumentMessage] = useState('');
   const [customDocumentName, setCustomDocumentName] = useState('');
   const [liveAttendanceLogs, setLiveAttendanceLogs] = useState([]);
@@ -297,6 +347,35 @@ const StudentProfile = ({ studentContext, onBack }) => {
       .catch(() => setLiveAttendanceLogs([]));
   }, [profileData.admissionNumber, selectedClassName]);
 
+  const refreshDocumentStatuses = React.useCallback(() => {
+    if (!profileData.admissionNumber) return Promise.resolve();
+    return studentDocumentsApi
+      .fetchStatuses({ admissionNumber: profileData.admissionNumber })
+      .then((records) => {
+        const byName = {};
+        (records || []).forEach((record) => {
+          const key = String(record?.docName || '').trim().toLowerCase();
+          if (!key) return;
+          byName[key] = {
+            status: normalizeVerificationStatus(record.status),
+            reviewNote: record.reviewNote || '',
+            reviewedByName: record.reviewedByName || '',
+            reviewedAt: record.reviewedAt || '',
+          };
+        });
+        setDocumentStatuses(byName);
+      })
+      .catch(() => {
+        // Status endpoint unavailable (e.g. brand-new roster) — leave the vault
+        // usable without verification chips rather than blocking uploads.
+        setDocumentStatuses({});
+      });
+  }, [profileData.admissionNumber]);
+
+  useEffect(() => {
+    refreshDocumentStatuses();
+  }, [refreshDocumentStatuses]);
+
   useEffect(() => {
     let isActive = true;
     const refreshState = () => {
@@ -340,6 +419,14 @@ const StudentProfile = ({ studentContext, onBack }) => {
       return;
     }
 
+    // Respect the clerk verification lock client-side too, so a locked/approved
+    // doc never even attempts the upload (the backend still enforces this 403).
+    const currentStatus = documentStatuses[docName.toLowerCase()]?.status;
+    if (isDocumentLocked(currentStatus)) {
+      alert("This document is locked and can't be changed. Contact the school office.");
+      return;
+    }
+
     // Persist the file to binary storage immediately. Only metadata (a pointer)
     // goes into the roster draft — never base64 — so the shared roster blob
     // stays small. The Save button then just writes that pointer metadata.
@@ -351,7 +438,11 @@ const StudentProfile = ({ studentContext, onBack }) => {
         docName,
       });
     } catch (error) {
-      alert(error.message || 'Document upload failed. Please try again.');
+      if (error.status === 403) {
+        alert("This document is locked and can't be changed. Contact the school office.");
+      } else {
+        alert(error.message || 'Document upload failed. Please try again.');
+      }
       return;
     }
 
@@ -373,6 +464,9 @@ const StudentProfile = ({ studentContext, onBack }) => {
       ),
     });
     setDocumentMessage('Document uploaded. Save documents to update the record.');
+    // Re-pull the verification status so the chip flips back to Pending after a
+    // fresh upload/replace of a previously-rejected document.
+    refreshDocumentStatuses();
   };
 
   const handleSaveDocuments = () => {
@@ -1043,54 +1137,87 @@ const StudentProfile = ({ studentContext, onBack }) => {
                 </form>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {documentDrafts.map((doc, idx) => (
-                    <div key={`${doc.name}-${idx}`} className="glass-soft p-3 rounded-xl flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <span className="text-slate-900 font-black truncate block">{doc.name}</span>
-                        <span className="text-[10px] text-slate-500 font-mono block truncate mt-0.5">
-                          {doc.file || 'No file uploaded yet'} {doc.size ? `| ${formatFileSize(doc.size)}` : ''}
-                        </span>
-                      </div>
+                  {documentDrafts.map((doc, idx) => {
+                    const verification = documentStatuses[doc.name.toLowerCase()] || {};
+                    const verificationStatus = verification.status;
+                    const locked = isDocumentLocked(verificationStatus);
+                    return (
+                      <div key={`${doc.name}-${idx}`} className="glass-soft p-3 rounded-xl flex flex-col gap-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <span className="text-slate-900 font-black truncate block">{doc.name}</span>
+                            <span className="text-[10px] text-slate-500 font-mono block truncate mt-0.5">
+                              {doc.file || 'No file uploaded yet'} {doc.size ? `| ${formatFileSize(doc.size)}` : ''}
+                            </span>
+                          </div>
 
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
-                        <span className={`text-[9px] px-1.5 py-0.5 border rounded font-black uppercase ${
-                          doc.file
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                            : 'bg-amber-50 text-amber-700 border-amber-200'
-                        }`}>
-                          {doc.status}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => handleViewDocument(doc)}
-                          className="p-2 bg-white/60 hover:bg-slate-900 hover:text-white rounded-lg border border-slate-200/70 transition-all"
-                          title="Preview Document"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDownloadDocument(doc)}
-                          className="p-2 bg-white/60 hover:bg-slate-900 hover:text-white rounded-lg border border-slate-200/70 transition-all"
-                          title="Download Asset File"
-                        >
-                          <Download className="w-3.5 h-3.5" />
-                        </button>
-                        <label
-                          className="btn-primary p-2 rounded-lg transition-all cursor-pointer"
-                          title={doc.file ? 'Replace Document' : 'Upload Document'}
-                        >
-                          <UploadCloud className="w-3.5 h-3.5" />
-                          <input
-                            type="file"
-                            accept=".jpg,.jpeg,.png,.webp,.pdf"
-                            onChange={(event) => handleDocumentUpload(doc.name, event.target.files?.[0])}
-                            className="hidden"
-                          />
-                        </label>
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            {verificationStatus ? (
+                              <span className={`text-[9px] px-1.5 py-0.5 border rounded font-black uppercase ${VERIFICATION_CHIP_STYLES[verificationStatus]}`}>
+                                {VERIFICATION_CHIP_LABELS[verificationStatus]}
+                              </span>
+                            ) : (
+                              <span className={`text-[9px] px-1.5 py-0.5 border rounded font-black uppercase ${
+                                doc.file
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  : 'bg-amber-50 text-amber-700 border-amber-200'
+                              }`}>
+                                {doc.status}
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleViewDocument(doc)}
+                              className="p-2 bg-white/60 hover:bg-slate-900 hover:text-white rounded-lg border border-slate-200/70 transition-all"
+                              title="Preview Document"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadDocument(doc)}
+                              className="p-2 bg-white/60 hover:bg-slate-900 hover:text-white rounded-lg border border-slate-200/70 transition-all"
+                              title="Download Asset File"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                            </button>
+                            {locked ? (
+                              <span
+                                className="p-2 rounded-lg border border-slate-300 bg-slate-100 text-slate-500 flex items-center"
+                                title={verificationStatus === 'approved' ? 'Approved by school' : 'Locked by school'}
+                              >
+                                <Lock className="w-3.5 h-3.5" />
+                              </span>
+                            ) : (
+                              <label
+                                className="btn-primary p-2 rounded-lg transition-all cursor-pointer"
+                                title={doc.file ? 'Replace Document' : 'Upload Document'}
+                              >
+                                <UploadCloud className="w-3.5 h-3.5" />
+                                <input
+                                  type="file"
+                                  accept=".jpg,.jpeg,.png,.webp,.pdf"
+                                  onChange={(event) => handleDocumentUpload(doc.name, event.target.files?.[0])}
+                                  className="hidden"
+                                />
+                              </label>
+                            )}
+                          </div>
+                        </div>
+
+                        {locked && (
+                          <p className="text-[10px] font-bold text-slate-500">
+                            {verificationStatus === 'approved' ? 'Approved — no changes needed.' : 'Locked by school.'}
+                          </p>
+                        )}
+                        {verificationStatus === 'rejected' && verification.reviewNote && (
+                          <p className="text-[10px] font-bold text-red-600">
+                            Rejected: {verification.reviewNote}
+                          </p>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 {documentDrafts.length === 0 && (

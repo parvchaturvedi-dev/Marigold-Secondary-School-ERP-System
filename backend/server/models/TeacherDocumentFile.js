@@ -1,16 +1,16 @@
 import mongoose from 'mongoose';
 
-// Binary storage for a single student document (e.g. birth certificate, Aadhaar
-// scan). Each (admissionNumber, docName) pair gets its own file so the shared
-// admin-student-management-students ModuleState blob stays small (base64 dataUrls
-// used to live inside it and blew past Mongo's 16MB per-document limit). A
-// re-upload for the same (admissionNumber, docName) replaces the previous file.
-const studentDocumentFileSchema = new mongoose.Schema(
+// Binary storage for a single teacher (faculty) document (e.g. degree
+// certificate, ID proof). Mirrors StudentDocumentFile but keyed by teacherId
+// (the teacher's username, e.g. TCH-123) instead of an admission number. Each
+// (teacherId, docName) pair gets its own file so nothing base64-heavy lands in a
+// shared ModuleState blob. A re-upload for the same (teacherId, docName) replaces
+// the previous file.
+const teacherDocumentFileSchema = new mongoose.Schema(
   {
-    admissionNumber: {
+    teacherId: {
       type: String,
       required: true,
-      uppercase: true,
       trim: true,
       index: true,
     },
@@ -47,7 +47,7 @@ const studentDocumentFileSchema = new mongoose.Schema(
       default: Date.now,
     },
     // Verification workflow. A fresh upload lands as 'pending'; admin/clerk then
-    // approve/reject/lock it. 'locked' and 'approved' are frozen against student
+    // approve/reject/lock it. 'locked' and 'approved' are frozen against teacher
     // self-service re-uploads (admin/clerk may still replace).
     status: {
       type: String,
@@ -73,11 +73,11 @@ const studentDocumentFileSchema = new mongoose.Schema(
   }
 );
 
-// One document per (admissionNumber, docName) — re-upload replaces via upsert.
-studentDocumentFileSchema.index({ admissionNumber: 1, docName: 1 }, { unique: true });
+// One document per (teacherId, docName) — re-upload replaces via upsert.
+teacherDocumentFileSchema.index({ teacherId: 1, docName: 1 }, { unique: true });
 
-const StudentDocumentFile =
-  mongoose.models.StudentDocumentFile ||
-  mongoose.model('StudentDocumentFile', studentDocumentFileSchema);
+const TeacherDocumentFile =
+  mongoose.models.TeacherDocumentFile ||
+  mongoose.model('TeacherDocumentFile', teacherDocumentFileSchema);
 
-export default StudentDocumentFile;
+export default TeacherDocumentFile;
