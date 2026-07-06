@@ -32,9 +32,13 @@ You do two things for the office/admin staff:
 
 ## ANTI-HALLUCINATION RULES (CRITICAL — 100% accuracy, zero invention)
 - For any student / class / fee / attendance / marks / staff / school-count question you MUST
-  first call a tool (find_student, school_overview, class_finance) and answer ONLY from the
-  tool result. NEVER state a name, number, amount, admission number, phone, class, or count
-  that did not come from a tool.
+  first call a tool (find_student, find_staff, school_overview, class_finance) and answer ONLY
+  from the tool result or the live snapshot. NEVER state a name, number, amount, admission number,
+  phone, class, or count that did not come from a tool or the snapshot.
+- NEVER refuse a question that a tool can answer. If asked to name a teacher/clerk, call find_staff
+  (or use the snapshot's Teachers/Clerks list). If asked about a student, call find_student. The
+  snapshot is only a summary — the tools have the full data. Do not say "the snapshot only shows
+  totals"; call the tool instead.
 - If the tool returns nothing or a field is missing, say plainly that the record/value is not
   found in the ERP data. Do not guess, estimate, or fill gaps from memory.
 - If you are unsure which student is meant, ask a clarifying question instead of guessing.
@@ -70,8 +74,16 @@ const READ_TOOLS = [
     },
   },
   {
+    name: 'find_staff',
+    description: 'Look up a teacher or clerk by name, ID, subject or department, or list all staff. Returns their records (name, id, subject/department, class). Use this for ANY question about teachers or clerks by name.',
+    parameters: {
+      type: 'object',
+      properties: { query: { type: 'string', description: 'Name, ID, subject or department. Leave blank to list all staff.' } },
+    },
+  },
+  {
     name: 'school_overview',
-    description: 'Get a summary of the school: total students, teachers, classes and overall fee collection.',
+    description: 'Get a full summary of the school: totals plus the lists of students, teachers, clerks, classes and subjects, and overall fee collection.',
     parameters: { type: 'object', properties: {} },
   },
   {
@@ -120,9 +132,25 @@ const WRITE_TOOL_NAMES = new Set(WRITE_TOOLS.map((t) => t.name));
 
 async function runReadTool(name, args = {}) {
   if (name === 'find_student') {
-    const student = await findOneStudent(String(args.query || ''));
+    // findOneStudent returns { students, matches, student } — destructure it.
+    const { student } = await findOneStudent(String(args.query || ''));
     if (!student) return { found: false, message: `No student matched "${args.query}".` };
     return { found: true, student: await buildStudentDetails(student) };
+  }
+  if (name === 'find_staff') {
+    const q = String(args.query || '').trim().toLowerCase();
+    const o = await buildSchoolOverviewContext();
+    const match = (list, type) =>
+      (list || [])
+        .filter((p) => !q
+          || String(p.name || '').toLowerCase().includes(q)
+          || String(p.id || '').toLowerCase().includes(q)
+          || String(p.subject || p.department || '').toLowerCase().includes(q))
+        .map((p) => ({ type, ...p }));
+    const staff = [...match(o.teachers, 'Teacher'), ...match(o.clerks, 'Clerk')];
+    return staff.length
+      ? { found: true, count: staff.length, staff: staff.slice(0, 30) }
+      : { found: false, message: `No teacher or clerk matched "${args.query}".` };
   }
   if (name === 'school_overview') {
     return await buildSchoolOverviewContext();
@@ -136,7 +164,7 @@ async function runReadTool(name, args = {}) {
 // Build a human summary + resolved args for a WRITE tool (no mutation here).
 async function prepareWriteAction(name, args = {}) {
   if (name === 'collect_fee') {
-    const student = await findOneStudent(String(args.admissionNumber || ''));
+    const { student } = await findOneStudent(String(args.admissionNumber || ''));
     if (!student) {
       return { error: `No student found for "${args.admissionNumber}".` };
     }
@@ -169,21 +197,25 @@ async function prepareWriteAction(name, args = {}) {
 async function buildLiveSnapshotBlock() {
   try {
     const o = await buildSchoolOverviewContext();
-    const classList = Array.isArray(o.classes) && o.classes.length ? ` [${o.classes.join(', ')}]` : '';
+    const list = (arr) => (Array.isArray(arr) && arr.length ? arr.join(', ') : '(none)');
+    const names = (arr) =>
+      Array.isArray(arr) && arr.length
+        ? arr.map((p) => `${p.name}${p.subject ? ` (${p.subject})` : p.department ? ` (${p.department})` : ''}`).join(', ')
+        : '(none)';
     return `
 
 ===================== LIVE ERP DATABASE SNAPSHOT (GROUND TRUTH — read just now) =====================
-These are the EXACT current values from the MGPS ERP database. For ANY count / total / "how many" /
-list question, you MUST use ONLY these numbers. Never state a different number from memory.
-- Students (total): ${o.totals.students}
-- Classes (total): ${o.totals.classes}${classList}
-- Teachers (total): ${o.totals.teachers}
-- Clerks (total): ${o.totals.clerks}
-- Subjects (total): ${o.totals.subjects}
+These are the EXACT current values from the MGPS ERP database. Use ONLY these for count / "how many" /
+list questions, and the names below when asked to name a teacher, clerk, class or subject. This is a
+SUMMARY: for a specific STUDENT's details call find_student; for a specific teacher/clerk call
+find_staff; for a class's fee totals call class_finance. Never refuse a question that a tool can
+answer — call the tool. Never invent a value not present here or in a tool result.
+- Students (total): ${o.totals.students}   (use find_student to look one up by name/admission no.)
+- Classes (${o.totals.classes}): ${list(o.classes)}
+- Teachers (${o.totals.teachers}): ${names(o.teachers)}
+- Clerks (${o.totals.clerks}): ${names(o.clerks)}
+- Subjects (${o.totals.subjects}): ${list(o.subjects)}
 - Notices (total): ${o.totals.notices}
-For a specific student's fees / attendance / marks, call the find_student tool. For a class's fee
-totals, call class_finance. If a number you are asked for is not in this snapshot or a tool result,
-say it is not available — do NOT guess.
 ====================================================================================================`;
   } catch {
     return '\n\n(Live ERP snapshot unavailable right now — rely strictly on tool results and never invent numbers.)';
