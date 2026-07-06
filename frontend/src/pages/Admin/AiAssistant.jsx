@@ -10,8 +10,10 @@ import { useMongoState } from '../../components/common/mongoState';
 import {
   getClassOrder,
   collectStudentPayment,
+  assignClassFeeToStudent,
   getStudentAdmissionNumber,
   getStudentDisplayName,
+  getStudentClassName,
   formatCurrency,
 } from '../../components/common/financeData';
 
@@ -63,6 +65,10 @@ const AiAssistant = () => {
   const [, setNoticesList] = useMongoState('admin-notices-list', []);
 
   const scrollRef = useRef(null);
+
+  // Defined before the effects/handlers that use it (avoids a minified TDZ crash).
+  const appendModelMessage = (content) =>
+    setMessages((prev) => [...prev, { role: 'model', content }]);
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -143,9 +149,6 @@ const AiAssistant = () => {
     }, 1700);
     return () => clearInterval(interval);
   }, [isSystemActive]);
-
-  const appendModelMessage = (content) =>
-    setMessages((prev) => [...prev, { role: 'model', content }]);
 
   // ---- Send a message to the server-side Gemini assistant ------------------
   const handleSend = async (event) => {
@@ -243,6 +246,36 @@ const AiAssistant = () => {
     appendModelMessage(receiptLines);
   };
 
+  // ---- CONFIRM: assign_fee (sets a class fee demand, like Student Ledger) --
+  const runAssignFee = (args) => {
+    const admissionNumber = String(args?.admissionNumber || '').trim();
+    const amount = Number(args?.amount) || 0;
+    const note = String(args?.note || '').trim();
+
+    if (!admissionNumber || amount < 0) {
+      appendModelMessage('I could not assign the fee — a valid admission number and amount are required.');
+      return;
+    }
+
+    const list = Array.isArray(students) ? students : [];
+    const index = list.findIndex(
+      (student) =>
+        String(getStudentAdmissionNumber(student)).trim().toLowerCase() === admissionNumber.toLowerCase()
+    );
+    if (index === -1) {
+      appendModelMessage(`No student found with admission number "${admissionNumber}".`);
+      return;
+    }
+
+    const targetClass = String(args?.className || '').trim() || getStudentClassName(list[index]);
+    const updatedStudent = assignClassFeeToStudent(list[index], targetClass, amount, note);
+    setStudents(list.map((student, i) => (i === index ? updatedStudent : student)));
+
+    appendModelMessage(
+      `Fee assigned successfully.\n\nStudent: ${getStudentDisplayName(list[index])} (${admissionNumber})\nClass: ${targetClass}\nAssigned fee: ${formatCurrency(amount)}${note ? `\nNote: ${note}` : ''}`
+    );
+  };
+
   // ---- CONFIRM: send_notice (mirrors Notices.jsx publish flow) ------------
   const runSendNotice = (args) => {
     const title = String(args?.title || '').trim();
@@ -288,6 +321,7 @@ const AiAssistant = () => {
     setIsConfirming(true);
     try {
       if (pendingAction.type === 'collect_fee') runCollectFee(pendingAction.args || {});
+      else if (pendingAction.type === 'assign_fee') runAssignFee(pendingAction.args || {});
       else if (pendingAction.type === 'send_notice') runSendNotice(pendingAction.args || {});
       else appendModelMessage(`I don't know how to perform the action "${pendingAction.type}".`);
     } finally {
@@ -302,7 +336,7 @@ const AiAssistant = () => {
   };
 
   const pendingIcon =
-    pendingAction?.type === 'collect_fee' ? <Wallet className="w-4 h-4" />
+    pendingAction?.type === 'collect_fee' || pendingAction?.type === 'assign_fee' ? <Wallet className="w-4 h-4" />
       : pendingAction?.type === 'send_notice' ? <Megaphone className="w-4 h-4" />
       : <AlertTriangle className="w-4 h-4" />;
 

@@ -124,6 +124,20 @@ const WRITE_TOOLS = [
       required: ['title', 'description'],
     },
   },
+  {
+    name: 'assign_fee',
+    description: "Assign / set the fee amount for a student for a class (the demand, not a payment). Requires admission number and amount. Class defaults to the student's current class if omitted.",
+    parameters: {
+      type: 'object',
+      properties: {
+        admissionNumber: { type: 'string' },
+        amount: { type: 'number', description: 'The fee amount to assign, in rupees.' },
+        className: { type: 'string', description: "Optional; defaults to the student's current class." },
+        note: { type: 'string' },
+      },
+      required: ['admissionNumber', 'amount'],
+    },
+  },
 ];
 
 const WRITE_TOOL_NAMES = new Set(WRITE_TOOLS.map((t) => t.name));
@@ -185,6 +199,20 @@ async function prepareWriteAction(name, args = {}) {
         targetClass: String(args.targetClass || '').trim(),
       },
       summary: `Send notice "${args.title}"${args.targetClass ? ` to ${args.targetClass}` : ' to all classes'}.`,
+    };
+  }
+  if (name === 'assign_fee') {
+    const { student } = await findOneStudent(String(args.admissionNumber || ''));
+    if (!student) {
+      return { error: `No student found for "${args.admissionNumber}".` };
+    }
+    const adm = student.admissionNumber || student.id || args.admissionNumber;
+    const className = String(args.className || '').trim() || student.className || '';
+    const amount = Number(args.amount) || 0;
+    return {
+      type: 'assign_fee',
+      args: { admissionNumber: adm, className, amount, note: args.note || '' },
+      summary: `Assign ₹${amount.toLocaleString('en-IN')} fee for ${className || 'current class'} to ${student.displayName || student.name || adm}.`,
     };
   }
   return { error: `Unknown write tool: ${name}` };
