@@ -10,6 +10,14 @@ function normalizeApiBaseUrl(value) {
 
 export const API_BASE_URL = normalizeApiBaseUrl(process.env.EXPO_PUBLIC_API_BASE_URL);
 
+// AuthContext registers a handler here so that any 401 (missing/expired/invalid
+// session) auto-logs-out to the login screen instead of surfacing a raw
+// "Authentication required" error that leaves the user stuck.
+let onUnauthorized = null;
+export function setUnauthorizedHandler(handler) {
+  onUnauthorized = handler;
+}
+
 export async function apiRequest(endpoint, options = {}) {
   let token = null;
   try {
@@ -47,6 +55,25 @@ export async function apiRequest(endpoint, options = {}) {
         }
       })()
     : null;
+
+  // 401 = not authenticated (missing/expired/invalid session). Clear the stale
+  // session and trigger auto-logout so the app returns to Login instead of
+  // showing an "Authentication required" error.
+  if (response.status === 401) {
+    try {
+      await AsyncStorage.removeItem("mgps_erp_auth_session");
+    } catch {
+      /* noop */
+    }
+    if (onUnauthorized) {
+      try {
+        onUnauthorized();
+      } catch {
+        /* noop */
+      }
+    }
+    throw new Error(data?.message || "Your session has expired. Please sign in again.");
+  }
 
   if (!response.ok) {
     throw new Error(data?.message || "Request failed");

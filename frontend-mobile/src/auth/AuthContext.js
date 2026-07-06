@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useRef } from "r
 import * as Notifications from "expo-notifications";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { loginApi } from "../api/authApi";
-import { apiRequest } from "../api/apiClient";
+import { apiRequest, setUnauthorizedHandler } from "../api/apiClient";
 import { getActiveStudentProfile, getTeacherProfile } from "../shared/profile";
 import {
   registerForPushNotifications,
@@ -52,6 +52,23 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [selectedModule, setSelectedModule] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  // Any 401 from the API auto-logs-out to the Login screen (session expired /
+  // invalid after a fresh install) instead of leaving the user on an error.
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      AsyncStorage.removeItem(SESSION_KEY).catch(() => {});
+      try {
+        disconnectRealtime();
+      } catch {
+        /* noop */
+      }
+      setUser(null);
+      setSelectedModule(null);
+      setScreen("login");
+    });
+    return () => setUnauthorizedHandler(null);
+  }, []);
 
   useEffect(() => {
     async function loadSession() {
