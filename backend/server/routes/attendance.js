@@ -545,9 +545,8 @@ router.post('/students/batch', requireRole('admin', 'clerk', 'teacher'), async (
     if (!person) continue;
 
     const status = clean(record.status).toLowerCase() === 'absent' ? 'absent' : 'present';
-    if (status === 'absent' || status === 'half-day') {
-      notifyTargets.push({ admissionNumber: person.admissionNumber, status });
-    }
+    // Notify EVERY marked student — present as well as absent/half-day.
+    notifyTargets.push({ admissionNumber: person.admissionNumber, status });
     const logPayload = buildLogPayload(
       person,
       {
@@ -573,11 +572,11 @@ router.post('/students/batch', requireRole('admin', 'clerk', 'teacher'), async (
 
   if (writes.length) await AttendanceLog.bulkWrite(writes);
 
-  // Notify each absent / half-day student (never present ones). Non-blocking.
+  // Notify each marked student — present, absent and half-day. Non-blocking.
   for (const target of notifyTargets) {
     createNotification({
       title: 'Attendance Marked',
-      description: `Marked ${target.status} on ${attendanceDate} for ${className}.`,
+      description: `You were marked ${target.status} on ${attendanceDate} for ${className}.`,
       type: 'attendance',
       linkPage: 'Attendance',
       recipientRole: 'student',
