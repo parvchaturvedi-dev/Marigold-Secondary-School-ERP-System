@@ -30,8 +30,31 @@ import { colors } from "../shared/theme/colors";
 import { gradients, glassColors, glassStyles } from "../shared/theme/glass";
 import AuroraBackground from "../shared/components/AuroraBackground";
 import GlassCard from "../shared/components/GlassCard";
-import { Segmented, Banner, useBanner } from "./modules/shared/formKit";
+import {
+  Banner,
+  Card,
+  DateField,
+  Field,
+  PrimaryButton,
+  SectionTitle,
+  Segmented,
+  SmallButton,
+  TextField,
+  useBanner,
+} from "./modules/shared/formKit";
+import { useTheme } from "../theme/ThemeContext";
 import MobileStaffAttendanceReport from "./MobileStaffAttendanceReport";
+
+// Weekly-off toggles map day labels to JS getDay() weekday numbers (0 = Sunday).
+const WEEKDAYS = [
+  { n: 0, label: "Sun" },
+  { n: 1, label: "Mon" },
+  { n: 2, label: "Tue" },
+  { n: 3, label: "Wed" },
+  { n: 4, label: "Thu" },
+  { n: 5, label: "Fri" },
+  { n: 6, label: "Sat" },
+];
 
 // Local-time YYYY-MM-DD formatter. IMPORTANT: never use toISOString() here — it
 // converts to UTC and shifts the calendar day backwards in IST (and any tz east
@@ -92,6 +115,7 @@ async function getLocation() {
 export default function AttendanceScreen({ role, onBack }) {
   const { user } = useAuth();
   const clockBanner = useBanner();
+  const settingsBanner = useBanner();
   // Desk sub-menu tab. admin: students | staff | manage. clerk/teacher: my | class.
   const [activeTab, setActiveTab] = useState(role === "admin" ? "students" : "my");
   const [clockStatus, setClockStatus] = useState(null);
@@ -148,6 +172,17 @@ export default function AttendanceScreen({ role, onBack }) {
           halfDayUntil: overviewPayload.settings.halfDayUntil || "10:30",
           closeAfter: overviewPayload.settings.closeAfter || "11:00",
           allowTeacherQrScan: overviewPayload.settings.allowTeacherQrScan !== false,
+          studentSessionStart: overviewPayload.settings.studentSessionStart || "",
+          studentSessionEnd: overviewPayload.settings.studentSessionEnd || "",
+          teacherSessionStart: overviewPayload.settings.teacherSessionStart || "",
+          teacherSessionEnd: overviewPayload.settings.teacherSessionEnd || "",
+          studentWeeklyOffDays: Array.isArray(overviewPayload.settings.studentWeeklyOffDays)
+            ? overviewPayload.settings.studentWeeklyOffDays
+            : [],
+          teacherWeeklyOffDays: Array.isArray(overviewPayload.settings.teacherWeeklyOffDays)
+            ? overviewPayload.settings.teacherWeeklyOffDays
+            : [],
+          offDays: Array.isArray(overviewPayload.settings.offDays) ? overviewPayload.settings.offDays : [],
         });
       }
     } catch (error) {
@@ -308,6 +343,7 @@ export default function AttendanceScreen({ role, onBack }) {
   }
 
   async function handleSaveSettings() {
+    settingsBanner.clear();
     setSaving(true);
     try {
       await saveAttendanceSettings({
@@ -316,10 +352,12 @@ export default function AttendanceScreen({ role, onBack }) {
         geofenceLongitude: Number(settingsDraft.geofenceLongitude),
         geofenceRadiusMeters: Number(settingsDraft.geofenceRadiusMeters || 50),
       });
-      Alert.alert("Settings", "Attendance security settings saved.");
+      // The backend returns 400 when a locked session start is changed — that
+      // reaches the catch below. Success covers security + session/holiday config.
+      settingsBanner.showSuccess("Attendance settings saved.");
       load();
     } catch (error) {
-      Alert.alert("Settings", error.message);
+      settingsBanner.showError(error.message || "Could not save attendance settings.");
     } finally {
       setSaving(false);
     }
@@ -434,13 +472,21 @@ export default function AttendanceScreen({ role, onBack }) {
             {/* ---- Admin: Attendance Management (settings + summary) ---- */}
             {isAdmin && activeTab === "manage" && (
               <>
+                {!!settingsBanner.error && <Banner type="error" message={settingsBanner.error} />}
+                {!!settingsBanner.success && <Banner type="success" message={settingsBanner.success} />}
                 <SecurityConfigurator
                   settingsDraft={settingsDraft}
                   setSettingsDraft={setSettingsDraft}
                   onSave={handleSaveSettings}
                   saving={saving}
                 />
-                <RoleSummary roleSummary={overview?.roleSummary} counts={overview?.counts} />
+                <SessionHolidayConfigurator
+                  settingsDraft={settingsDraft}
+                  setSettingsDraft={setSettingsDraft}
+                  savedSettings={settings}
+                  onSave={handleSaveSettings}
+                  saving={saving}
+                />
               </>
             )}
 
@@ -623,6 +669,171 @@ function SecurityConfigurator({ settingsDraft, setSettingsDraft, onSave, saving 
         </LinearGradient>
       </TouchableOpacity>
     </GlassCard>
+  );
+}
+
+function SessionHolidayConfigurator({ settingsDraft, setSettingsDraft, savedSettings = {}, onSave, saving }) {
+  const { palette } = useTheme();
+  const [scope, setScope] = useState("student");
+  const [offDate, setOffDate] = useState("");
+  const [offReason, setOffReason] = useState("");
+  const [closureDate, setClosureDate] = useState("");
+  const [closureReason, setClosureReason] = useState("");
+
+  const isTeacherPanel = scope === "teacher";
+  const startKey = isTeacherPanel ? "teacherSessionStart" : "studentSessionStart";
+  const endKey = isTeacherPanel ? "teacherSessionEnd" : "studentSessionEnd";
+  const weeklyKey = isTeacherPanel ? "teacherWeeklyOffDays" : "studentWeeklyOffDays";
+
+  const savedStart = isTeacherPanel ? savedSettings.teacherSessionStart : savedSettings.studentSessionStart;
+  const startLocked = Boolean(savedStart) && savedStart <= todayKey();
+
+  const weeklyOff = Array.isArray(settingsDraft[weeklyKey]) ? settingsDraft[weeklyKey] : [];
+  const offDays = Array.isArray(settingsDraft.offDays) ? settingsDraft.offDays : [];
+  const visibleOffDays = offDays
+    .map((entry, index) => ({ ...entry, index }))
+    .filter((entry) => entry.scope === scope || entry.scope === "both");
+
+  const patch = (key, value) => setSettingsDraft((draft) => ({ ...draft, [key]: value }));
+
+  const toggleWeekday = (weekday) => {
+    setSettingsDraft((draft) => {
+      const current = Array.isArray(draft[weeklyKey]) ? draft[weeklyKey] : [];
+      const next = current.includes(weekday)
+        ? current.filter((n) => n !== weekday)
+        : [...current, weekday].sort((a, b) => a - b);
+      return { ...draft, [weeklyKey]: next };
+    });
+  };
+
+  const addOffDay = (date, dayScope, reason) => {
+    const key = normalize(date);
+    if (!key) {
+      Alert.alert("Off day", "Pick a date first.");
+      return;
+    }
+    setSettingsDraft((draft) => {
+      const current = Array.isArray(draft.offDays) ? draft.offDays : [];
+      if (current.some((entry) => entry.date === key && entry.scope === dayScope)) return draft;
+      return { ...draft, offDays: [...current, { date: key, scope: dayScope, reason: normalize(reason) }] };
+    });
+  };
+
+  const removeOffDay = (index) => {
+    setSettingsDraft((draft) => {
+      const current = Array.isArray(draft.offDays) ? draft.offDays : [];
+      return { ...draft, offDays: current.filter((_, i) => i !== index) };
+    });
+  };
+
+  const scopeLabel = isTeacherPanel ? "Teacher" : "Student";
+
+  return (
+    <Card>
+      <SectionTitle>Session &amp; Holidays</SectionTitle>
+      <Text style={[styles.muted, { marginTop: -2 }]}>
+        Configure the academic session window and off days per group.
+      </Text>
+      <View style={{ marginBottom: 12 }}>
+        <Segmented
+          options={[
+            { value: "student", label: "Students" },
+            { value: "teacher", label: "Teachers" },
+          ]}
+          value={scope}
+          onChange={setScope}
+        />
+      </View>
+
+      {startLocked ? (
+        <>
+          <View style={{ opacity: 0.55 }} pointerEvents="none">
+            <DateField label={`${scopeLabel} Session Start`} value={settingsDraft[startKey]} onChange={() => {}} />
+          </View>
+          <Text style={styles.lockNote}>Session already started — locked.</Text>
+        </>
+      ) : (
+        <DateField
+          label={`${scopeLabel} Session Start`}
+          value={settingsDraft[startKey]}
+          onChange={(value) => patch(startKey, value)}
+        />
+      )}
+
+      <DateField
+        label={`${scopeLabel} Session End`}
+        value={settingsDraft[endKey]}
+        onChange={(value) => patch(endKey, value)}
+      />
+
+      <Field label="Weekly Off Days">
+        <View style={styles.chipWrap}>
+          {WEEKDAYS.map((day) => {
+            const active = weeklyOff.includes(day.n);
+            return (
+              <TouchableOpacity
+                key={day.n}
+                onPress={() => toggleWeekday(day.n)}
+                style={[styles.dayChip, active && styles.pillActive]}
+              >
+                <Text style={[styles.dayChipText, active && styles.pillTextActive]}>{day.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </Field>
+
+      <Field label={`Declared Off / Holiday Days (${scopeLabel})`}>
+        <DateField value={offDate} onChange={setOffDate} placeholder="Holiday date" />
+        <TextField value={offReason} onChangeText={setOffReason} placeholder="Reason (optional)" />
+        <SmallButton
+          icon="add"
+          label={`Add ${scopeLabel} Off Day`}
+          onPress={() => {
+            addOffDay(offDate, scope, offReason);
+            setOffDate("");
+            setOffReason("");
+          }}
+        />
+      </Field>
+
+      <Field label="Full Closure (both groups)">
+        <DateField value={closureDate} onChange={setClosureDate} placeholder="Closure date" />
+        <TextField value={closureReason} onChangeText={setClosureReason} placeholder="Reason (optional)" />
+        <SmallButton
+          icon="add"
+          label="Add Full Closure"
+          onPress={() => {
+            addOffDay(closureDate, "both", closureReason);
+            setClosureDate("");
+            setClosureReason("");
+          }}
+        />
+      </Field>
+
+      <Field label={`Current Off Days (${scopeLabel} + closures)`}>
+        {visibleOffDays.length ? (
+          <View style={styles.chipWrap}>
+            {visibleOffDays.map((entry) => (
+              <View key={`${entry.date}-${entry.scope}-${entry.index}`} style={styles.offChip}>
+                <Text style={styles.offChipText}>
+                  {entry.date}
+                  {entry.scope === "both" ? " · Closure" : ""}
+                  {entry.reason ? ` · ${entry.reason}` : ""}
+                </Text>
+                <TouchableOpacity onPress={() => removeOffDay(entry.index)} hitSlop={8}>
+                  <Ionicons name="close" size={14} color={palette.danger || "#DC2626"} />
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <Text style={styles.mutedSmall}>No off days declared yet.</Text>
+        )}
+      </Field>
+
+      <PrimaryButton icon="calendar-outline" label="Save Session & Holidays" onPress={onSave} loading={saving} />
+    </Card>
   );
 }
 
@@ -991,6 +1202,49 @@ const styles = {
   },
   pillTextActive: {
     color: "#fff",
+  },
+  chipWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  dayChip: {
+    minWidth: 46,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.8)",
+    backgroundColor: "rgba(255,255,255,0.6)",
+    alignItems: "center",
+  },
+  dayChipText: {
+    color: "#475569",
+    fontWeight: "900",
+    fontSize: 12,
+  },
+  offChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    backgroundColor: "rgba(99,102,241,0.10)",
+    borderWidth: 1,
+    borderColor: "rgba(99,102,241,0.20)",
+  },
+  offChipText: {
+    color: "#4F46E5",
+    fontWeight: "800",
+    fontSize: 12,
+  },
+  lockNote: {
+    color: "#DC2626",
+    fontWeight: "800",
+    fontSize: 12,
+    marginTop: -4,
+    marginBottom: 12,
   },
   primaryButton: {
     minHeight: 50,

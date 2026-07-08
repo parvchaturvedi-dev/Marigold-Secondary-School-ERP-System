@@ -55,6 +55,44 @@ const attendanceSettingSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    studentSessionStart: {
+      type: String,
+      default: '',
+    },
+    studentSessionEnd: {
+      type: String,
+      default: '',
+    },
+    teacherSessionStart: {
+      type: String,
+      default: '',
+    },
+    teacherSessionEnd: {
+      type: String,
+      default: '',
+    },
+    studentWeeklyOffDays: {
+      type: [Number],
+      default: [],
+    },
+    teacherWeeklyOffDays: {
+      type: [Number],
+      default: [],
+    },
+    offDays: {
+      type: [
+        {
+          date: { type: String, default: '' },
+          scope: {
+            type: String,
+            enum: ['student', 'teacher', 'both'],
+            default: 'both',
+          },
+          reason: { type: String, default: '' },
+        },
+      ],
+      default: [],
+    },
     updatedBy: {
       type: String,
       default: '',

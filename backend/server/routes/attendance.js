@@ -98,6 +98,41 @@ const getSettings = () =>
     { new: true, upsert: true, setDefaultsOnInsert: true }
   ).lean();
 
+// Returns true when `dateKey` (YYYY-MM-DD) is a holiday / off day for the given
+// group ('student' | 'teacher'), because it is outside the group's session
+// range, falls on a recurring weekly-off weekday, or matches a declared off day
+// whose scope covers the group. Weekday is computed in local time.
+const isOffDay = (dateKey, group, setting = {}) => {
+  const key = clean(dateKey);
+  if (!key) return false;
+
+  const sessionStart = clean(
+    group === 'teacher' ? setting.teacherSessionStart : setting.studentSessionStart
+  );
+  const sessionEnd = clean(
+    group === 'teacher' ? setting.teacherSessionEnd : setting.studentSessionEnd
+  );
+  if (sessionStart && key < sessionStart) return true;
+  if (sessionEnd && key > sessionEnd) return true;
+
+  const weeklyOffDays = Array.isArray(
+    group === 'teacher' ? setting.teacherWeeklyOffDays : setting.studentWeeklyOffDays
+  )
+    ? group === 'teacher'
+      ? setting.teacherWeeklyOffDays
+      : setting.studentWeeklyOffDays
+    : [];
+  const weekday = new Date(`${key}T00:00:00`).getDay();
+  if (weeklyOffDays.map(Number).includes(weekday)) return true;
+
+  const offDays = Array.isArray(setting.offDays) ? setting.offDays : [];
+  return offDays.some(
+    (entry) =>
+      clean(entry?.date) === key &&
+      (entry?.scope === 'both' || entry?.scope === group)
+  );
+};
+
 const validateAttendanceExecution = async (request, response, next) => {
   const setting = await getSettings();
   request.attendanceSetting = setting;
@@ -345,7 +380,73 @@ router.get('/settings', requireRole('admin', 'clerk', 'teacher'), async (_reques
   response.json(await getSettings());
 });
 
+// Normalizes an incoming set of weekday numbers (0=Sun..6=Sat), dropping
+// anything out of range or non-numeric and de-duplicating.
+const normalizeWeeklyOffDays = (value) => {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set();
+  for (const item of value) {
+    const day = Number(item);
+    if (Number.isInteger(day) && day >= 0 && day <= 6) seen.add(day);
+  }
+  return Array.from(seen).sort((a, b) => a - b);
+};
+
+// Normalizes declared off/holiday days to the stored shape.
+const normalizeOffDays = (value) => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => {
+      const date = normalizeDateKey(entry?.date);
+      const scope = ['student', 'teacher', 'both'].includes(entry?.scope)
+        ? entry.scope
+        : 'both';
+      return { date, scope, reason: clean(entry?.reason) };
+    })
+    .filter((entry) => entry.date);
+};
+
+// A session START date may only be changed while the currently-saved value is
+// empty OR still in the future. Once it is today or past, it is locked.
+// Returns the value to persist, or a { locked } marker on an illegal change.
+const resolveSessionStart = (savedValue, incomingValue, today) => {
+  const saved = clean(savedValue);
+  const provided = incomingValue !== undefined && incomingValue !== null;
+  const incoming = normalizeDateKey(incomingValue);
+  const changed = provided && incoming !== saved;
+  const isLocked = Boolean(saved) && saved <= today;
+  if (changed && isLocked) return { locked: true, value: saved };
+  if (!provided) return { locked: false, value: saved };
+  return { locked: false, value: incoming };
+};
+
 router.put('/settings', requireRole('admin'), async (request, response) => {
+  const current = await getSettings();
+  const today = todayKey();
+
+  const studentStart = resolveSessionStart(
+    current.studentSessionStart,
+    request.body.studentSessionStart,
+    today
+  );
+  if (studentStart.locked) {
+    response.status(400).json({
+      message: 'The student session start date can no longer be changed because it has already begun.',
+    });
+    return;
+  }
+  const teacherStart = resolveSessionStart(
+    current.teacherSessionStart,
+    request.body.teacherSessionStart,
+    today
+  );
+  if (teacherStart.locked) {
+    response.status(400).json({
+      message: 'The teacher session start date can no longer be changed because it has already begun.',
+    });
+    return;
+  }
+
   const setting = await AttendanceSetting.findOneAndUpdate(
     { key: 'default' },
     {
@@ -360,6 +461,28 @@ router.put('/settings', requireRole('admin'), async (request, response) => {
       geofenceRadiusMeters: Math.max(25, Number(request.body.geofenceRadiusMeters) || 100),
       authorizedWifiBssid: normalizeBssid(request.body.authorizedWifiBssid),
       enforceReceptionQr: request.body.enforceReceptionQr === true,
+      studentSessionStart: studentStart.value,
+      studentSessionEnd:
+        request.body.studentSessionEnd !== undefined
+          ? normalizeDateKey(request.body.studentSessionEnd)
+          : clean(current.studentSessionEnd),
+      teacherSessionStart: teacherStart.value,
+      teacherSessionEnd:
+        request.body.teacherSessionEnd !== undefined
+          ? normalizeDateKey(request.body.teacherSessionEnd)
+          : clean(current.teacherSessionEnd),
+      studentWeeklyOffDays:
+        request.body.studentWeeklyOffDays !== undefined
+          ? normalizeWeeklyOffDays(request.body.studentWeeklyOffDays)
+          : normalizeWeeklyOffDays(current.studentWeeklyOffDays),
+      teacherWeeklyOffDays:
+        request.body.teacherWeeklyOffDays !== undefined
+          ? normalizeWeeklyOffDays(request.body.teacherWeeklyOffDays)
+          : normalizeWeeklyOffDays(current.teacherWeeklyOffDays),
+      offDays:
+        request.body.offDays !== undefined
+          ? normalizeOffDays(request.body.offDays)
+          : normalizeOffDays(current.offDays),
       updatedBy: request.auth.username,
     },
     { new: true, upsert: true, setDefaultsOnInsert: true }
@@ -491,6 +614,12 @@ router.post('/clock', requireRole('admin', 'clerk', 'teacher'), validateAttendan
   const source = clean(request.body.source || 'self-service').toLowerCase();
   const action = clean(request.body.action || 'clock-in').toLowerCase();
   const setting = request.attendanceSetting || (await getSettings());
+
+  if (isOffDay(todayKey(), 'teacher', setting)) {
+    response.status(409).json({ message: 'Today is a holiday. Attendance is closed.' });
+    return;
+  }
+
   const person = await findDirectoryPerson({
     entityType: request.auth.role,
     entityId: request.auth.username,
@@ -577,12 +706,27 @@ router.post('/clock', requireRole('admin', 'clerk', 'teacher'), validateAttendan
 // exactly one action (Clock In → Clock Out → done).
 router.get('/my-clock-status', requireRole('admin', 'clerk', 'teacher'), async (request, response) => {
   const attendanceDate = todayKey();
+  const setting = await getSettings();
   const person = await findDirectoryPerson({
     entityType: request.auth.role,
     entityId: request.auth.username,
   });
   const entityType = person?.entityType || request.auth.role;
   const entityId = person?.entityId || upper(request.auth.username);
+
+  // A holiday / off day means there is nothing to clock — surface it so the
+  // client can hide the clock-in action and skip counting the day.
+  if (isOffDay(attendanceDate, 'teacher', setting)) {
+    response.json({
+      clockedIn: false,
+      clockedOut: false,
+      clockInAt: null,
+      clockOutAt: null,
+      status: 'off',
+      isOffDay: true,
+    });
+    return;
+  }
 
   const log = await AttendanceLog.findOne({ entityType, entityId, attendanceDate }).lean();
 
@@ -630,6 +774,12 @@ router.post('/students/batch', requireRole('admin', 'clerk', 'teacher'), async (
   }
 
   const setting = await getSettings();
+  if (isOffDay(attendanceDate, 'student', setting)) {
+    response.status(409).json({
+      message: 'This day is a declared holiday / off day. Student attendance is closed for this date.',
+    });
+    return;
+  }
   const directory = await listDirectory();
   const studentsById = new Map(
     directory
@@ -833,7 +983,7 @@ router.get('/staff-report', requireRole('admin', 'clerk'), async (request, respo
   const fromInput = normalizeDateKey(request.query.from);
   const toInput = normalizeDateKey(request.query.to);
 
-  const [directory, logs] = await Promise.all([
+  const [directory, logs, setting] = await Promise.all([
     listDirectory(),
     AttendanceLog.find({
       entityType: { $in: ['teacher', 'clerk', 'admin'] },
@@ -849,6 +999,7 @@ router.get('/staff-report', requireRole('admin', 'clerk'), async (request, respo
     })
       .sort({ attendanceDate: 1, scannedAt: 1 })
       .lean(),
+    getSettings(),
   ]);
 
   const person = directory.find(
@@ -906,16 +1057,34 @@ router.get('/staff-report', requireRole('admin', 'clerk'), async (request, respo
       const weekday = new Date(`${dateKey}T00:00:00`).toLocaleDateString('en-US', {
         weekday: 'short',
       });
+
+      let status;
+      if (isOffDay(dateKey, 'teacher', setting)) {
+        // Declared / recurring holiday or outside the session — neither present
+        // nor absent; excluded from every count below.
+        status = 'off';
+      } else if (entry?.status) {
+        status = entry.status;
+      } else if (dateKey < today) {
+        // Working day, in the past, no clock log at all → auto-absent.
+        status = 'absent';
+      } else {
+        // Today (not yet clocked) or a future day stays pending.
+        status = 'unmarked';
+      }
+
       days.push({
         date: dateKey,
         weekday,
-        status: entry?.status || 'unmarked',
+        status,
         clockInAt: entry?.clockInAt || null,
         clockOutAt: entry?.clockOutAt || null,
       });
     }
 
-    const schoolDays = days.filter((day) => day.status !== 'unmarked').length;
+    const schoolDays = days.filter(
+      (day) => day.status !== 'unmarked' && day.status !== 'off'
+    ).length;
     const presentDays = days.filter(
       (day) => day.status === 'present' || day.status === 'manual'
     ).length;
@@ -968,18 +1137,28 @@ router.get('/overview', requireRole('admin', 'clerk', 'teacher'), async (request
   ]);
 
   const logByKey = new Map(logs.map((log) => [`${log.entityType}:${log.entityId}`, log]));
+  const isPastDate = date < todayKey();
   const buildCountsForType = (entityType) => {
+    const group = entityType === 'student' ? 'student' : 'teacher';
     const people = directory.filter((item) => item.entityType === entityType);
+    // Whole group is off on this date — count nobody present or absent.
+    if (isOffDay(date, group, settings)) {
+      return { total: 0, present: 0, absent: 0, late: 0, pending: 0, off: true };
+    }
+    const isStaff = group === 'teacher';
     return people.reduce(
       (acc, item) => {
-        const status = logByKey.get(`${item.entityType}:${item.entityId}`)?.status || 'absent';
+        const status = logByKey.get(`${item.entityType}:${item.entityId}`)?.status || '';
         if (status === 'present' || status === 'manual') acc.present += 1;
         else if (status === 'half-day') acc.late += 1;
-        else acc.absent += 1;
+        else if (!status && isStaff && !isPastDate) {
+          // Today (or future) staff who have not clocked yet are pending, not absent.
+          acc.pending += 1;
+        } else acc.absent += 1;
         acc.total += 1;
         return acc;
       },
-      { total: 0, present: 0, absent: 0, late: 0 }
+      { total: 0, present: 0, absent: 0, late: 0, pending: 0 }
     );
   };
   const roster = directory
@@ -1008,6 +1187,8 @@ router.get('/overview', requireRole('admin', 'clerk', 'teacher'), async (request
   response.json({
     date,
     settings,
+    isStudentOffDay: isOffDay(date, 'student', settings),
+    isTeacherOffDay: isOffDay(date, 'teacher', settings),
     counts,
     roleSummary: {
       clerk: buildCountsForType('clerk'),

@@ -1,8 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   CalendarDays,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clock3,
@@ -22,11 +21,21 @@ import { apiFetch, authFetch } from './api';
 import StaffAttendanceReport from './StaffAttendanceReport';
 import {
   clockAttendance,
-  fetchStaffAttendanceRecords,
   saveAttendanceSettings,
   saveStudentAttendanceBatch,
   useAttendanceOverview,
 } from './attendanceStore';
+
+// Weekly-off toggles map day labels to JS getDay() weekday numbers (0 = Sunday).
+const WEEKDAYS = [
+  { n: 0, label: 'Sun' },
+  { n: 1, label: 'Mon' },
+  { n: 2, label: 'Tue' },
+  { n: 3, label: 'Wed' },
+  { n: 4, label: 'Thu' },
+  { n: 5, label: 'Fri' },
+  { n: 6, label: 'Sat' },
+];
 
 // Role-based sub-menu tabs for the Attendance Desk. Admin gets the full split;
 // clerk/teacher get self + class register; student sees no tabs (own view).
@@ -64,16 +73,6 @@ const addDays = (date, days) => {
 const statusFromLog = (log) => (log?.status === 'absent' ? 'absent' : log ? 'present' : 'present');
 const bssidPlaceholder = 'AA:BB:CC:DD:EE:FF';
 
-// First / last day of the current month as LOCAL YYYY-MM-DD (never toISOString).
-const monthStartKey = () => {
-  const now = new Date();
-  return toLocalKey(new Date(now.getFullYear(), now.getMonth(), 1));
-};
-const monthEndKey = () => {
-  const now = new Date();
-  return toLocalKey(new Date(now.getFullYear(), now.getMonth() + 1, 0));
-};
-
 // Format an ISO timestamp string as local hh:mm AM/PM. Returns '—' for null.
 const formatClockTime = (iso) => {
   if (!iso) return '—';
@@ -105,6 +104,13 @@ const AttendanceControl = ({ role = 'admin' }) => {
     geofenceRadiusMeters: 100,
     authorizedWifiBssid: '',
     enforceReceptionQr: false,
+    studentSessionStart: '',
+    studentSessionEnd: '',
+    teacherSessionStart: '',
+    teacherSessionEnd: '',
+    studentWeeklyOffDays: [],
+    teacherWeeklyOffDays: [],
+    offDays: [],
   });
 
   const { overview, isLoading, error, reload } = useAttendanceOverview({
@@ -135,6 +141,17 @@ const AttendanceControl = ({ role = 'admin' }) => {
       geofenceRadiusMeters: overview.settings.geofenceRadiusMeters || 100,
       authorizedWifiBssid: overview.settings.authorizedWifiBssid || '',
       enforceReceptionQr: overview.settings.enforceReceptionQr === true,
+      studentSessionStart: overview.settings.studentSessionStart || '',
+      studentSessionEnd: overview.settings.studentSessionEnd || '',
+      teacherSessionStart: overview.settings.teacherSessionStart || '',
+      teacherSessionEnd: overview.settings.teacherSessionEnd || '',
+      studentWeeklyOffDays: Array.isArray(overview.settings.studentWeeklyOffDays)
+        ? overview.settings.studentWeeklyOffDays
+        : [],
+      teacherWeeklyOffDays: Array.isArray(overview.settings.teacherWeeklyOffDays)
+        ? overview.settings.teacherWeeklyOffDays
+        : [],
+      offDays: Array.isArray(overview.settings.offDays) ? overview.settings.offDays : [],
     }));
   }, [overview?.settings]);
 
@@ -170,7 +187,36 @@ const AttendanceControl = ({ role = 'admin' }) => {
     [draftStatus, roster]
   );
 
-  const roleSummary = overview?.roleSummary || {};
+  // Session-start locks come from the SAVED settings (not the editable draft): once
+  // a start date is today-or-past the session has begun and the field is frozen.
+  const savedStudentStart = overview?.settings?.studentSessionStart || '';
+  const savedTeacherStart = overview?.settings?.teacherSessionStart || '';
+  const studentStartLocked = Boolean(savedStudentStart) && savedStudentStart <= todayKey();
+  const teacherStartLocked = Boolean(savedTeacherStart) && savedTeacherStart <= todayKey();
+
+  const toggleWeeklyOff = (field, weekday) => {
+    setSettingsDraft((draft) => {
+      const current = Array.isArray(draft[field]) ? draft[field] : [];
+      const exists = current.includes(weekday);
+      return { ...draft, [field]: exists ? current.filter((n) => n !== weekday) : [...current, weekday] };
+    });
+  };
+
+  const addOffDay = (date, scope, reason) => {
+    if (!date) return;
+    setSettingsDraft((draft) => ({
+      ...draft,
+      offDays: [...(Array.isArray(draft.offDays) ? draft.offDays : []), { date, scope, reason: reason || '' }],
+    }));
+  };
+
+  const removeOffDay = (index) => {
+    setSettingsDraft((draft) => ({
+      ...draft,
+      offDays: (Array.isArray(draft.offDays) ? draft.offDays : []).filter((_, i) => i !== index),
+    }));
+  };
+
   const mapSrc =
     settingsDraft.geofenceLatitude && settingsDraft.geofenceLongitude
       ? `https://maps.google.com/maps?q=${settingsDraft.geofenceLatitude},${settingsDraft.geofenceLongitude}&z=16&output=embed`
@@ -209,7 +255,7 @@ const AttendanceControl = ({ role = 'admin' }) => {
   const saveSettings = async () => {
     try {
       await saveAttendanceSettings(settingsDraft);
-      setMessage('Geofence and security configuration saved.');
+      setMessage('Attendance configuration saved.');
       reload();
     } catch (saveError) {
       setMessage(saveError.message);
@@ -384,16 +430,10 @@ const AttendanceControl = ({ role = 'admin' }) => {
     </section>
   );
 
-  // Attendance Management tab (admin): role-summary metric cards + geofence /
-  // WiFi / time-rules configurator + the legacy staff-attendance-record table.
+  // Attendance Management tab (admin): geofence / WiFi / time-rules configurator +
+  // the session & holiday configuration (students / teachers).
   const managementSection = (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 stagger">
-        <MetricCard title="Clerk Attendance Summary" counts={roleSummary.clerk} />
-        <MetricCard title="Teacher Attendance Summary" counts={roleSummary.teacher} />
-        <MetricCard title="Student Attendance Summary" counts={roleSummary.student} />
-      </div>
-
       <section className="grid grid-cols-1 xl:grid-cols-12 gap-6">
         <div className="xl:col-span-7 glass-card rounded-3xl p-5 space-y-4">
           <h3 className="text-sm font-black flex items-center gap-2">
@@ -469,7 +509,60 @@ const AttendanceControl = ({ role = 'admin' }) => {
         </div>
       </section>
 
-      <StaffAttendanceRecords />
+      {/* Session & Holidays — academic session window, weekly offs and declared
+          holidays, configured independently for students and staff. Full-closure
+          days (scope 'both') block everyone. Persisted via saveAttendanceSettings;
+          a locked-start 400 from the backend surfaces in the message banner. */}
+      <section className="glass-card rounded-3xl p-5 space-y-4">
+        <div className="border-b border-slate-100/80 pb-4">
+          <h3 className="text-sm font-black flex items-center gap-2">
+            <CalendarDays className="w-4 h-4 text-emerald-700" /> Session & Holidays
+          </h3>
+          <p className="text-[10px] font-bold text-slate-500 mt-1">
+            Academic session window, weekly offs and declared holidays. A start date that has already begun is locked.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <SessionHolidayPanel
+            title="Students"
+            scope="student"
+            start={settingsDraft.studentSessionStart}
+            end={settingsDraft.studentSessionEnd}
+            startLocked={studentStartLocked}
+            weeklyOff={settingsDraft.studentWeeklyOffDays}
+            offDays={settingsDraft.offDays}
+            onStartChange={(value) => setSettingsDraft((draft) => ({ ...draft, studentSessionStart: value }))}
+            onEndChange={(value) => setSettingsDraft((draft) => ({ ...draft, studentSessionEnd: value }))}
+            onToggleWeekly={(weekday) => toggleWeeklyOff('studentWeeklyOffDays', weekday)}
+            onAddOffDay={(date, reason) => addOffDay(date, 'student', reason)}
+            onRemoveOffDay={removeOffDay}
+          />
+          <SessionHolidayPanel
+            title="Teachers (Staff)"
+            scope="teacher"
+            start={settingsDraft.teacherSessionStart}
+            end={settingsDraft.teacherSessionEnd}
+            startLocked={teacherStartLocked}
+            weeklyOff={settingsDraft.teacherWeeklyOffDays}
+            offDays={settingsDraft.offDays}
+            onStartChange={(value) => setSettingsDraft((draft) => ({ ...draft, teacherSessionStart: value }))}
+            onEndChange={(value) => setSettingsDraft((draft) => ({ ...draft, teacherSessionEnd: value }))}
+            onToggleWeekly={(weekday) => toggleWeeklyOff('teacherWeeklyOffDays', weekday)}
+            onAddOffDay={(date, reason) => addOffDay(date, 'teacher', reason)}
+            onRemoveOffDay={removeOffDay}
+          />
+        </div>
+
+        <div className="rounded-2xl bg-rose-50/60 border border-rose-100 p-4 space-y-2">
+          <p className="text-[10px] font-black uppercase tracking-widest text-rose-600">Full Closure — nobody can mark</p>
+          <OffDayAdder onAdd={(date, reason) => addOffDay(date, 'both', reason)} addLabel="Add closure" />
+        </div>
+
+        <button type="button" onClick={saveSettings} className="h-11 px-5 rounded-2xl btn-primary text-xs font-black inline-flex items-center gap-2">
+          <Save className="w-4 h-4" /> Save Session & Holidays
+        </button>
+      </section>
     </div>
   );
 
@@ -774,165 +867,148 @@ const MyAttendancePanel = () => {
   );
 };
 
-const StaffAttendanceRecords = () => {
-  const [from, setFrom] = useState(monthStartKey());
-  const [to, setTo] = useState(monthEndKey());
-  const [state, setState] = useState({ isLoading: false, error: '', data: null });
-  const [expanded, setExpanded] = useState({});
+// A single add-row for declared holidays / closures: a date, a reason, and an Add
+// button. Manages its own draft inputs and clears them after a successful add.
+const OffDayAdder = ({ onAdd, addLabel = 'Add' }) => {
+  const [date, setDate] = useState('');
+  const [reason, setReason] = useState('');
 
-  const load = async (rangeFrom, rangeTo) => {
-    setState((current) => ({ ...current, isLoading: true, error: '' }));
-    try {
-      const data = await fetchStaffAttendanceRecords({ from: rangeFrom, to: rangeTo });
-      setState({ isLoading: false, error: '', data });
-      setExpanded({});
-    } catch (loadError) {
-      setState({ isLoading: false, error: loadError.message || 'Could not load staff records.', data: null });
-    }
+  const submit = () => {
+    if (!date) return;
+    onAdd(date, reason.trim());
+    setDate('');
+    setReason('');
   };
 
-  useEffect(() => {
-    load(from, to);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  return (
+    <div className="flex flex-wrap items-end gap-2">
+      <input
+        type="date"
+        value={date}
+        onChange={(event) => setDate(event.target.value)}
+        className="h-9 rounded-xl bg-white/60 border border-white/80 px-2 text-xs font-bold outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all"
+      />
+      <input
+        value={reason}
+        onChange={(event) => setReason(event.target.value)}
+        placeholder="Reason"
+        className="h-9 flex-1 min-w-32 rounded-xl bg-white/60 border border-white/80 px-2 text-xs font-bold outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all"
+      />
+      <button
+        type="button"
+        onClick={submit}
+        disabled={!date}
+        className="h-9 px-3 rounded-xl btn-primary text-[11px] font-black disabled:opacity-40"
+      >
+        {addLabel}
+      </button>
+    </div>
+  );
+};
 
-  const staff = state.data?.staff || [];
+// One panel (Students or Teachers) of the Session & Holidays configurator: session
+// start (lockable) + end, weekly-off toggles, and this scope's declared holidays.
+// offDays is the SHARED array; rows are filtered to this scope plus 'both' closures.
+const SessionHolidayPanel = ({
+  title,
+  scope,
+  start,
+  end,
+  startLocked,
+  weeklyOff = [],
+  offDays = [],
+  onStartChange,
+  onEndChange,
+  onToggleWeekly,
+  onAddOffDay,
+  onRemoveOffDay,
+}) => {
+  const rows = (Array.isArray(offDays) ? offDays : [])
+    .map((entry, index) => ({ entry, index }))
+    .filter(({ entry }) => entry.scope === scope || entry.scope === 'both');
 
   return (
-    <section className="glass-card rounded-3xl p-5 space-y-4">
-      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 border-b border-slate-100/80 pb-4">
-        <div>
-          <h3 className="text-sm font-black flex items-center gap-2">
-            <UsersRound className="w-4 h-4 text-emerald-700" /> Staff Attendance Record
-          </h3>
-          <p className="text-[10px] font-bold text-slate-500 mt-1">
-            Days present and daily clock-in / clock-out times for every teacher and clerk.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-end gap-2">
-          <label className="text-[10px] font-black uppercase text-slate-500">
-            From
-            <input
-              type="date"
-              value={from}
-              onChange={(event) => setFrom(event.target.value)}
-              className="mt-1 h-10 w-full rounded-2xl bg-white/60 border border-white/80 px-3 text-xs font-bold outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all"
-            />
-          </label>
-          <label className="text-[10px] font-black uppercase text-slate-500">
-            To
-            <input
-              type="date"
-              value={to}
-              onChange={(event) => setTo(event.target.value)}
-              className="mt-1 h-10 w-full rounded-2xl bg-white/60 border border-white/80 px-3 text-xs font-bold outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all"
-            />
-          </label>
-          <button
-            type="button"
-            onClick={() => load(from, to)}
-            disabled={state.isLoading}
-            className="h-10 px-4 rounded-2xl btn-primary text-xs font-black inline-flex items-center gap-2 disabled:opacity-40"
-          >
-            <RefreshCcw className="w-4 h-4" /> {state.isLoading ? 'Loading...' : 'Load'}
-          </button>
+    <div className="glass-soft rounded-2xl p-4 space-y-4">
+      <p className="text-[11px] font-black uppercase tracking-widest text-slate-500">{title}</p>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <label className="text-[10px] font-black uppercase text-slate-500">
+          Session Start
+          <input
+            type="date"
+            value={start || ''}
+            disabled={startLocked}
+            onChange={(event) => onStartChange(event.target.value)}
+            className="mt-1 h-10 w-full rounded-2xl bg-white/60 border border-white/80 px-3 text-xs font-bold outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+          />
+          {startLocked && (
+            <span className="mt-1 block text-[9px] font-bold normal-case text-amber-600">
+              Locked — session already started
+            </span>
+          )}
+        </label>
+        <label className="text-[10px] font-black uppercase text-slate-500">
+          Session End
+          <input
+            type="date"
+            value={end || ''}
+            onChange={(event) => onEndChange(event.target.value)}
+            className="mt-1 h-10 w-full rounded-2xl bg-white/60 border border-white/80 px-3 text-xs font-bold outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all"
+          />
+        </label>
+      </div>
+
+      <div>
+        <p className="text-[10px] font-black uppercase text-slate-500 mb-2">Weekly Off Days</p>
+        <div className="flex flex-wrap gap-1">
+          {WEEKDAYS.map((day) => {
+            const active = weeklyOff.includes(day.n);
+            return (
+              <button
+                key={day.n}
+                type="button"
+                onClick={() => onToggleWeekly(day.n)}
+                className={`h-8 w-11 rounded-xl border text-[11px] font-black transition-colors ${
+                  active ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-white/60 text-slate-500 border-white/80'
+                }`}
+              >
+                {day.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {state.error && (
-        <div className="rounded-2xl bg-rose-50 border border-rose-100 px-4 py-3 text-xs font-black text-rose-700">
-          {state.error}
+      <div>
+        <p className="text-[10px] font-black uppercase text-slate-500 mb-2">Declared Off / Holiday Days</p>
+        <OffDayAdder onAdd={(date, reason) => onAddOffDay(date, reason)} />
+        <div className="mt-3 flex flex-wrap gap-2">
+          {rows.map(({ entry, index }) => (
+            <span
+              key={`${entry.date}-${entry.scope}-${index}`}
+              className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-black border ${
+                entry.scope === 'both'
+                  ? 'bg-rose-50 border-rose-200 text-rose-700'
+                  : 'bg-white/70 border-white/80 text-slate-600'
+              }`}
+            >
+              <span className="font-mono">{entry.date}</span>
+              {entry.reason && <span className="font-bold normal-case text-slate-500">· {entry.reason}</span>}
+              {entry.scope === 'both' && <span className="text-[9px] uppercase tracking-widest text-rose-500">Closure</span>}
+              <button
+                type="button"
+                onClick={() => onRemoveOffDay(index)}
+                className="text-slate-400 hover:text-rose-600"
+                title="Remove"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          ))}
+          {!rows.length && <span className="text-[10px] font-bold text-slate-400">No declared holidays.</span>}
         </div>
-      )}
-
-      <div className="overflow-x-auto rounded-2xl border border-slate-100/80">
-        <table className="w-full min-w-180 text-left text-xs font-bold">
-          <thead className="bg-indigo-50/60 text-slate-500 uppercase text-[10px]">
-            <tr>
-              <th className="px-3 py-3">Staff Name</th>
-              <th className="px-3 py-3">Role</th>
-              <th className="px-3 py-3">Days Present</th>
-              <th className="px-3 py-3 text-right">Details</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100/80">
-            {staff.map((person) => {
-              const isOpen = Boolean(expanded[person.entityId]);
-              const hasDays = person.days.length > 0;
-              return (
-                <React.Fragment key={person.entityId}>
-                  <tr className="hover:bg-white/60">
-                    <td className="px-3 py-3">
-                      <p className="font-black">{person.displayName}</p>
-                      <p className="text-[10px] font-mono text-slate-500">{person.entityId}</p>
-                    </td>
-                    <td className="px-3 py-3 capitalize text-slate-500">{person.role}</td>
-                    <td className="px-3 py-3">
-                      <span className={`text-lg font-black ${person.daysPresent > 0 ? 'text-emerald-700' : 'text-slate-400'}`}>
-                        {person.daysPresent}
-                      </span>
-                    </td>
-                    <td className="px-3 py-3 text-right">
-                      <button
-                        type="button"
-                        onClick={() => setExpanded((current) => ({ ...current, [person.entityId]: !isOpen }))}
-                        disabled={!hasDays}
-                        className="h-8 px-3 rounded-xl bg-white/70 border border-white/80 text-[11px] font-black inline-flex items-center gap-1 disabled:opacity-40"
-                      >
-                        {isOpen ? 'Hide' : 'View'}
-                        <ChevronDown className={`w-3 h-3 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-                      </button>
-                    </td>
-                  </tr>
-                  {isOpen && hasDays && (
-                    <tr>
-                      <td colSpan="4" className="px-3 pb-4">
-                        <div className="overflow-x-auto rounded-xl border border-slate-100/80 bg-white/40">
-                          <table className="w-full text-left text-[11px] font-bold">
-                            <thead className="bg-emerald-50/60 text-slate-500 uppercase text-[9px]">
-                              <tr>
-                                <th className="px-3 py-2">Date</th>
-                                <th className="px-3 py-2">Clock In</th>
-                                <th className="px-3 py-2">Clock Out</th>
-                                <th className="px-3 py-2">Status</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100/70">
-                              {person.days.map((day) => (
-                                <tr key={day.date}>
-                                  <td className="px-3 py-2 font-mono">{day.date}</td>
-                                  <td className="px-3 py-2 font-mono text-emerald-700">{formatClockTime(day.clockInAt)}</td>
-                                  <td className="px-3 py-2 font-mono text-indigo-700">{formatClockTime(day.clockOutAt)}</td>
-                                  <td className="px-3 py-2 capitalize text-slate-500">{day.status || '—'}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                  {!hasDays && (
-                    <tr>
-                      <td colSpan="4" className="px-3 pb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                        No clock-ins in this range
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
-              );
-            })}
-            {!staff.length && (
-              <tr>
-                <td colSpan="4" className="py-10 text-center text-[10px] font-black uppercase tracking-widest text-neutral-400">
-                  {state.isLoading ? 'Loading staff records...' : 'No teachers or clerks found.'}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
       </div>
-    </section>
+    </div>
   );
 };
 
