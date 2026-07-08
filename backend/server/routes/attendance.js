@@ -146,6 +146,22 @@ const validateAttendanceExecution = async (request, response, next) => {
     const allowed = Number(setting.geofenceRadiusMeters || 50);
     if (distance > allowed) {
       const label = action === 'clock-out' ? 'clock out' : 'clock in';
+      // Best-effort alert to admins that a staff member tried to clock in/out
+      // from outside the campus boundary. Never let notify failure change the
+      // response — the fence rejection below is what the client acts on.
+      const breachRole = request.auth?.role || 'staff';
+      findDirectoryPerson({ entityType: breachRole, entityId: request.auth?.username })
+        .then((breachPerson) => {
+          const personName = breachPerson?.displayName || request.auth?.username || 'A staff member';
+          return createNotification({
+            title: 'Attendance Boundary Alert',
+            description: `${personName} (${breachRole}) tried to ${label} ~${Math.round(distance)}m away from campus (allowed ${allowed}m).`,
+            type: 'general',
+            linkPage: 'Attendance',
+            recipientRole: 'admin',
+          });
+        })
+        .catch(() => {});
       response.status(403).json({
         message: `You are ${Math.round(distance)}m away from the school. You can only ${label} within ${allowed}m of the campus.`,
         distanceMeters: Math.round(distance),
@@ -210,6 +226,14 @@ const normalizeStaffRecord = (person = {}, role = 'teacher', index = 0) => {
     fatherName: '',
     motherName: '',
     mobileNumber: clean(profile.mobile || source.mobile || source.phone),
+    joinDate: clean(
+      source.dateOfJoining ||
+        source.joiningDate ||
+        source.joinDate ||
+        source.doj ||
+        profile.dateOfJoining ||
+        ''
+    ),
   };
 };
 
@@ -282,6 +306,10 @@ const buildLogPayload = (person, body, status, setting, scannedAt) => ({
   mobileNumber: person.mobileNumber,
   attendanceDate: clean(body.attendanceDate) || todayKey(),
   scannedAt,
+  // clockInAt / clockOutAt only apply to staff clock flows; omit the keys
+  // entirely for scans/registers so a full-document update never nulls them.
+  ...(body.clockInAt !== undefined ? { clockInAt: body.clockInAt } : {}),
+  ...(body.clockOutAt !== undefined ? { clockOutAt: body.clockOutAt } : {}),
   status,
   source: body.source,
   deviceId: clean(body.deviceId),
@@ -473,20 +501,62 @@ router.post('/clock', requireRole('admin', 'clerk', 'teacher'), validateAttendan
     return;
   }
 
+  const attendanceDate = todayKey();
+  const isClockOut = action === 'clock-out';
+  const now = request.serverTimestamp || new Date();
+
+  // Read today's existing state to enforce clock-in-once + clock-out ordering.
+  const existing = await AttendanceLog.findOne({
+    entityType: person.entityType,
+    entityId: person.entityId,
+    attendanceDate,
+  }).lean();
+  const hasClockIn = Boolean(existing?.clockInAt);
+  const hasClockOut = Boolean(existing?.clockOutAt);
+
+  if (isClockOut) {
+    if (!hasClockIn) {
+      response.status(409).json({ message: 'Please clock in first.' });
+      return;
+    }
+    if (hasClockOut) {
+      response.status(409).json({ message: 'You have already clocked out today.' });
+      return;
+    }
+  } else if (hasClockIn) {
+    response.status(409).json({ message: 'You have already clocked in today.', clockedIn: true });
+    return;
+  }
+
+  // Clock-in decides the day's status (present / half-day by scan time). Clock-out
+  // keeps whatever status the clock-in already established.
+  let dayStatus;
+  if (isClockOut) {
+    dayStatus = existing?.status || 'present';
+  } else {
+    dayStatus = resolveStatus(setting, now);
+    if (dayStatus === 'closed') dayStatus = 'half-day';
+  }
+
+  const clockFields = isClockOut
+    ? { clockInAt: existing?.clockInAt || null, clockOutAt: now }
+    : { clockInAt: now, clockOutAt: existing?.clockOutAt || null };
+
   const logPayload = buildLogPayload(
     person,
     {
       ...request.body,
       source,
-      action: action === 'clock-out' ? 'clock-out' : 'clock-in',
-      attendanceDate: todayKey(),
-      status: 'present',
+      action: isClockOut ? 'clock-out' : 'clock-in',
+      attendanceDate,
+      status: dayStatus,
       recordedBy: request.auth.username,
       geofenceDistanceMeters: request.geofenceDistanceMeters,
+      ...clockFields,
     },
-    'present',
+    dayStatus,
     setting,
-    request.serverTimestamp || new Date()
+    now
   );
 
   const log = await AttendanceLog.findOneAndUpdate(
@@ -500,7 +570,38 @@ router.post('/clock', requireRole('admin', 'clerk', 'teacher'), validateAttendan
   );
 
   emitRealtimeEvent(eventName, { type: 'clock', log });
-  response.json({ message: `${action === 'clock-out' ? 'Clock-out' : 'Clock-in'} recorded.`, log, setting });
+  response.json({ message: `${isClockOut ? 'Clock-out' : 'Clock-in'} recorded.`, log, setting });
+});
+
+// Today's clock state for the signed-in staff member so the client can render
+// exactly one action (Clock In → Clock Out → done).
+router.get('/my-clock-status', requireRole('admin', 'clerk', 'teacher'), async (request, response) => {
+  const attendanceDate = todayKey();
+  const person = await findDirectoryPerson({
+    entityType: request.auth.role,
+    entityId: request.auth.username,
+  });
+  const entityType = person?.entityType || request.auth.role;
+  const entityId = person?.entityId || upper(request.auth.username);
+
+  const log = await AttendanceLog.findOne({ entityType, entityId, attendanceDate }).lean();
+
+  // Prefer the explicit clockInAt/clockOutAt fields; fall back to scannedAt+action
+  // for any legacy row written before those fields existed.
+  const toIso = (value) => (value ? new Date(value).toISOString() : null);
+  const legacyStamp = log?.scannedAt ? new Date(log.scannedAt).toISOString() : null;
+  const clockInAt =
+    toIso(log?.clockInAt) || (log && log.action !== 'clock-out' ? legacyStamp : null);
+  const clockOutAt =
+    toIso(log?.clockOutAt) || (log && log.action === 'clock-out' ? legacyStamp : null);
+
+  response.json({
+    clockedIn: Boolean(clockInAt),
+    clockedOut: Boolean(clockOutAt),
+    clockInAt,
+    clockOutAt,
+    status: log?.status || 'absent',
+  });
 });
 
 router.post('/students/batch', requireRole('admin', 'clerk', 'teacher'), async (request, response) => {
@@ -705,6 +806,151 @@ router.get('/staff-records', requireRole('admin', 'clerk'), async (request, resp
     .sort((a, b) => a.displayName.localeCompare(b.displayName));
 
   response.json({ from, to, staff });
+});
+
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+const pad2 = (value) => String(value).padStart(2, '0');
+const normalizeDateKey = (value) => {
+  const raw = clean(value);
+  if (!raw) return '';
+  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? '' : toLocalKey(parsed);
+};
+
+// Per-staff monthly attendance breakdown that powers the Staff Attendance
+// screen (monthly cards + datewise detail + client-side export).
+router.get('/staff-report', requireRole('admin', 'clerk'), async (request, response) => {
+  const entityId = upper(request.query.entityId);
+  if (!entityId) {
+    response.status(400).json({ message: 'entityId is required.' });
+    return;
+  }
+
+  const fromInput = normalizeDateKey(request.query.from);
+  const toInput = normalizeDateKey(request.query.to);
+
+  const [directory, logs] = await Promise.all([
+    listDirectory(),
+    AttendanceLog.find({
+      entityType: { $in: ['teacher', 'clerk', 'admin'] },
+      entityId,
+      ...(fromInput || toInput
+        ? {
+            attendanceDate: {
+              ...(fromInput ? { $gte: fromInput } : {}),
+              ...(toInput ? { $lte: toInput } : {}),
+            },
+          }
+        : {}),
+    })
+      .sort({ attendanceDate: 1, scannedAt: 1 })
+      .lean(),
+  ]);
+
+  const person = directory.find(
+    (item) =>
+      ['teacher', 'clerk', 'admin'].includes(item.entityType) && item.entityId === entityId
+  );
+
+  // One AttendanceLog row per staff/day; index it by date for O(1) day lookups.
+  const logByDate = new Map();
+  logs.forEach((log) => {
+    const stamp = log.scannedAt ? new Date(log.scannedAt).toISOString() : null;
+    const clockInAt = log.clockInAt
+      ? new Date(log.clockInAt).toISOString()
+      : log.action !== 'clock-out'
+      ? stamp
+      : null;
+    const clockOutAt = log.clockOutAt
+      ? new Date(log.clockOutAt).toISOString()
+      : log.action === 'clock-out'
+      ? stamp
+      : null;
+    logByDate.set(log.attendanceDate, { status: log.status, clockInAt, clockOutAt });
+  });
+
+  const today = todayKey();
+  const earliestLog = logs.length ? logs[0].attendanceDate : '';
+  const joinDate = normalizeDateKey(person?.joinDate) || earliestLog || today;
+
+  // Effective span: explicit from/to when given, else joinDate → today.
+  let start = fromInput || joinDate;
+  let end = toInput || today;
+  if (start > end) start = end;
+
+  const months = [];
+  let year = Number(start.slice(0, 4));
+  let month = Number(start.slice(5, 7));
+  const endYear = Number(end.slice(0, 4));
+  const endMonth = Number(end.slice(5, 7));
+  let guard = 0;
+
+  while ((year < endYear || (year === endYear && month <= endMonth)) && guard < 240) {
+    const monthKey = `${year}-${pad2(month)}`;
+    const lastDayNum = new Date(year, month, 0).getDate();
+    const monthStartKey = `${monthKey}-01`;
+    const monthEndKey = `${monthKey}-${pad2(lastDayNum)}`;
+    const dayFromKey = start > monthStartKey ? start : monthStartKey;
+    const dayToKey = end < monthEndKey ? end : monthEndKey;
+    const dayFrom = Number(dayFromKey.slice(8, 10));
+    const dayTo = Number(dayToKey.slice(8, 10));
+
+    const days = [];
+    for (let dayNum = dayFrom; dayNum <= dayTo; dayNum += 1) {
+      const dateKey = `${monthKey}-${pad2(dayNum)}`;
+      const entry = logByDate.get(dateKey);
+      const weekday = new Date(`${dateKey}T00:00:00`).toLocaleDateString('en-US', {
+        weekday: 'short',
+      });
+      days.push({
+        date: dateKey,
+        weekday,
+        status: entry?.status || 'unmarked',
+        clockInAt: entry?.clockInAt || null,
+        clockOutAt: entry?.clockOutAt || null,
+      });
+    }
+
+    const schoolDays = days.filter((day) => day.status !== 'unmarked').length;
+    const presentDays = days.filter(
+      (day) => day.status === 'present' || day.status === 'manual'
+    ).length;
+    const halfDays = days.filter((day) => day.status === 'half-day').length;
+    const absentDays = days.filter((day) => day.status === 'absent').length;
+    const percent = schoolDays
+      ? Number(((presentDays / schoolDays) * 100).toFixed(1))
+      : 0;
+
+    months.push({
+      month: monthKey,
+      label: `${MONTH_NAMES[month - 1]} ${year}`,
+      schoolDays,
+      presentDays,
+      absentDays,
+      halfDays,
+      percent,
+      days,
+    });
+
+    month += 1;
+    if (month > 12) {
+      month = 1;
+      year += 1;
+    }
+    guard += 1;
+  }
+
+  response.json({
+    entityId,
+    displayName: person?.displayName || logs[0]?.displayName || entityId,
+    role: person?.entityType || logs[0]?.entityType || 'teacher',
+    joinDate,
+    months,
+  });
 });
 
 router.get('/overview', requireRole('admin', 'clerk', 'teacher'), async (request, response) => {

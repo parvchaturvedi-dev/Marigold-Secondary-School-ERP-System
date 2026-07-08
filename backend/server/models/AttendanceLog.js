@@ -58,6 +58,14 @@ const attendanceLogSchema = new mongoose.Schema(
       required: true,
       default: Date.now,
     },
+    clockInAt: {
+      type: Date,
+      default: null,
+    },
+    clockOutAt: {
+      type: Date,
+      default: null,
+    },
     status: {
       type: String,
       enum: ['present', 'half-day', 'closed', 'manual', 'absent'],
