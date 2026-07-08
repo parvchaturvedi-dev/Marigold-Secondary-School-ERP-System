@@ -18,10 +18,8 @@ import { LinearGradient } from "expo-linear-gradient";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
-// SDK 54: the legacy file API (readAsStringAsync/base64) lives at /legacy — the
-// root import's old functions throw at runtime. FileField.pick reads a picked
-// file as base64, so it must use the legacy module.
-import * as FileSystem from "expo-file-system/legacy";
+// SDK 54 file API: read a picked file's base64 via `new File(uri).base64()`.
+import { File } from "expo-file-system";
 
 import PageHeader from "../../../components/cards/PageHeader";
 import AuroraBackground from "../../../shared/components/AuroraBackground";
@@ -340,7 +338,7 @@ export function FileField({ label, hint, value, onChange, types = ["image/*", "a
     const res = await DocumentPicker.getDocumentAsync({ type: types, multiple: false, copyToCacheDirectory: true });
     if (res.canceled || !res.assets?.[0]) return;
     const a = res.assets[0];
-    const base64 = await FileSystem.readAsStringAsync(a.uri, { encoding: "base64" });
+    const base64 = await new File(a.uri).base64();
     const type = a.mimeType || "application/octet-stream";
     onChange({
       uri: a.uri,
