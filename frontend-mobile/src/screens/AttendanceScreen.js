@@ -17,6 +17,7 @@ import * as Location from "expo-location";
 import PageHeader from "../components/cards/PageHeader";
 import { useAuth } from "../auth/AuthContext";
 import { getDeviceIdentity } from "../api/deviceIdentity";
+import { apiRequest } from "../api/apiClient";
 import {
   clockAttendance,
   fetchAttendanceDirectory,
@@ -29,12 +30,25 @@ import { colors } from "../shared/theme/colors";
 import { gradients, glassColors, glassStyles } from "../shared/theme/glass";
 import AuroraBackground from "../shared/components/AuroraBackground";
 import GlassCard from "../shared/components/GlassCard";
+import { Segmented, Banner, useBanner } from "./modules/shared/formKit";
+import MobileStaffAttendanceReport from "./MobileStaffAttendanceReport";
 
-const todayKey = () => new Date().toISOString().slice(0, 10);
+// Local-time YYYY-MM-DD formatter. IMPORTANT: never use toISOString() here — it
+// converts to UTC and shifts the calendar day backwards in IST (and any tz east
+// of GMT), which used to make "today" resolve to yesterday after ~05:30 local.
+const pad2 = (value) => String(value).padStart(2, "0");
+const formatDateKey = (date) => `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+const todayKey = () => formatDateKey(new Date());
 const addDays = (dateKey, days) => {
   const date = new Date(`${dateKey}T00:00:00`);
   date.setDate(date.getDate() + days);
-  return date.toISOString().slice(0, 10);
+  return formatDateKey(date);
+};
+const formatClockTime = (value) => {
+  if (!value) return "--";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 };
 const normalize = (value = "") => String(value || "").trim();
 const isPresentStatus = (status) => ["present", "manual", "half-day"].includes(status);
@@ -77,6 +91,11 @@ async function getLocation() {
 
 export default function AttendanceScreen({ role, onBack }) {
   const { user } = useAuth();
+  const clockBanner = useBanner();
+  // Desk sub-menu tab. admin: students | staff | manage. clerk/teacher: my | class.
+  const [activeTab, setActiveTab] = useState(role === "admin" ? "students" : "my");
+  const [clockStatus, setClockStatus] = useState(null);
+  const [clockStatusLoading, setClockStatusLoading] = useState(false);
   const [date, setDate] = useState(todayKey());
   const [selectedClass, setSelectedClass] = useState("");
   const [overview, setOverview] = useState(null);
@@ -141,6 +160,24 @@ export default function AttendanceScreen({ role, onBack }) {
   useEffect(() => {
     load();
   }, [load]);
+
+  const isSelfClockRole = role === "clerk" || role === "teacher";
+  const refetchClockStatus = useCallback(async () => {
+    if (!isSelfClockRole) return;
+    setClockStatusLoading(true);
+    try {
+      const payload = await apiRequest("/attendance/my-clock-status");
+      setClockStatus(payload || null);
+    } catch {
+      setClockStatus(null);
+    } finally {
+      setClockStatusLoading(false);
+    }
+  }, [isSelfClockRole]);
+
+  useEffect(() => {
+    refetchClockStatus();
+  }, [refetchClockStatus]);
 
   useEffect(() => {
     const roster = overview?.roster || [];
@@ -225,13 +262,14 @@ export default function AttendanceScreen({ role, onBack }) {
   }
 
   async function handleClock(action) {
+    clockBanner.clear();
     const point = locationState.point;
     if (!point?.inside) {
-      Alert.alert("Location required", "Please verify GPS inside the school boundary first.");
+      clockBanner.showError("Please verify GPS inside the school boundary first.");
       return;
     }
     if (point.isMockLocation) {
-      Alert.alert("Blocked", "Mock location detected.");
+      clockBanner.showError("Mock location detected. Disable it and try again.");
       return;
     }
 
@@ -253,10 +291,17 @@ export default function AttendanceScreen({ role, onBack }) {
           isMockLocation: false,
         },
       });
-      Alert.alert("Attendance", payload.message || "Attendance recorded.");
+      clockBanner.showSuccess(payload.message || "Attendance recorded.");
+      // Refetch the once-per-day clock state so the UI collapses to the next
+      // valid action (or the "done for today" card). Also refresh overview.
+      await refetchClockStatus();
       load();
     } catch (error) {
-      Alert.alert("Attendance", error.message);
+      // The clock endpoint now returns 409 for already-clocked-in / clock-in-first
+      // / already-clocked-out. apiRequest surfaces the server message — show it as
+      // a friendly banner and resync the status so buttons reflect reality.
+      clockBanner.showError(error.message || "Could not record attendance.");
+      await refetchClockStatus();
     } finally {
       setSaving(false);
     }
@@ -319,6 +364,20 @@ export default function AttendanceScreen({ role, onBack }) {
     setDraft(next);
   }
 
+  const deskTabs = isAdmin
+    ? [
+        { value: "students", label: "Students" },
+        { value: "staff", label: "Staff" },
+        { value: "manage", label: "Manage" },
+      ]
+    : [
+        { value: "my", label: "My Attendance" },
+        { value: "class", label: "Class" },
+      ];
+  // The register (with its sticky Save bar) lives on the "students" tab for admin
+  // and the "class" tab for clerk/teacher.
+  const registerTabActive = isAdmin ? activeTab === "students" : activeTab === "class";
+
   if (loading && !overview && !isStudent) {
     return (
       <View style={{ flex: 1 }}>
@@ -337,33 +396,18 @@ export default function AttendanceScreen({ role, onBack }) {
       <AttendanceHeader onBack={onBack} />
       <ScrollView
         refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}
-        contentContainerStyle={{ padding: 16, paddingBottom: canEditStudents ? 112 : 28 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: canEditStudents && registerTabActive ? 112 : 28 }}
       >
         {isStudent ? (
           <StudentLedger metrics={studentMetrics} monthDays={monthDays} logs={studentLogs} />
         ) : (
           <>
-            <RoleSummary roleSummary={overview?.roleSummary} counts={overview?.counts} />
-            {isAdmin && (
-              <SecurityConfigurator
-                settingsDraft={settingsDraft}
-                setSettingsDraft={setSettingsDraft}
-                onSave={handleSaveSettings}
-                saving={saving}
-              />
-            )}
-            {(isClerk || isTeacher) && (
-              <ClockCard
-                role={role}
-                locationState={locationState}
-                onCheck={checkLocation}
-                onClock={handleClock}
-                saving={saving}
-              />
-            )}
-            {isTeacher && !teacherClass ? (
-              <AccessDenied />
-            ) : (
+            <View style={{ marginBottom: 14 }}>
+              <Segmented options={deskTabs} value={activeTab} onChange={setActiveTab} />
+            </View>
+
+            {/* ---- Admin: Students Attendance ---- */}
+            {isAdmin && activeTab === "students" && (
               <RegisterCard
                 isAdmin={isAdmin}
                 isClerk={isClerk}
@@ -383,11 +427,70 @@ export default function AttendanceScreen({ role, onBack }) {
                 setOverrideToken={setOverrideToken}
               />
             )}
+
+            {/* ---- Admin: Staff Attendance (self-contained sibling) ---- */}
+            {isAdmin && activeTab === "staff" && <MobileStaffAttendanceReport />}
+
+            {/* ---- Admin: Attendance Management (settings + summary) ---- */}
+            {isAdmin && activeTab === "manage" && (
+              <>
+                <SecurityConfigurator
+                  settingsDraft={settingsDraft}
+                  setSettingsDraft={setSettingsDraft}
+                  onSave={handleSaveSettings}
+                  saving={saving}
+                />
+                <RoleSummary roleSummary={overview?.roleSummary} counts={overview?.counts} />
+              </>
+            )}
+
+            {/* ---- Clerk / Teacher: My Attendance (self clock-in/out) ---- */}
+            {(isClerk || isTeacher) && activeTab === "my" && (
+              <ClockCard
+                role={role}
+                locationState={locationState}
+                onCheck={checkLocation}
+                onClock={handleClock}
+                saving={saving}
+                status={clockStatus}
+                statusLoading={clockStatusLoading}
+                banner={clockBanner}
+              />
+            )}
+
+            {/* ---- Clerk / Teacher: Class Attendance (register) ---- */}
+            {(isClerk || isTeacher) && activeTab === "class" && (
+              isTeacher && !teacherClass ? (
+                <AccessDenied />
+              ) : (
+                <>
+                  <RoleSummary roleSummary={overview?.roleSummary} counts={overview?.counts} />
+                  <RegisterCard
+                    isAdmin={isAdmin}
+                    isClerk={isClerk}
+                    isTeacher={isTeacher}
+                    date={date}
+                    setDate={setDate}
+                    calendarOpen={calendarOpen}
+                    setCalendarOpen={setCalendarOpen}
+                    className={className}
+                    selectedClass={selectedClass}
+                    setSelectedClass={setSelectedClass}
+                    classNames={classNames}
+                    roster={roster}
+                    draft={draft}
+                    setDraft={setDraft}
+                    overrideToken={overrideToken}
+                    setOverrideToken={setOverrideToken}
+                  />
+                </>
+              )
+            )}
           </>
         )}
       </ScrollView>
 
-      {canEditStudents && roster.length > 0 && (
+      {canEditStudents && registerTabActive && roster.length > 0 && (
         <View style={styles.stickyBar}>
           <ActionButton label="Cancel" color="#64748B" onPress={load} />
           <ActionButton label="Reset" color="#F97316" onPress={resetDraft} />
@@ -523,44 +626,60 @@ function SecurityConfigurator({ settingsDraft, setSettingsDraft, onSave, saving 
   );
 }
 
-function ClockCard({ role, locationState, onCheck, onClock, saving }) {
+function ClockCard({ role, locationState, onCheck, onClock, saving, status, statusLoading, banner }) {
   const enabled = Boolean(locationState.point?.inside && !locationState.point?.isMockLocation);
+  const clockedIn = Boolean(status?.clockedIn);
+  const clockedOut = Boolean(status?.clockedOut);
+  const done = clockedIn && clockedOut;
+
   return (
     <GlassCard style={styles.card}>
       <Text style={styles.cardTitle}>My Attendance</Text>
       <Text style={styles.muted}>{role === "teacher" ? "Teacher" : "Clerk"} self-service clock-in and clock-out requires verified GPS.</Text>
-      <TouchableOpacity style={styles.secondaryButton} onPress={onCheck} disabled={locationState.checking}>
-        <Ionicons name="locate-outline" size={20} color={colors.primary} />
-        <Text style={styles.secondaryButtonText}>{locationState.checking ? "Checking GPS..." : "Check School Boundary"}</Text>
-      </TouchableOpacity>
-      {!!locationState.message && (
-        <Text style={[styles.statusText, enabled ? { color: "#16A34A" } : { color: "#DC2626" }]}>
-          {locationState.message}
-          {locationState.point?.distance !== undefined ? ` (${locationState.point.distance}m)` : ""}
-        </Text>
+
+      {!!banner?.error && <Banner type="error" message={banner.error} />}
+      {!!banner?.success && <Banner type="success" message={banner.success} />}
+
+      {statusLoading && !status ? (
+        <ActivityIndicator color={colors.primary} style={{ marginVertical: 16 }} />
+      ) : done ? (
+        <View style={styles.doneCard}>
+          <Ionicons name="checkmark-circle" size={30} color="#16A34A" />
+          <Text style={styles.doneTitle}>Done for today</Text>
+          <Text style={styles.doneMeta}>
+            In: {formatClockTime(status?.clockInAt)}   •   Out: {formatClockTime(status?.clockOutAt)}
+          </Text>
+        </View>
+      ) : (
+        <>
+          <TouchableOpacity style={styles.secondaryButton} onPress={onCheck} disabled={locationState.checking}>
+            <Ionicons name="locate-outline" size={20} color={colors.primary} />
+            <Text style={styles.secondaryButtonText}>{locationState.checking ? "Checking GPS..." : "Check School Boundary"}</Text>
+          </TouchableOpacity>
+          {!!locationState.message && (
+            <Text style={[styles.statusText, enabled ? { color: "#16A34A" } : { color: "#DC2626" }]}>
+              {locationState.message}
+              {locationState.point?.distance !== undefined ? ` (${locationState.point.distance}m)` : ""}
+            </Text>
+          )}
+          {clockedIn && (
+            <Text style={styles.clockedInHint}>
+              Clocked in at {formatClockTime(status?.clockInAt)}. Clock out when you leave.
+            </Text>
+          )}
+          {/* Show ONLY the next valid action: Clock In if not yet in, else Clock Out. */}
+          <TouchableOpacity
+            activeOpacity={0.85}
+            disabled={!enabled || saving}
+            onPress={() => onClock(clockedIn ? "clock-out" : "clock-in")}
+            style={[{ borderRadius: 16, overflow: "hidden" }, !enabled && styles.disabled]}
+          >
+            <LinearGradient colors={gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.clockButton}>
+              <Text style={styles.clockText}>{clockedIn ? "Clock Out" : "Clock In"}</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </>
       )}
-      <View style={{ flexDirection: "row", gap: 10 }}>
-        <TouchableOpacity
-          activeOpacity={0.85}
-          disabled={!enabled || saving}
-          onPress={() => onClock("clock-in")}
-          style={[{ flex: 1, borderRadius: 16, overflow: "hidden" }, !enabled && styles.disabled]}
-        >
-          <LinearGradient colors={gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.clockButton}>
-            <Text style={styles.clockText}>Clock In</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-        <TouchableOpacity
-          activeOpacity={0.85}
-          disabled={!enabled || saving}
-          onPress={() => onClock("clock-out")}
-          style={[{ flex: 1, borderRadius: 16, overflow: "hidden" }, !enabled && styles.disabled]}
-        >
-          <LinearGradient colors={gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.clockButton}>
-            <Text style={styles.clockText}>Clock Out</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-      </View>
     </GlassCard>
   );
 }
@@ -584,6 +703,8 @@ function RegisterCard(props) {
     overrideToken,
     setOverrideToken,
   } = props;
+  // Future dates are never markable — block the forward arrow (and picker) at today.
+  const atToday = date >= todayKey();
   return (
     <GlassCard style={styles.card}>
       <Text style={styles.cardTitle}>{isAdmin ? "Global Override Register" : "Student Attendance Register"}</Text>
@@ -594,7 +715,11 @@ function RegisterCard(props) {
         <TouchableOpacity style={[styles.inputBox, { flex: 1 }]} onPress={() => setCalendarOpen(true)}>
           <Text style={{ fontWeight: "900", color: "#0F172A", textAlign: "center" }}>{date}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.iconButton} onPress={() => setDate(addDays(date, 1))}>
+        <TouchableOpacity
+          style={[styles.iconButton, atToday && styles.disabled]}
+          disabled={atToday}
+          onPress={() => !atToday && setDate(addDays(date, 1))}
+        >
           <Ionicons name="chevron-forward" size={20} color="#0F172A" />
         </TouchableOpacity>
       </View>
@@ -634,7 +759,7 @@ function RegisterCard(props) {
         </View>
       ))}
       {!roster.length && <Text style={styles.emptyText}>No students found for this class and date.</Text>}
-      <DateModal visible={calendarOpen} date={date} onClose={() => setCalendarOpen(false)} onSave={setDate} />
+      <DateModal visible={calendarOpen} date={date} onClose={() => setCalendarOpen(false)} onSave={setDate} max={todayKey()} />
     </GlassCard>
   );
 }
@@ -718,7 +843,7 @@ function AccessDenied() {
   );
 }
 
-function DateModal({ visible, date, onClose, onSave }) {
+function DateModal({ visible, date, onClose, onSave, max }) {
   const [value, setValue] = useState(date);
   useEffect(() => setValue(date), [date, visible]);
   return (
@@ -727,10 +852,20 @@ function DateModal({ visible, date, onClose, onSave }) {
         <GlassCard strong style={styles.modalCard}>
           <Text style={styles.cardTitle}>Select Date</Text>
           <Input label="Date (YYYY-MM-DD)" value={value} onChangeText={setValue} />
+          {!!max && (
+            <Text style={[styles.mutedSmall, { marginTop: -6, marginBottom: 12 }]}>
+              Future dates are not allowed (up to {max}).
+            </Text>
+          )}
           <TouchableOpacity
             activeOpacity={0.85}
             onPress={() => {
-              onSave(value);
+              // Block future dates — clamp anything past today back to the max.
+              const next = max && value > max ? max : value;
+              if (max && value > max) {
+                Alert.alert("Future date", "You cannot mark attendance for a future date.");
+              }
+              onSave(next);
               onClose();
             }}
             style={{ borderRadius: 16, overflow: "hidden" }}
@@ -896,6 +1031,30 @@ const styles = {
   statusText: {
     fontWeight: "900",
     marginBottom: 12,
+  },
+  clockedInHint: {
+    color: "#16A34A",
+    fontWeight: "800",
+    marginBottom: 12,
+  },
+  doneCard: {
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 18,
+    marginTop: 6,
+    borderRadius: 16,
+    backgroundColor: "rgba(16,185,129,0.10)",
+    borderWidth: 1,
+    borderColor: "rgba(16,185,129,0.30)",
+  },
+  doneTitle: {
+    color: "#0F172A",
+    fontSize: 16,
+    fontWeight: "900",
+  },
+  doneMeta: {
+    color: "#16A34A",
+    fontWeight: "800",
   },
   disabled: {
     opacity: 0.45,
