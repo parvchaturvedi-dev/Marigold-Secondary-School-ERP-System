@@ -18,7 +18,10 @@ import { LinearGradient } from "expo-linear-gradient";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
-import * as FileSystem from "expo-file-system";
+// SDK 54: the legacy file API (readAsStringAsync/base64) lives at /legacy — the
+// root import's old functions throw at runtime. FileField.pick reads a picked
+// file as base64, so it must use the legacy module.
+import * as FileSystem from "expo-file-system/legacy";
 
 import PageHeader from "../../../components/cards/PageHeader";
 import AuroraBackground from "../../../shared/components/AuroraBackground";
