@@ -57,15 +57,14 @@ configure();
 
 export const isCloudinaryConfigured = () => configured;
 
-// Cloudinary splits assets by "resource type". Images (jpg/png) get the image
-// pipeline; everything else (PDFs and misc binaries) goes to 'raw'.
-export const resourceTypeForMime = (mimeType = '') => {
-  const mime = String(mimeType).toLowerCase();
-  if (mime === 'image/jpeg' || mime === 'image/jpg' || mime === 'image/png' || mime.startsWith('image/')) {
-    return 'image';
-  }
-  return 'raw';
-};
+// We store EVERY uploaded file as a Cloudinary 'raw' asset — including image
+// scans (JPG/PNG). Cloudinary's 'image' pipeline re-encodes/optimizes images on
+// upload, which silently changes the bytes and can degrade a scanned document
+// (e.g. an Aadhaar/birth-certificate photo). 'raw' preserves the original file
+// byte-for-byte, which is what a document store must do. Our own download route
+// sets the correct Content-Type from the stored mimeType, so files still open
+// and display normally in the browser/app.
+export const resourceTypeForMime = () => 'raw';
 
 // Upload a Buffer to Cloudinary as an authenticated (non-public) asset.
 // Returns { publicId, resourceType, bytes, format } or throws.
