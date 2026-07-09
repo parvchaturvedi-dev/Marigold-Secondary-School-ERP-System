@@ -4,8 +4,21 @@ import TeacherDocumentFile from '../models/TeacherDocumentFile.js';
 import { isMongoConnected } from '../db.js';
 import { requireRole } from '../middleware/auth.js';
 import { createNotification } from '../utils/notify.js';
+import {
+  isCloudinaryConfigured,
+  resourceTypeForMime,
+  uploadBuffer,
+  streamAssetToResponse,
+  deleteAsset,
+} from '../utils/cloudinary.js';
 
 const router = express.Router();
+
+// Stable Cloudinary public_id per (teacherId, docName) so a re-upload overwrites
+// the previous asset instead of orphaning it.
+const cloudPublicId = (teacherId, docName) =>
+  `${teacherId}__${String(docName).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`;
+const TEACHER_DOC_FOLDER = 'mgps/teacher-documents';
 
 const TEACHER_DOC_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
 const REVIEW_STATUSES = ['approved', 'rejected', 'locked'];
@@ -81,6 +94,35 @@ const performUpload = async ({ request, response, teacherId, docName, byTeacher 
 
   const uploadedByName = request.auth?.displayName || request.auth?.username || 'Admin';
 
+  // Offload the bytes to Cloudinary when configured; otherwise keep the legacy
+  // inline Buffer so the app still works before keys are set.
+  let storageFields;
+  if (isCloudinaryConfigured()) {
+    try {
+      const uploaded = await uploadBuffer(file.buffer, {
+        folder: TEACHER_DOC_FOLDER,
+        publicId: cloudPublicId(teacherId, docName),
+        mimeType: file.mimetype,
+      });
+      storageFields = {
+        storage: 'cloudinary',
+        publicId: uploaded.publicId,
+        resourceType: uploaded.resourceType,
+        data: undefined,
+      };
+    } catch (error) {
+      response.status(502).json({ message: 'File storage upload failed. Please try again.' });
+      return;
+    }
+  } else {
+    storageFields = {
+      storage: 'mongo',
+      publicId: '',
+      resourceType: '',
+      data: file.buffer,
+    };
+  }
+
   const record = await TeacherDocumentFile.findOneAndUpdate(
     { teacherId, docName },
     {
@@ -89,7 +131,7 @@ const performUpload = async ({ request, response, teacherId, docName, byTeacher 
       fileName: file.originalname || docName,
       mimeType: file.mimetype,
       size: file.size ?? file.buffer?.length ?? 0,
-      data: file.buffer,
+      ...storageFields,
       uploadedByName,
       uploadedAt: new Date(),
       status: 'pending',
@@ -168,7 +210,27 @@ router.get('/me/:docName', ensureMongo, requireRole('teacher'), async (request, 
   const docName = String(request.params.docName || '').trim();
 
   const file = await TeacherDocumentFile.findOne({ teacherId, docName });
-  if (!file || !file.data) {
+  if (!file) {
+    response.status(404).json({ message: 'Document not found.' });
+    return;
+  }
+
+  if (file.storage === 'cloudinary' && file.publicId) {
+    try {
+      await streamAssetToResponse(response, {
+        publicId: file.publicId,
+        resourceType: file.resourceType || resourceTypeForMime(file.mimeType),
+        mimeType: file.mimeType,
+        fileName: file.fileName || docName,
+        disposition: 'inline',
+      });
+    } catch (error) {
+      response.status(502).json({ message: 'Failed to load document from storage.' });
+    }
+    return;
+  }
+
+  if (!file.data) {
     response.status(404).json({ message: 'Document not found.' });
     return;
   }
@@ -195,7 +257,27 @@ router.get('/:teacherId/:docName', ensureMongo, async (request, response) => {
   }
 
   const file = await TeacherDocumentFile.findOne({ teacherId, docName });
-  if (!file || !file.data) {
+  if (!file) {
+    response.status(404).json({ message: 'Document not found.' });
+    return;
+  }
+
+  if (file.storage === 'cloudinary' && file.publicId) {
+    try {
+      await streamAssetToResponse(response, {
+        publicId: file.publicId,
+        resourceType: file.resourceType || resourceTypeForMime(file.mimeType),
+        mimeType: file.mimeType,
+        fileName: file.fileName || docName,
+        disposition: 'inline',
+      });
+    } catch (error) {
+      response.status(502).json({ message: 'Failed to load document from storage.' });
+    }
+    return;
+  }
+
+  if (!file.data) {
     response.status(404).json({ message: 'Document not found.' });
     return;
   }
@@ -261,10 +343,17 @@ router.delete(
     const teacherId = normalizeTeacherId(request.params.teacherId);
     const docName = String(request.params.docName || '').trim();
 
+    const existing = await TeacherDocumentFile.findOne({ teacherId, docName }).select(
+      'storage publicId resourceType'
+    );
     const result = await TeacherDocumentFile.deleteOne({ teacherId, docName });
     if (result.deletedCount === 0) {
       response.status(404).json({ message: 'Document not found.' });
       return;
+    }
+
+    if (existing?.storage === 'cloudinary' && existing.publicId) {
+      await deleteAsset(existing.publicId, existing.resourceType || 'raw');
     }
 
     response.json({ message: 'Document removed.' });

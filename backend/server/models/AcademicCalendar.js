@@ -16,9 +16,27 @@ const academicCalendarSchema = new mongoose.Schema(
       required: true,
       default: 'application/pdf',
     },
+    // Where the bytes live: 'cloudinary' (offloaded) or 'mongo' (legacy Buffer).
+    storage: {
+      type: String,
+      enum: ['mongo', 'cloudinary'],
+      default: 'mongo',
+    },
+    // Cloudinary reference (set when storage === 'cloudinary').
+    publicId: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    resourceType: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    // Legacy inline bytes (set when storage === 'mongo'). Optional now that files
+    // can be offloaded to Cloudinary.
     fileData: {
       type: Buffer,
-      required: true,
     },
     uploadedBy: {
       type: String,

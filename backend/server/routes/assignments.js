@@ -6,6 +6,13 @@ import { emitRealtimeEvent } from '../realtime.js';
 import { requireRole } from '../middleware/auth.js';
 import { resolveDisplayName } from '../utils/nameLookup.js';
 import { notifyMany } from '../utils/notify.js';
+import {
+  isCloudinaryConfigured,
+  resourceTypeForMime,
+  uploadBuffer,
+  signedUrlFor,
+  deleteAsset,
+} from '../utils/cloudinary.js';
 
 const router = express.Router();
 const upload = multer({
@@ -14,6 +21,12 @@ const upload = multer({
     fileSize: 25 * 1024 * 1024,
   },
 });
+
+// Stable Cloudinary public_id per (assignmentId, fileName) so a re-upload of the
+// same file overwrites its previous asset instead of orphaning it.
+const ASSIGNMENT_FOLDER = 'mgps/assignments';
+const assignmentPublicId = (assignmentId, fileName) =>
+  `${assignmentId}__${String(fileName).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`;
 
 const ensureMongo = (_request, response, next) => {
   if (!isMongoConnected()) {
@@ -34,15 +47,86 @@ const isLocked = (checkingDate) => {
   return deadline < today;
 };
 
-const applyAttachment = (assignment, file) => {
-  if (!file) return;
+// Attach an uploaded file to the assignment. Offloads the bytes to Cloudinary
+// when configured; otherwise keeps the legacy inline Buffer so the app still
+// works before keys are set. Returns false on a Cloudinary upload failure so the
+// caller can respond 502; true otherwise (including the no-file case).
+const applyAttachment = async (assignment, file) => {
+  if (!file) return true;
+
+  let storageFields;
+  if (isCloudinaryConfigured()) {
+    try {
+      const uploaded = await uploadBuffer(file.buffer, {
+        folder: ASSIGNMENT_FOLDER,
+        publicId: assignmentPublicId(assignment._id, file.originalname),
+        mimeType: file.mimetype,
+      });
+      storageFields = {
+        storage: 'cloudinary',
+        publicId: uploaded.publicId,
+        resourceType: uploaded.resourceType,
+        data: undefined,
+      };
+    } catch (error) {
+      return false;
+    }
+  } else {
+    storageFields = { storage: 'mongo', publicId: '', resourceType: '', data: file.buffer };
+  }
 
   assignment.attachment = {
     name: file.originalname,
     mimeType: file.mimetype,
     size: file.size,
-    data: file.buffer,
+    ...storageFields,
   };
+  return true;
+};
+
+// Best-effort delete of an attachment's backing Cloudinary asset (no-op for
+// legacy Mongo-stored attachments). Never let a cleanup failure break a request.
+const deleteAttachmentAsset = async (attachment) => {
+  if (attachment && attachment.storage === 'cloudinary' && attachment.publicId) {
+    await deleteAsset(attachment.publicId, attachment.resourceType || 'raw');
+  }
+};
+
+// Build the attachment portion of the API payload. Keeps the exact
+// { name, mimeType, size, dataUrl } | null shape the frontends expect: legacy
+// Mongo attachments encode their inline Buffer; Cloudinary-offloaded attachments
+// have their bytes fetched back (via a short-lived signed URL) and re-encoded so
+// the contract is byte-for-byte identical and no frontend change is needed.
+const resolveAttachmentPayload = async (attachment) => {
+  if (!attachment) return null;
+
+  const base = {
+    name: attachment.name,
+    mimeType: attachment.mimeType,
+    size: attachment.size,
+  };
+
+  if (attachment.storage === 'cloudinary' && attachment.publicId) {
+    try {
+      const url = signedUrlFor(
+        attachment.publicId,
+        attachment.resourceType || resourceTypeForMime(attachment.mimeType)
+      );
+      const upstream = await fetch(url);
+      if (!upstream.ok) return null;
+      const arrayBuffer = await upstream.arrayBuffer();
+      const base64 = Buffer.from(arrayBuffer).toString('base64');
+      return { ...base, dataUrl: `data:${attachment.mimeType};base64,${base64}` };
+    } catch (error) {
+      return null;
+    }
+  }
+
+  if (attachment.data) {
+    return { ...base, dataUrl: `data:${attachment.mimeType};base64,${attachment.data.toString('base64')}` };
+  }
+
+  return null;
 };
 
 const toAssignmentPayload = async (assignment) => {
@@ -61,14 +145,7 @@ const toAssignmentPayload = async (assignment) => {
     subject: assignment.subject,
     targetClasses: assignment.targetClasses,
     checkingDate: assignment.checkingDate,
-    attachment: assignment.attachment?.data
-      ? {
-          name: assignment.attachment.name,
-          mimeType: assignment.attachment.mimeType,
-          size: assignment.attachment.size,
-          dataUrl: `data:${assignment.attachment.mimeType};base64,${assignment.attachment.data.toString('base64')}`,
-        }
-      : null,
+    attachment: await resolveAttachmentPayload(assignment.attachment),
     createdByRole: assignment.createdByRole,
     createdByUsername: assignment.createdByUsername,
     createdByName,
@@ -133,7 +210,11 @@ router.post('/', ensureMongo, requireRole('admin', 'clerk', 'teacher'), upload.s
     updatedByName: request.body.createdByName,
   });
 
-  applyAttachment(assignment, request.file);
+  const attachmentOk = await applyAttachment(assignment, request.file);
+  if (!attachmentOk) {
+    response.status(502).json({ message: 'File storage upload failed. Please try again.' });
+    return;
+  }
   await assignment.save();
 
   emitRealtimeEvent('mgps-erp-assignments-updated');
@@ -178,6 +259,16 @@ router.patch('/:id', ensureMongo, requireRole('admin', 'clerk', 'teacher'), uplo
     return;
   }
 
+  // Snapshot the current attachment's storage reference so we can clean up its
+  // Cloudinary asset if this update replaces or removes it.
+  const previousAttachment = assignment.attachment
+    ? {
+        storage: assignment.attachment.storage,
+        publicId: assignment.attachment.publicId,
+        resourceType: assignment.attachment.resourceType,
+      }
+    : null;
+
   const targetClasses = parseTargetClasses(request.body.targetClasses);
   assignment.title = request.body.title || assignment.title;
   assignment.description = request.body.description || assignment.description;
@@ -189,8 +280,20 @@ router.patch('/:id', ensureMongo, requireRole('admin', 'clerk', 'teacher'), uplo
     assignment.attachment = null;
   }
 
-  applyAttachment(assignment, request.file);
+  const attachmentOk = await applyAttachment(assignment, request.file);
+  if (!attachmentOk) {
+    response.status(502).json({ message: 'File storage upload failed. Please try again.' });
+    return;
+  }
   await assignment.save();
+
+  // Drop the old Cloudinary asset if it was replaced (different publicId) or removed.
+  if (previousAttachment?.storage === 'cloudinary' && previousAttachment.publicId) {
+    const currentPublicId = assignment.attachment?.publicId || '';
+    if (previousAttachment.publicId !== currentPublicId) {
+      await deleteAsset(previousAttachment.publicId, previousAttachment.resourceType || 'raw');
+    }
+  }
 
   emitRealtimeEvent('mgps-erp-assignments-updated');
   response.json(await toAssignmentPayload(assignment));
@@ -238,8 +341,16 @@ router.patch('/:id/checking-date', ensureMongo, requireRole('admin', 'clerk', 't
 
 // Session promotion resets the assignment board: every promoted class starts fresh.
 router.post('/reset', ensureMongo, requireRole('admin', 'clerk'), async (_request, response) => {
+  // Collect Cloudinary-backed attachments so their assets can be cleaned up too.
+  const cloudBacked = await Assignment.find({ 'attachment.storage': 'cloudinary' }).select('attachment');
+
   const result = await Assignment.deleteMany({});
   const cleared = typeof result?.deletedCount === 'number' ? result.deletedCount : 0;
+
+  // Best-effort asset cleanup — deleteAsset swallows its own failures.
+  for (const assignment of cloudBacked) {
+    await deleteAttachmentAsset(assignment.attachment);
+  }
 
   emitRealtimeEvent('mgps-erp-assignments-updated');
   response.json({ cleared });

@@ -37,9 +37,23 @@ const boardStudentResultFileSchema = new mongoose.Schema(
       required: true,
       enum: ['application/pdf', 'image/jpeg', 'image/png'],
     },
+    storage: {
+      type: String,
+      enum: ['mongo', 'cloudinary'],
+      default: 'mongo',
+    },
+    publicId: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    resourceType: {
+      type: String,
+      trim: true,
+      default: '',
+    },
     data: {
       type: Buffer,
-      required: true,
     },
     uploadedByName: {
       type: String,

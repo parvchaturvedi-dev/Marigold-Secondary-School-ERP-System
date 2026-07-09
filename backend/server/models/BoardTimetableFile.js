@@ -26,9 +26,23 @@ const boardTimetableFileSchema = new mongoose.Schema(
       required: true,
       default: 'application/pdf',
     },
+    storage: {
+      type: String,
+      enum: ['mongo', 'cloudinary'],
+      default: 'mongo',
+    },
+    publicId: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    resourceType: {
+      type: String,
+      trim: true,
+      default: '',
+    },
     data: {
       type: Buffer,
-      required: true,
     },
     uploadedByName: {
       type: String,

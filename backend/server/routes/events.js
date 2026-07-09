@@ -6,6 +6,19 @@ import { emitRealtimeEvent } from '../realtime.js';
 import { requireRole } from '../middleware/auth.js';
 import { resolveDisplayName } from '../utils/nameLookup.js';
 import { createNotification } from '../utils/notify.js';
+import {
+  isCloudinaryConfigured,
+  resourceTypeForMime,
+  uploadBuffer,
+  signedUrlFor,
+  deleteAsset,
+} from '../utils/cloudinary.js';
+
+// Stable Cloudinary public_id per event so a re-upload overwrites the previous
+// asset instead of orphaning it (one image per event → derived from the id).
+const EVENT_FOLDER = 'mgps/events';
+const cloudPublicId = (eventId) =>
+  String(eventId).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 
 const router = express.Router();
 const upload = multer({
@@ -28,8 +41,31 @@ const ensureMongo = (_request, response, next) => {
 
 const toBoolean = (value) => value === true || value === 'true';
 
+// Resolve the inline base64 data URL the frontend renders directly as <img src>.
+// Cloudinary-stored images are fetched back via a short-lived signed URL so the
+// response shape (imageDataUrl) stays identical to the legacy Mongo-Buffer path.
+const resolveImageDataUrl = async (event) => {
+  if (!event.imageType) return '';
+  if (event.storage === 'cloudinary' && event.publicId) {
+    try {
+      const url = signedUrlFor(event.publicId, event.resourceType || resourceTypeForMime(event.imageType));
+      const upstream = await fetch(url);
+      if (!upstream.ok) return '';
+      const arrayBuffer = await upstream.arrayBuffer();
+      return `data:${event.imageType};base64,${Buffer.from(arrayBuffer).toString('base64')}`;
+    } catch {
+      return '';
+    }
+  }
+  if (event.imageData) {
+    return `data:${event.imageType};base64,${event.imageData.toString('base64')}`;
+  }
+  return '';
+};
+
 const toEventPayload = async (event) => {
   const createdByName = await resolveDisplayName(event.createdByUsername);
+  const imageDataUrl = await resolveImageDataUrl(event);
 
   return {
   id: event._id.toString(),
@@ -46,10 +82,7 @@ const toEventPayload = async (event) => {
   imageName: event.imageName,
   imageType: event.imageType,
   imageSize: event.imageSize,
-  imageDataUrl:
-    event.imageData && event.imageType
-      ? `data:${event.imageType};base64,${event.imageData.toString('base64')}`
-      : '',
+  imageDataUrl,
   participants: event.participants || [],
   createdByRole: event.createdByRole,
   createdByUsername: event.createdByUsername,
@@ -97,13 +130,32 @@ const isParticipationOpenNow = (event) => {
   return true;
 };
 
-const applyImageFields = (event, file) => {
+// Offload the image bytes to Cloudinary when configured; otherwise keep the
+// legacy inline Buffer so the app still works before keys are set. Throws if a
+// Cloudinary upload fails so the caller can respond 502.
+const applyImageFields = async (event, file) => {
   if (!file) return;
 
   event.imageName = file.originalname;
   event.imageType = file.mimetype;
   event.imageSize = file.size;
-  event.imageData = file.buffer;
+
+  if (isCloudinaryConfigured()) {
+    const uploaded = await uploadBuffer(file.buffer, {
+      folder: EVENT_FOLDER,
+      publicId: cloudPublicId(event._id),
+      mimeType: file.mimetype,
+    });
+    event.storage = 'cloudinary';
+    event.publicId = uploaded.publicId;
+    event.resourceType = uploaded.resourceType;
+    event.imageData = undefined;
+  } else {
+    event.storage = 'mongo';
+    event.publicId = '';
+    event.resourceType = '';
+    event.imageData = file.buffer;
+  }
 };
 
 router.get('/', ensureMongo, async (_request, response) => {
@@ -122,7 +174,12 @@ router.post('/', ensureMongo, requireRole('admin', 'clerk'), upload.single('imag
     participants: [],
   });
 
-  applyImageFields(event, request.file);
+  try {
+    await applyImageFields(event, request.file);
+  } catch (error) {
+    response.status(502).json({ message: 'Image storage upload failed. Please try again.' });
+    return;
+  }
   await event.save();
 
   emitRealtimeEvent('mgps-erp-events-updated');
@@ -160,13 +217,24 @@ router.patch('/:id', ensureMongo, requireRole('admin', 'clerk'), upload.single('
   Object.assign(event, buildEventFields(request.body));
 
   if (toBoolean(request.body.removeImage)) {
+    if (event.storage === 'cloudinary' && event.publicId) {
+      await deleteAsset(event.publicId, event.resourceType || 'raw');
+    }
     event.imageName = '';
     event.imageType = '';
     event.imageSize = 0;
     event.imageData = null;
+    event.storage = 'mongo';
+    event.publicId = '';
+    event.resourceType = '';
   }
 
-  applyImageFields(event, request.file);
+  try {
+    await applyImageFields(event, request.file);
+  } catch (error) {
+    response.status(502).json({ message: 'Image storage upload failed. Please try again.' });
+    return;
+  }
   await event.save();
 
   emitRealtimeEvent('mgps-erp-events-updated');
@@ -174,7 +242,11 @@ router.patch('/:id', ensureMongo, requireRole('admin', 'clerk'), upload.single('
 });
 
 router.delete('/:id', ensureMongo, requireRole('admin', 'clerk'), async (request, response) => {
+  const existing = await Event.findById(request.params.id).select('storage publicId resourceType');
   await Event.findByIdAndDelete(request.params.id);
+  if (existing?.storage === 'cloudinary' && existing.publicId) {
+    await deleteAsset(existing.publicId, existing.resourceType || 'raw');
+  }
   emitRealtimeEvent('mgps-erp-events-updated');
   response.json({ message: 'Event removed.' });
 });

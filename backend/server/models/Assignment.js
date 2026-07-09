@@ -16,6 +16,24 @@ const attachmentSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    // Where the bytes live: 'cloudinary' (offloaded) or 'mongo' (legacy Buffer).
+    storage: {
+      type: String,
+      enum: ['mongo', 'cloudinary'],
+      default: 'mongo',
+    },
+    // Cloudinary reference (set when storage === 'cloudinary').
+    publicId: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    resourceType: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    // Legacy inline bytes (set when storage === 'mongo').
     data: {
       type: Buffer,
       default: null,

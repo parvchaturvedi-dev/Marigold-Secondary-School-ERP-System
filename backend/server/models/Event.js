@@ -102,6 +102,23 @@ const eventSchema = new mongoose.Schema(
       type: Buffer,
       default: null,
     },
+    // Where the image bytes live: 'cloudinary' (offloaded) or 'mongo' (legacy Buffer).
+    storage: {
+      type: String,
+      enum: ['mongo', 'cloudinary'],
+      default: 'mongo',
+    },
+    // Cloudinary reference (set when storage === 'cloudinary').
+    publicId: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    resourceType: {
+      type: String,
+      trim: true,
+      default: '',
+    },
     participants: {
       type: [participantSchema],
       default: [],

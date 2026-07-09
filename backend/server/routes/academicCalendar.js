@@ -5,6 +5,13 @@ import { isMongoConnected } from '../db.js';
 import { emitRealtimeEvent } from '../realtime.js';
 import { requireRole } from '../middleware/auth.js';
 import { createNotification } from '../utils/notify.js';
+import {
+  isCloudinaryConfigured,
+  resourceTypeForMime,
+  uploadBuffer,
+  signedUrlFor,
+  deleteAsset,
+} from '../utils/cloudinary.js';
 
 const router = express.Router();
 const upload = multer({
@@ -13,6 +20,13 @@ const upload = multer({
     fileSize: 10 * 1024 * 1024,
   },
 });
+
+// Stable Cloudinary public_id derived from the calendar's file name so a
+// re-upload of the same file overwrites the previous asset instead of orphaning
+// it. Only one calendar is ever stored (POST deleteMany + create).
+const CALENDAR_FOLDER = 'mgps/academic-calendar';
+const cloudPublicId = (name) =>
+  `academic-calendar__${String(name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`;
 
 const ensureMongo = (_request, response, next) => {
   if (!isMongoConnected()) {
@@ -25,15 +39,36 @@ const ensureMongo = (_request, response, next) => {
   next();
 };
 
-const toCalendarPayload = (calendar) => ({
-  id: calendar._id.toString(),
-  name: calendar.name,
-  size: calendar.size,
-  type: calendar.type,
-  uploadedBy: calendar.uploadedBy,
-  uploadedAt: calendar.updatedAt?.toISOString() || calendar.createdAt?.toISOString(),
-  dataUrl: `data:${calendar.type};base64,${calendar.fileData.toString('base64')}`,
-});
+// Rebuild the inline base64 dataUrl the frontends expect. For Cloudinary-backed
+// records the bytes no longer live in Mongo, so fetch them back via a short-lived
+// signed URL and re-encode; legacy Mongo records use their inline Buffer.
+const toCalendarPayload = async (calendar) => {
+  let base64;
+  if (calendar.storage === 'cloudinary' && calendar.publicId) {
+    const url = signedUrlFor(
+      calendar.publicId,
+      calendar.resourceType || resourceTypeForMime(calendar.type)
+    );
+    const upstream = await fetch(url);
+    if (!upstream.ok) {
+      throw new Error(`Cloudinary fetch failed (${upstream.status}).`);
+    }
+    const arrayBuffer = await upstream.arrayBuffer();
+    base64 = Buffer.from(arrayBuffer).toString('base64');
+  } else {
+    base64 = calendar.fileData.toString('base64');
+  }
+
+  return {
+    id: calendar._id.toString(),
+    name: calendar.name,
+    size: calendar.size,
+    type: calendar.type,
+    uploadedBy: calendar.uploadedBy,
+    uploadedAt: calendar.updatedAt?.toISOString() || calendar.createdAt?.toISOString(),
+    dataUrl: `data:${calendar.type};base64,${base64}`,
+  };
+};
 
 router.get('/latest', ensureMongo, async (_request, response) => {
   const calendar = await AcademicCalendar.findOne().sort({ updatedAt: -1 });
@@ -43,7 +78,11 @@ router.get('/latest', ensureMongo, async (_request, response) => {
     return;
   }
 
-  response.json(toCalendarPayload(calendar));
+  try {
+    response.json(await toCalendarPayload(calendar));
+  } catch (error) {
+    response.status(502).json({ message: 'Failed to load file from storage.' });
+  }
 });
 
 router.post('/', ensureMongo, requireRole('admin', 'clerk'), upload.single('calendarPdf'), async (request, response) => {
@@ -60,13 +99,52 @@ router.post('/', ensureMongo, requireRole('admin', 'clerk'), upload.single('cale
     return;
   }
 
+  // Offload the bytes to Cloudinary when configured; otherwise keep the legacy
+  // inline Buffer so the app still works before keys are set.
+  const mimeType = file.mimetype || 'application/pdf';
+  let storageFields;
+  if (isCloudinaryConfigured()) {
+    try {
+      const uploaded = await uploadBuffer(file.buffer, {
+        folder: CALENDAR_FOLDER,
+        publicId: cloudPublicId(file.originalname),
+        mimeType,
+      });
+      storageFields = {
+        storage: 'cloudinary',
+        publicId: uploaded.publicId,
+        resourceType: uploaded.resourceType,
+        fileData: undefined,
+      };
+    } catch (error) {
+      response.status(502).json({ message: 'File storage upload failed. Please try again.' });
+      return;
+    }
+  } else {
+    storageFields = {
+      storage: 'mongo',
+      publicId: '',
+      resourceType: '',
+      fileData: file.buffer,
+    };
+  }
+
+  // Best-effort cleanup of any previously offloaded calendar asset before we
+  // drop the old records (only one calendar is ever kept).
+  const previous = await AcademicCalendar.find({ storage: 'cloudinary', publicId: { $ne: '' } })
+    .select('publicId resourceType');
   await AcademicCalendar.deleteMany({});
+  for (const old of previous) {
+    if (old.publicId) {
+      await deleteAsset(old.publicId, old.resourceType || 'raw');
+    }
+  }
 
   const calendar = await AcademicCalendar.create({
     name: file.originalname,
     size: file.size,
-    type: file.mimetype || 'application/pdf',
-    fileData: file.buffer,
+    type: mimeType,
+    ...storageFields,
     uploadedBy: request.body.uploadedBy || 'Admin',
   });
 
@@ -90,11 +168,23 @@ router.post('/', ensureMongo, requireRole('admin', 'clerk'), upload.single('cale
     recipientClassName: '',
   }).catch(() => {});
 
-  response.status(201).json(toCalendarPayload(calendar));
+  try {
+    response.status(201).json(await toCalendarPayload(calendar));
+  } catch (error) {
+    response.status(502).json({ message: 'Failed to load file from storage.' });
+  }
 });
 
 router.delete('/', ensureMongo, requireRole('admin', 'clerk'), async (_request, response) => {
+  // Remove any offloaded Cloudinary assets alongside the Mongo records.
+  const previous = await AcademicCalendar.find({ storage: 'cloudinary', publicId: { $ne: '' } })
+    .select('publicId resourceType');
   await AcademicCalendar.deleteMany({});
+  for (const old of previous) {
+    if (old.publicId) {
+      await deleteAsset(old.publicId, old.resourceType || 'raw');
+    }
+  }
   emitRealtimeEvent('mgps-academic-calendar-updated');
   response.json({ message: 'Academic calendar PDF removed.' });
 });

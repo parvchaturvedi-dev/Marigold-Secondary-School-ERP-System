@@ -9,8 +9,33 @@ import { isMongoConnected } from '../db.js';
 import { emitRealtimeEvent } from '../realtime.js';
 import { requireRole } from '../middleware/auth.js';
 import { createNotification } from '../utils/notify.js';
+import {
+  isCloudinaryConfigured,
+  resourceTypeForMime,
+  uploadBuffer,
+  streamAssetToResponse,
+  deleteAsset,
+  signedUrlFor,
+} from '../utils/cloudinary.js';
 
 const router = express.Router();
+
+// Cloudinary storage folders + a deterministic public_id builder per board
+// collection. The public_id is derived from each record's natural identity key
+// so a re-upload overwrites the same asset instead of orphaning it.
+const BOARD_RESULT_FOLDER = 'mgps/board-results';
+const BOARD_STUDENT_RESULT_FOLDER = 'mgps/board-student-results';
+const BOARD_TIMETABLE_FOLDER = 'mgps/board-timetables';
+
+const cloudSlug = (...parts) =>
+  parts
+    .map((part) =>
+      String(part)
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+    )
+    .join('__');
 
 // Buffer PDF uploads in memory (cap 10 MB; application/pdf enforced below).
 const boardResultUpload = multer({
@@ -429,12 +454,36 @@ router.post(
       pdfSize: file.size,
     };
 
+    // Offload the bytes to Cloudinary when configured; otherwise keep the legacy
+    // inline Buffer so the app still works before keys are set.
+    let storageFields;
+    if (isCloudinaryConfigured()) {
+      try {
+        const uploaded = await uploadBuffer(file.buffer, {
+          folder: BOARD_RESULT_FOLDER,
+          publicId: cloudSlug(resultId),
+          mimeType: metadata.pdfType,
+        });
+        storageFields = {
+          storage: 'cloudinary',
+          publicId: uploaded.publicId,
+          resourceType: uploaded.resourceType,
+          fileData: undefined,
+        };
+      } catch (error) {
+        response.status(502).json({ message: 'File storage upload failed. Please try again.' });
+        return;
+      }
+    } else {
+      storageFields = { storage: 'mongo', publicId: '', resourceType: '', fileData: file.buffer };
+    }
+
     await BoardResultFile.create({
       resultId,
       name: metadata.pdfName,
       size: metadata.pdfSize,
       type: metadata.pdfType,
-      fileData: file.buffer,
+      ...storageFields,
       uploadedBy: uploaderUsername,
     });
 
@@ -477,12 +526,34 @@ router.get('/board-results/:id/pdf', ensureMongo, async (request, response) => {
     return;
   }
 
+  // The response shape (JSON data URL) is fixed by the web + mobile frontends,
+  // so for a Cloudinary-stored file we fetch the bytes back and base64-encode
+  // them here instead of streaming.
+  let base64;
+  if (file.storage === 'cloudinary' && file.publicId) {
+    try {
+      const url = signedUrlFor(file.publicId, file.resourceType || resourceTypeForMime(file.type));
+      const upstream = await fetch(url);
+      if (!upstream.ok) throw new Error(`Cloudinary fetch failed (${upstream.status}).`);
+      const arrayBuffer = await upstream.arrayBuffer();
+      base64 = Buffer.from(arrayBuffer).toString('base64');
+    } catch (error) {
+      response.status(502).json({ message: 'Failed to load file from storage.' });
+      return;
+    }
+  } else if (file.fileData) {
+    base64 = file.fileData.toString('base64');
+  } else {
+    response.status(404).json({ message: 'Board result PDF not found.' });
+    return;
+  }
+
   response.json({
     id: file.resultId,
     name: file.name,
     type: file.type,
     size: file.size,
-    dataUrl: `data:${file.type};base64,${file.fileData.toString('base64')}`,
+    dataUrl: `data:${file.type};base64,${base64}`,
   });
 });
 
@@ -506,7 +577,13 @@ router.delete(
     if (state.boardResults.length === before) {
       // Metadata already gone. Drop any orphaned file doc so the store
       // stays consistent, then 404.
+      const orphan = await BoardResultFile.findOne({ resultId: request.params.id }).select(
+        'storage publicId resourceType'
+      );
       await BoardResultFile.deleteOne({ resultId: request.params.id });
+      if (orphan?.storage === 'cloudinary' && orphan.publicId) {
+        await deleteAsset(orphan.publicId, orphan.resourceType || 'raw');
+      }
       response.status(404).json({ message: 'Board result not found.' });
       return;
     }
@@ -516,7 +593,13 @@ router.delete(
     record.markModified('state');
     await record.save();
 
+    const existingFile = await BoardResultFile.findOne({ resultId: request.params.id }).select(
+      'storage publicId resourceType'
+    );
     await BoardResultFile.deleteOne({ resultId: request.params.id });
+    if (existingFile?.storage === 'cloudinary' && existingFile.publicId) {
+      await deleteAsset(existingFile.publicId, existingFile.resourceType || 'raw');
+    }
 
     broadcastExaminationsUpdated();
     response.json({ message: 'Board result removed.' });
@@ -694,6 +777,31 @@ router.post(
     }
 
     const uploadedByName = request.auth?.displayName || request.auth?.username || 'Admin';
+    const mimeType = file.mimetype || 'application/pdf';
+
+    // Offload the bytes to Cloudinary when configured; otherwise keep the legacy
+    // inline Buffer so the app still works before keys are set.
+    let storageFields;
+    if (isCloudinaryConfigured()) {
+      try {
+        const uploaded = await uploadBuffer(file.buffer, {
+          folder: BOARD_TIMETABLE_FOLDER,
+          publicId: cloudSlug(className, examId),
+          mimeType,
+        });
+        storageFields = {
+          storage: 'cloudinary',
+          publicId: uploaded.publicId,
+          resourceType: uploaded.resourceType,
+          data: undefined,
+        };
+      } catch (error) {
+        response.status(502).json({ message: 'File storage upload failed. Please try again.' });
+        return;
+      }
+    } else {
+      storageFields = { storage: 'mongo', publicId: '', resourceType: '', data: file.buffer };
+    }
 
     const record = await BoardTimetableFile.findOneAndUpdate(
       { className, examId },
@@ -701,8 +809,8 @@ router.post(
         className,
         examId,
         fileName: file.originalname || 'board-timetable.pdf',
-        mimeType: file.mimetype || 'application/pdf',
-        data: file.buffer,
+        mimeType,
+        ...storageFields,
         uploadedByName,
         uploadedAt: new Date(),
       },
@@ -752,7 +860,27 @@ router.get('/board-timetable/:className/:examId', ensureMongo, async (request, r
     className: request.params.className,
     examId: request.params.examId,
   });
-  if (!file || !file.data) {
+  if (!file) {
+    response.status(404).json({ message: 'Board timetable not found.' });
+    return;
+  }
+
+  if (file.storage === 'cloudinary' && file.publicId) {
+    try {
+      await streamAssetToResponse(response, {
+        publicId: file.publicId,
+        resourceType: file.resourceType || resourceTypeForMime(file.mimeType),
+        mimeType: file.mimeType,
+        fileName: file.fileName || 'board-timetable.pdf',
+        disposition: 'inline',
+      });
+    } catch (error) {
+      response.status(502).json({ message: 'Failed to load file from storage.' });
+    }
+    return;
+  }
+
+  if (!file.data) {
     response.status(404).json({ message: 'Board timetable not found.' });
     return;
   }
@@ -770,10 +898,17 @@ router.delete(
   ensureMongo,
   requireRole('admin', 'clerk'),
   async (request, response) => {
+    const existing = await BoardTimetableFile.findOne({ _id: request.params.id }).select(
+      'storage publicId resourceType'
+    );
     const result = await BoardTimetableFile.deleteOne({ _id: request.params.id });
     if (result.deletedCount === 0) {
       response.status(404).json({ message: 'Board timetable not found.' });
       return;
+    }
+
+    if (existing?.storage === 'cloudinary' && existing.publicId) {
+      await deleteAsset(existing.publicId, existing.resourceType || 'raw');
     }
 
     broadcastExaminationsUpdated();
@@ -824,6 +959,30 @@ router.post(
 
     const uploadedByName = request.auth?.displayName || request.auth?.username || 'Admin';
 
+    // Offload the bytes to Cloudinary when configured; otherwise keep the legacy
+    // inline Buffer so the app still works before keys are set.
+    let storageFields;
+    if (isCloudinaryConfigured()) {
+      try {
+        const uploaded = await uploadBuffer(file.buffer, {
+          folder: BOARD_STUDENT_RESULT_FOLDER,
+          publicId: cloudSlug(admissionNumber, examId),
+          mimeType: file.mimetype,
+        });
+        storageFields = {
+          storage: 'cloudinary',
+          publicId: uploaded.publicId,
+          resourceType: uploaded.resourceType,
+          data: undefined,
+        };
+      } catch (error) {
+        response.status(502).json({ message: 'File storage upload failed. Please try again.' });
+        return;
+      }
+    } else {
+      storageFields = { storage: 'mongo', publicId: '', resourceType: '', data: file.buffer };
+    }
+
     const record = await BoardStudentResultFile.findOneAndUpdate(
       { admissionNumber, examId },
       {
@@ -833,7 +992,7 @@ router.post(
         examId,
         fileName: file.originalname || 'board-result',
         mimeType: file.mimetype,
-        data: file.buffer,
+        ...storageFields,
         uploadedByName,
         uploadedAt: new Date(),
       },
@@ -924,7 +1083,27 @@ router.get('/board-student-result/me/:examId', ensureMongo, async (request, resp
     admissionNumber: { $in: admissionNumbers },
     examId,
   });
-  if (!file || !file.data) {
+  if (!file) {
+    response.status(404).json({ message: 'Board result not found.' });
+    return;
+  }
+
+  if (file.storage === 'cloudinary' && file.publicId) {
+    try {
+      await streamAssetToResponse(response, {
+        publicId: file.publicId,
+        resourceType: file.resourceType || resourceTypeForMime(file.mimeType),
+        mimeType: file.mimeType,
+        fileName: file.fileName || 'board-result',
+        disposition: 'inline',
+      });
+    } catch (error) {
+      response.status(502).json({ message: 'Failed to load file from storage.' });
+    }
+    return;
+  }
+
+  if (!file.data) {
     response.status(404).json({ message: 'Board result not found.' });
     return;
   }
@@ -946,7 +1125,27 @@ router.get(
       admissionNumber: request.params.admissionNumber,
       examId: request.params.examId,
     });
-    if (!file || !file.data) {
+    if (!file) {
+      response.status(404).json({ message: 'Board result not found.' });
+      return;
+    }
+
+    if (file.storage === 'cloudinary' && file.publicId) {
+      try {
+        await streamAssetToResponse(response, {
+          publicId: file.publicId,
+          resourceType: file.resourceType || resourceTypeForMime(file.mimeType),
+          mimeType: file.mimeType,
+          fileName: file.fileName || 'board-result',
+          disposition: 'inline',
+        });
+      } catch (error) {
+        response.status(502).json({ message: 'Failed to load file from storage.' });
+      }
+      return;
+    }
+
+    if (!file.data) {
       response.status(404).json({ message: 'Board result not found.' });
       return;
     }
@@ -965,10 +1164,17 @@ router.delete(
   ensureMongo,
   requireRole('admin', 'clerk'),
   async (request, response) => {
+    const existing = await BoardStudentResultFile.findOne({ _id: request.params.id }).select(
+      'storage publicId resourceType'
+    );
     const result = await BoardStudentResultFile.deleteOne({ _id: request.params.id });
     if (result.deletedCount === 0) {
       response.status(404).json({ message: 'Board result not found.' });
       return;
+    }
+
+    if (existing?.storage === 'cloudinary' && existing.publicId) {
+      await deleteAsset(existing.publicId, existing.resourceType || 'raw');
     }
 
     broadcastExaminationsUpdated();
