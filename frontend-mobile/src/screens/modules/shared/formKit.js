@@ -1,6 +1,6 @@
 // Shared mobile form/CRUD kit — reusable building blocks so every module screen
 // stays thin and visually consistent with the glass design system.
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -511,7 +511,16 @@ export function useBanner() {
     setError("");
     setSuccess("");
   }, []);
-  return { error, success, showError, showSuccess, clear };
+  // Return a STABLE object reference — the identity only changes when the
+  // error/success text actually changes, never on unrelated re-renders. Without
+  // this, every render produced a fresh `banner` object, so any consumer that
+  // put `banner` in a useCallback/useEffect dependency array (e.g. a screen's
+  // `load`) rebuilt that callback every render, re-ran its effect, called
+  // setState, re-rendered, and looped forever (spinners flashing + refetching).
+  return useMemo(
+    () => ({ error, success, showError, showSuccess, clear }),
+    [error, success, showError, showSuccess, clear]
+  );
 }
 
 // In-memory cache shared across all useModuleState instances so hopping
