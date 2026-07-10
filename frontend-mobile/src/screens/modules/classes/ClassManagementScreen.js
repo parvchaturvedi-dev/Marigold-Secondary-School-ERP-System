@@ -447,11 +447,18 @@ export default function ClassManagementScreen({ user }) {
       return;
     }
 
+    // A new session starts with a clean assignment board and notice board.
+    // (Events are not cleared here — they expire five days after the event.)
     let resetNote = "";
     try {
       await apiRequest("/assignments/reset", { method: "POST" });
     } catch (resetError) {
       resetNote = ` Note: assignment reset failed (${resetError.message}). Retry from Assignments.`;
+    }
+    try {
+      await apiRequest("/notices/reset", { method: "POST" });
+    } catch (resetError) {
+      resetNote += ` Note: notice reset failed (${resetError.message}). Retry from Notices.`;
     }
 
     banner.showSuccess(

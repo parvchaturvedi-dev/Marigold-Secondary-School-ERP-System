@@ -180,11 +180,19 @@ const ClassManagement = () => {
       }));
     });
 
+    // A new session starts with a clean assignment board and notice board.
+    // (Events are not cleared here — they expire on their own five days after
+    // the event date.)
     let resetNote = '';
     try {
       await apiFetch('/assignments/reset', { method: 'POST' });
     } catch (resetError) {
       resetNote = `\n\nNote: Assignment reset for the new session failed (${resetError.message}). Please retry from Assignments.`;
+    }
+    try {
+      await apiFetch('/notices/reset', { method: 'POST' });
+    } catch (resetError) {
+      resetNote += `\n\nNote: Notice reset for the new session failed (${resetError.message}). Please retry from Notices.`;
     }
 
     alert(

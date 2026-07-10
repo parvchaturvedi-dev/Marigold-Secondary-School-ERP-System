@@ -21,6 +21,7 @@ import gmailRoutes from './routes/gmail.js';
 import leaveRequestRoutes from './routes/leaveRequests.js';
 import meetingRoutes from './routes/meetings.js';
 import moduleStateRoutes from './routes/moduleState.js';
+import noticeRoutes from './routes/notices.js';
 import notificationRoutes from './routes/notifications.js';
 import payrollRoutes from './routes/payroll.js';
 import searchRoutes from './routes/search.js';
@@ -29,6 +30,7 @@ import teacherDocumentRoutes from './routes/teacherDocuments.js';
 import timetableRoutes from './routes/timetable.js';
 import vaultRoutes from './routes/vault.js';
 import { connectMongo, getDbStatus } from './db.js';
+import { scheduleEventCleanup } from './utils/eventCleanup.js';
 import { requireAuth } from './middleware/auth.js';
 import { verifyAuthToken } from './utils/authToken.js';
 import { setRealtimeServer, trackRealtimeSocket } from './realtime.js';
@@ -171,6 +173,7 @@ app.use('/api/gmail', gmailRoutes);
 app.use('/api/leave-requests', leaveRequestRoutes);
 app.use('/api/meetings', meetingRoutes);
 app.use('/api/module-state', moduleStateRoutes);
+app.use('/api/notices', noticeRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/payroll', payrollRoutes);
 app.use('/api/admin', adminResetRoutes);
@@ -204,6 +207,10 @@ app.use((error, request, response, next) => {
 });
 
 await connectMongo();
+
+// Events are transient: five days after an event finishes it (and its poster
+// image) is removed automatically. Runs at boot, then once a day.
+scheduleEventCleanup();
 
 server.listen(port, () => {
   console.log(`MGPS ERP API running on port ${port}`);
