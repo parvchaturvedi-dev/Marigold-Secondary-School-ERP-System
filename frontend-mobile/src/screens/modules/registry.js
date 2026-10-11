@@ -19,7 +19,15 @@ import ExaminationManageScreen from "./examinations/ExaminationManageScreen";
 import VaultScreen from "./vault/VaultScreen";
 import AiAssistantScreen from "./assistant/AiAssistantScreen";
 import CertificationScreen from "./about/CertificationScreen";
+import ModuleComingSoonScreen from "./about/ModuleComingSoonScreen";
 import AboutScreen from "./about/AboutScreen";
+
+const ApplicationsComingSoonScreen = () => (
+  <ModuleComingSoonScreen title="Applications" />
+);
+const AssignmentsComingSoonScreen = () => (
+  <ModuleComingSoonScreen title="Assignments" />
+);
 
 export const moduleScreens = {
   Settings: SettingsScreen,
@@ -43,6 +51,10 @@ export const moduleScreens = {
   "Marks Management": ExaminationManageScreen,
   Vault: VaultScreen,
   "Feature Page": AiAssistantScreen,
+  Application: ApplicationsComingSoonScreen,
+  Applications: ApplicationsComingSoonScreen,
+  Assignment: AssignmentsComingSoonScreen,
+  Assignments: AssignmentsComingSoonScreen,
   Certification: CertificationScreen,
   "About Us": AboutScreen,
 };

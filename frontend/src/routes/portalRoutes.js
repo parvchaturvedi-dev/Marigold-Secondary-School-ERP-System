@@ -1,4 +1,4 @@
-import { lazy } from 'react';
+import { createElement, lazy } from 'react';
 
 const pageLoaders = import.meta.glob('../pages/{Admin,Clerk,Student,Teacher,common}/**/*.jsx');
 
@@ -12,6 +12,17 @@ const resolvePageLoader = (path) => {
 };
 
 const lazyPage = (path) => lazy(resolvePageLoader(path));
+const ComingSoon = lazyPage('../pages/common/ComingSoon');
+const ApplicationsComingSoon = () =>
+  createElement(ComingSoon, {
+    title: 'Applications',
+    description: 'The Applications module is being prepared for your school portal. Please check back soon.',
+  });
+const AssignmentsComingSoon = () =>
+  createElement(ComingSoon, {
+    title: 'Assignments',
+    description: 'The Assignments module is being prepared for your school portal. Please check back soon.',
+  });
 
 export const portalRoutes = {
   admin: {
@@ -20,8 +31,10 @@ export const portalRoutes = {
       Dashboard: lazyPage('../pages/Admin/Dashboard'),
       'AI Assistant': lazyPage('../pages/Admin/AiAssistant'),
       'Academic Calender': lazyPage('../pages/Admin/AcademicCalender'),
-      Application: lazyPage('../pages/Admin/Application'),
-      Assignment: lazyPage('../pages/Admin/Assignment'),
+      // Application: lazyPage('../pages/Admin/Application'),
+      Application: ApplicationsComingSoon,
+      // Assignment: lazyPage('../pages/Admin/Assignment'),
+      Assignment: AssignmentsComingSoon,
       Attendance: lazyPage('../pages/Admin/Attendance'),
       'Admin Management': lazyPage('../pages/Admin/AdminManagement'),
       'Class Management': lazyPage('../pages/Admin/ClassManagement'),
@@ -68,8 +81,10 @@ export const portalRoutes = {
     pages: {
       Dashboard: lazyPage('../pages/Clerk/Dashboard'),
       'Academic Calender': lazyPage('../pages/Clerk/AcademicCalender'),
-      Application: lazyPage('../pages/Clerk/Application'),
-      Assignment: lazyPage('../pages/Clerk/Assignment'),
+      // Application: lazyPage('../pages/Clerk/Application'),
+      Application: ApplicationsComingSoon,
+      // Assignment: lazyPage('../pages/Clerk/Assignment'),
+      Assignment: AssignmentsComingSoon,
       Attendance: lazyPage('../pages/Clerk/Attendance'),
       'Class Management': lazyPage('../pages/Clerk/ClassManagement'),
       'Class Preferences': lazyPage('../pages/Clerk/ClassPreferences'),
@@ -109,8 +124,10 @@ export const portalRoutes = {
       'Academic Calender': lazyPage('../pages/Student/AcademicCalender'),
       'My Class': lazyPage('../pages/Student/MyClass'),
       Timetable: lazyPage('../pages/Student/Timetable'),
-      Application: lazyPage('../pages/Student/Application'),
-      Assignment: lazyPage('../pages/Student/Assignment'),
+      // Application: lazyPage('../pages/Student/Application'),
+      Application: ApplicationsComingSoon,
+      // Assignment: lazyPage('../pages/Student/Assignment'),
+      Assignment: AssignmentsComingSoon,
       Attendance: lazyPage('../pages/Student/Attendance'),
       Events: lazyPage('../pages/Student/Events'),
       Examinations: lazyPage('../pages/Student/Examinations'),
@@ -133,8 +150,10 @@ export const portalRoutes = {
       'Academic Calender': lazyPage('../pages/Teacher/AcademicCalender'),
       'My Class': lazyPage('../pages/Teacher/MyClass'),
       Timetable: lazyPage('../pages/Teacher/Timetable'),
-      Application: lazyPage('../pages/Teacher/Application'),
-      Assignment: lazyPage('../pages/Teacher/Assignment'),
+      // Application: lazyPage('../pages/Teacher/Application'),
+      Application: ApplicationsComingSoon,
+      // Assignment: lazyPage('../pages/Teacher/Assignment'),
+      Assignment: AssignmentsComingSoon,
       Attendance: lazyPage('../pages/Teacher/Attendance'),
       Events: lazyPage('../pages/Teacher/Events'),
       Examinations: lazyPage('../pages/Teacher/Examinations'),

@@ -55,6 +55,7 @@ import { exportIdCardPdf, exportManyIdCards } from "./modules/idcard/exportIdCar
 // THOSE is far less error-prone than trying to list every self-headed screen
 // (wrapping a self-headed screen produces a duplicate back/home header).
 const NEEDS_WRAPPER = new Set(["Certification", "About Us"]);
+const COMING_SOON_MODULES = new Set(["Application", "Applications", "Assignment", "Assignments"]);
 
 const hiddenKeys = new Set([
   "_id",
@@ -330,8 +331,16 @@ export default function ConnectedModuleScreen() {
 
   useEffect(() => {
     setForm(initialForm(title, user));
+    if (COMING_SOON_MODULES.has(selectedModule)) {
+      setLoading(false);
+      setError("");
+      setConfig(null);
+      setRows([]);
+      setRawPayload(null);
+      return;
+    }
     load();
-  }, [load, title, user]);
+  }, [load, selectedModule, title, user]);
 
   async function handleMarkRead() {
     if (!unreadIds.length) return;
@@ -543,15 +552,25 @@ export default function ConnectedModuleScreen() {
   const wrapWithHeader = (node) => (
     <View style={{ flex: 1 }}>
       <AuroraBackground />
-      <PageHeader title={title} />
+      <PageHeader
+        title={
+          selectedModule === "Application" || selectedModule === "Applications"
+            ? "Applications"
+            : selectedModule === "Assignment" || selectedModule === "Assignments"
+              ? "Assignments"
+              : title
+        }
+      />
       <View style={{ flex: 1 }}>{node}</View>
     </View>
   );
 
-  const RegisteredScreen = resolveModuleScreen(title);
+  const RegisteredScreen = resolveModuleScreen(selectedModule) || resolveModuleScreen(title);
   if (RegisteredScreen) {
     const node = <RegisteredScreen user={user} />;
-    return NEEDS_WRAPPER.has(title) ? wrapWithHeader(node) : node;
+    return NEEDS_WRAPPER.has(title) || COMING_SOON_MODULES.has(selectedModule)
+      ? wrapWithHeader(node)
+      : node;
   }
 
   if (title === "Fees") {
