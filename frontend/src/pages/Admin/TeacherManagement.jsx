@@ -5,7 +5,7 @@ import { useMasterData } from '../../components/common/masterData';
 
 const TeacherManagement = ({ role = 'admin' }) => {
   const canRemoveTeacher = role !== 'clerk';
-  const { classNames, globalSubjectNames, subjectsByClass } = useMasterData();
+  const { classNames, subjectsByClass } = useMasterData();
   // Master State for Teachers Database Directory
   const [teachersList, setTeachersList] = useMongoState('admin-teacher-management-list', []);
   const [, setClassesDb] = useMongoState('admin-class-management-classes', []);
@@ -88,6 +88,9 @@ const TeacherManagement = ({ role = 'admin' }) => {
   const handleEditAssignmentChange = (index, field, value) => {
     const updatedAssign = [...editingTeacher.classAssignments];
     updatedAssign[index][field] = value;
+    if (field === 'className') {
+      updatedAssign[index].subject = '';
+    }
     setEditingTeacher(prev => ({ ...prev, classAssignments: updatedAssign }));
   };
 
@@ -415,11 +418,14 @@ const TeacherManagement = ({ role = 'admin' }) => {
                       <div className="sm:col-span-6 flex flex-col gap-0.5">
                         <label className="text-[9px] text-slate-500">Subject Domain Specialty</label>
                         <select required value={assign.subject} onChange={(e) => handleEditAssignmentChange(asIdx, 'subject', e.target.value)} className="p-2 bg-white/60 border border-white/80 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none transition-all rounded-lg">
-                          <option value="">-- Select Subject --</option>
-                          {[
-                            ...(subjectsByClass[assign.className] || []).map((item) => item.subject),
-                            ...globalSubjectNames,
-                          ].filter((value, optionIndex, values) => value && values.indexOf(value) === optionIndex).map((subjectName) => (
+                          <option value="">
+                            {assign.className
+                              ? (subjectsByClass[assign.className] || []).length
+                                ? '-- Select Subject --'
+                                : '-- No linked subjects for this class --'
+                              : '-- Select class first --'}
+                          </option>
+                          {(subjectsByClass[assign.className] || []).map((item) => item.subject).filter((subjectName, optionIndex, values) => subjectName && values.indexOf(subjectName) === optionIndex).map((subjectName) => (
                             <option key={subjectName} value={subjectName}>{subjectName}</option>
                           ))}
                         </select>
