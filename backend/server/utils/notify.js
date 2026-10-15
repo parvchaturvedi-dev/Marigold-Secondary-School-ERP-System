@@ -111,6 +111,19 @@ export async function createNotification({
   recipientStudentId = '',
   image = '',
 }) {
+  let targetRole = recipientRole;
+  if (!targetRole && recipientStudentId) {
+    targetRole = 'student';
+  } else if (!targetRole && recipientUsername) {
+    const username = String(recipientUsername).trim().toUpperCase();
+    const recipient = await User.findOne({ username }).select('role').lean();
+    targetRole = recipient?.role || '';
+  }
+
+  if (!targetRole) {
+    throw new Error('A recipient role or resolvable recipient is required to create a notification.');
+  }
+
   // Use the rupee symbol (₹) in notification text instead of "Rs.". Note: the
   // notification framework can't colour individual words (Expo/OS limitation),
   // so amounts can't be shown in green — ₹ is the cleanest we can do.
@@ -123,7 +136,7 @@ export async function createNotification({
     description,
     type,
     linkPage,
-    recipientRole,
+    recipientRole: targetRole,
     recipientUsername,
     recipientClassName,
     recipientStudentId,
@@ -134,7 +147,7 @@ export async function createNotification({
   try {
     const users = await resolveRecipientUsers({
       recipientUsername,
-      recipientRole,
+      recipientRole: targetRole,
       recipientClassName,
       recipientStudentId,
     });

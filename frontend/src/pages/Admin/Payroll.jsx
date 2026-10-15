@@ -37,6 +37,11 @@ const NAMESPACE_BY_TAB = {
   clerks: 'admin-clerk-management-list',
 };
 
+const getNextSalaryChange = (staff) =>
+  (Array.isArray(staff.salaryHistory) ? staff.salaryHistory : [])
+    .filter((entry) => /^\d{4}-\d{2}$/.test(entry.fromMonth) && entry.fromMonth > currentMonthKey())
+    .sort((a, b) => a.fromMonth.localeCompare(b.fromMonth))[0];
+
 const StatusBadge = ({ status }) => {
   const styles =
     status === 'Paid'
@@ -49,13 +54,15 @@ const StatusBadge = ({ status }) => {
   );
 };
 
-const Payroll = ({ session }) => {
+const Payroll = () => {
   const [activeTab, setActiveTab] = useState('teachers');
-  const [teachers, setTeachers] = useMongoState(NAMESPACE_BY_TAB.teachers, []);
-  const [clerks, setClerks] = useMongoState(NAMESPACE_BY_TAB.clerks, []);
+  const [teachers, , teacherState] = useMongoState(NAMESPACE_BY_TAB.teachers, []);
+  const [clerks, , clerkState] = useMongoState(NAMESPACE_BY_TAB.clerks, []);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedId, setExpandedId] = useState('');
+  const [payrollError, setPayrollError] = useState('');
+  const [isSavingPayroll, setIsSavingPayroll] = useState(false);
 
   const [salaryModalStaff, setSalaryModalStaff] = useState(null);
   const [salaryAmount, setSalaryAmount] = useState('');
@@ -70,7 +77,7 @@ const Payroll = ({ session }) => {
   const [salarySlip, setSalarySlip] = useState(null);
 
   const list = activeTab === 'teachers' ? teachers : clerks;
-  const setList = activeTab === 'teachers' ? setTeachers : setClerks;
+  const listState = activeTab === 'teachers' ? teacherState : clerkState;
 
   const staffList = useMemo(() => {
     const arr = Array.isArray(list) ? list : [];
@@ -100,34 +107,68 @@ const Payroll = ({ session }) => {
     );
   }, [list]);
 
-  const persistStaff = (updatedStaff) => {
-    setList((current) =>
-      (Array.isArray(current) ? current : []).map((staff) =>
-        getStaffId(staff) === getStaffId(updatedStaff) ? updatedStaff : staff
-      )
+  const persistStaff = async (updatedStaff) => {
+    const namespace = NAMESPACE_BY_TAB[activeTab];
+    const updatedStaffId = getStaffId(updatedStaff);
+    if (!updatedStaffId) {
+      throw new Error('Staff record is missing its employee ID and cannot be saved.');
+    }
+    let foundStaff = false;
+    const nextList = (Array.isArray(list) ? list : []).map((staff) => {
+      if (getStaffId(staff) !== updatedStaffId) return staff;
+      foundStaff = true;
+      return updatedStaff;
+    });
+    if (!foundStaff) {
+      throw new Error('Staff record was not found in the current payroll list. Reload and try again.');
+    }
+
+    const payload = await apiFetch(`/module-state/${encodeURIComponent(namespace)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ value: nextList }),
+    });
+    const savedList = Array.isArray(payload?.value) ? payload.value : nextList;
+    window.dispatchEvent(
+      new CustomEvent(`mgps-erp-module-state:${namespace}`, { detail: savedList })
     );
   };
 
   const openSalaryModal = (staff) => {
+    setPayrollError('');
     setSalaryModalStaff(staff);
     setSalaryAmount(staff.monthlySalary ? String(staff.monthlySalary) : '');
     setSalaryEffMonth(nextMonthKey());
   };
 
-  const submitSalaryUpdate = (event) => {
+  const submitSalaryUpdate = async (event) => {
     event.preventDefault();
+    setPayrollError('');
     const amount = parseAmount(salaryAmount);
     if (amount <= 0) {
-      alert('Enter a valid salary amount.');
+      setPayrollError('Enter a valid salary amount.');
       return;
     }
-    const updated = setStaffSalary(salaryModalStaff, amount, salaryEffMonth);
-    persistStaff(updated);
-    setSalaryModalStaff(null);
-    alert(`Salary set to ${formatCurrency(amount)} effective ${salaryEffMonth} for ${getStaffName(salaryModalStaff)}.`);
+    if (!salaryEffMonth) {
+      setPayrollError('Select when the salary change should take effect.');
+      return;
+    }
+
+    setIsSavingPayroll(true);
+    try {
+      const updated = setStaffSalary(salaryModalStaff, amount, salaryEffMonth);
+      await persistStaff(updated);
+      setSalaryModalStaff(null);
+      alert(`Salary set to ${formatCurrency(amount)} effective ${salaryEffMonth} for ${getStaffName(salaryModalStaff)}.`);
+    } catch (error) {
+      setPayrollError(`Salary could not be saved: ${error.message}`);
+    } finally {
+      setIsSavingPayroll(false);
+    }
   };
 
   const openPayModal = (staff) => {
+    setPayrollError('');
     setPayModalStaff(staff);
     setPayTab('settle');
     setPayAmount('');
@@ -158,50 +199,58 @@ const Payroll = ({ session }) => {
     });
   };
 
-  const submitPayment = (event) => {
+  const submitPayment = async (event) => {
     event.preventDefault();
+    setPayrollError('');
     const amount = parseAmount(payAmount);
     if (amount <= 0) {
-      alert('Enter a valid payment amount.');
+      setPayrollError('Enter a valid payment amount.');
       return;
     }
 
-    if (payTab === 'settle') {
-      const result = settleStaffOutstanding(payModalStaff, amount, payMode, payNote);
-      persistStaff(result.staff);
-      const slip = buildSalarySlip({
-        staffName: getStaffName(result.staff),
-        staffId: getStaffId(result.staff),
-        month: result.applied.map((a) => a.month).join(', ') || '-',
-        amount: amount - result.remaining,
-        mode: payMode,
-        note: payNote,
-      });
-      setSalarySlip(slip);
-      setPayModalStaff(result.staff);
-      if (result.remaining > 0) {
-        alert(`Applied ${formatCurrency(amount - result.remaining)}. ${formatCurrency(result.remaining)} could not be applied (no further pending months).`);
+    setIsSavingPayroll(true);
+    try {
+      if (payTab === 'settle') {
+        const result = settleStaffOutstanding(payModalStaff, amount, payMode, payNote);
+        await persistStaff(result.staff);
+        const slip = buildSalarySlip({
+          staffName: getStaffName(result.staff),
+          staffId: getStaffId(result.staff),
+          month: result.applied.map((a) => a.month).join(', ') || '-',
+          amount: amount - result.remaining,
+          mode: payMode,
+          note: payNote,
+        });
+        setSalarySlip(slip);
+        setPayModalStaff(result.staff);
+        if (result.remaining > 0) {
+          alert(`Applied ${formatCurrency(amount - result.remaining)}. ${formatCurrency(result.remaining)} could not be applied (no further pending months).`);
+        }
+        if (amount - result.remaining > 0) {
+          notifySalaryPayment(result.staff, amount - result.remaining);
+        }
+      } else {
+        const updated = recordSalaryPayment(payModalStaff, payMonth, amount, payMode, payNote);
+        await persistStaff(updated);
+        const slip = buildSalarySlip({
+          staffName: getStaffName(updated),
+          staffId: getStaffId(updated),
+          month: payMonth,
+          amount,
+          mode: payMode,
+          note: payNote,
+        });
+        setSalarySlip(slip);
+        setPayModalStaff(updated);
+        notifySalaryPayment(updated, amount);
       }
-      if (amount - result.remaining > 0) {
-        notifySalaryPayment(result.staff, amount - result.remaining);
-      }
-    } else {
-      const updated = recordSalaryPayment(payModalStaff, payMonth, amount, payMode, payNote);
-      persistStaff(updated);
-      const slip = buildSalarySlip({
-        staffName: getStaffName(updated),
-        staffId: getStaffId(updated),
-        month: payMonth,
-        amount,
-        mode: payMode,
-        note: payNote,
-      });
-      setSalarySlip(slip);
-      setPayModalStaff(updated);
-      notifySalaryPayment(updated, amount);
+      setPayAmount('');
+      setPayNote('');
+    } catch (error) {
+      setPayrollError(`Salary payment could not be saved: ${error.message}`);
+    } finally {
+      setIsSavingPayroll(false);
     }
-    setPayAmount('');
-    setPayNote('');
   };
 
   return (
@@ -224,6 +273,7 @@ const Payroll = ({ session }) => {
                 setActiveTab(tab);
                 setSearchTerm('');
                 setExpandedId('');
+                setPayrollError('');
               }}
               className={`text-[10px] font-black uppercase tracking-wider px-4 py-2 rounded-xl transition-all ${
                 activeTab === tab ? 'bg-neutral-900 text-white' : 'bg-neutral-100 hover:bg-neutral-200 text-neutral-600'
@@ -234,6 +284,17 @@ const Payroll = ({ session }) => {
           ))}
         </div>
       </div>
+
+      {(payrollError || listState.error) && (
+        <div role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-semibold text-red-700">
+          {payrollError || listState.error}
+        </div>
+      )}
+      {listState.isLoading && (
+        <div className="glass-card rounded-2xl p-6 mb-4 text-center text-xs font-semibold text-neutral-500">
+          Loading staff payroll records…
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {[
@@ -272,6 +333,7 @@ const Payroll = ({ session }) => {
       <div className="space-y-4">
         {staffList.map((staff) => {
           const staffId = getStaffId(staff);
+          const nextSalaryChange = getNextSalaryChange(staff);
           const totals = staffPayrollTotals(staff);
           const ledger = buildPayrollLedger(staff);
           const isExpanded = expandedId === staffId;
@@ -292,6 +354,11 @@ const Payroll = ({ session }) => {
                   <div>
                     <span className="block text-[9px] font-black text-neutral-400 uppercase">Monthly Salary</span>
                     <span className="font-bold text-neutral-800">{formatCurrency(staff.monthlySalary)}</span>
+                    {nextSalaryChange && (
+                      <span className="block text-[9px] font-semibold text-indigo-600">
+                        {formatCurrency(nextSalaryChange.amount)} from {nextSalaryChange.fromMonth}
+                      </span>
+                    )}
                   </div>
                   <div>
                     <span className="block text-[9px] font-black text-neutral-400 uppercase">Paid</span>
@@ -377,7 +444,7 @@ const Payroll = ({ session }) => {
             </div>
           );
         })}
-        {!staffList.length && (
+        {!listState.isLoading && !staffList.length && (
           <div className="glass-card rounded-2xl p-10 text-center text-[10px] font-black uppercase tracking-widest text-neutral-400">
             No {activeTab === 'teachers' ? 'teacher' : 'clerk'} records found.
           </div>
@@ -400,6 +467,11 @@ const Payroll = ({ session }) => {
               Updating salary for {getStaffName(salaryModalStaff)}. The new rate applies from{' '}
               <span className="font-mono font-black">{salaryEffMonth}</span> onward.
             </p>
+            {payrollError && (
+              <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+                {payrollError}
+              </p>
+            )}
             <form onSubmit={submitSalaryUpdate} className="space-y-3">
               <div>
                 <span className="text-[9px] font-black text-neutral-400 block font-mono mb-1">Monthly Salary Amount</span>
@@ -407,6 +479,9 @@ const Payroll = ({ session }) => {
                   <span className="text-sm font-mono font-black mr-2">Rs.</span>
                   <input
                     type="number"
+                    min="0.01"
+                    step="0.01"
+                    required
                     value={salaryAmount}
                     onChange={(event) => setSalaryAmount(event.target.value)}
                     placeholder="Salary amount"
@@ -419,6 +494,7 @@ const Payroll = ({ session }) => {
                 <span className="text-[9px] font-black text-neutral-400 block font-mono mb-1">Effective From</span>
                 <input
                   type="month"
+                  required
                   value={salaryEffMonth}
                   onChange={(event) => setSalaryEffMonth(event.target.value)}
                   className="w-full p-2.5 bg-white border border-neutral-300 rounded-xl text-xs font-bold outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all font-mono"
@@ -435,9 +511,10 @@ const Payroll = ({ session }) => {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 bg-neutral-900 hover:bg-neutral-800 text-white font-black text-xs tracking-widest rounded-xl transition-all shadow-md"
+                  disabled={isSavingPayroll}
+                  className="flex-1 py-2.5 bg-neutral-900 hover:bg-neutral-800 text-white font-black text-xs tracking-widest rounded-xl transition-all shadow-md disabled:opacity-50"
                 >
-                  Save Salary
+                  {isSavingPayroll ? 'Saving…' : 'Save Salary'}
                 </button>
               </div>
             </form>
@@ -465,6 +542,11 @@ const Payroll = ({ session }) => {
               </button>
             </div>
 
+            {payrollError && (
+              <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+                {payrollError}
+              </p>
+            )}
             {!salarySlip && (
               <>
                 <p className="text-[11px] text-neutral-600 font-semibold">
@@ -565,9 +647,10 @@ const Payroll = ({ session }) => {
                   </div>
                   <button
                     type="submit"
-                    className="w-full py-3 bg-neutral-900 hover:bg-neutral-800 text-white font-black text-xs tracking-widest rounded-xl transition-all shadow-md flex items-center justify-center gap-2"
+                    disabled={isSavingPayroll}
+                    className="w-full py-3 bg-neutral-900 hover:bg-neutral-800 text-white font-black text-xs tracking-widest rounded-xl transition-all shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
                   >
-                    <DollarSign className="w-4 h-4" /> Confirm Payment
+                    <DollarSign className="w-4 h-4" /> {isSavingPayroll ? 'Saving…' : 'Confirm Payment'}
                   </button>
                 </form>
               </>

@@ -424,6 +424,7 @@ router.patch(
       description: `Your "${docName}" was ${status}${note ? ': ' + note : ''}.`,
       type: 'general',
       linkPage: 'Profile',
+      recipientRole: 'student',
       recipientStudentId: admissionNumber,
     }).catch(() => {});
 
