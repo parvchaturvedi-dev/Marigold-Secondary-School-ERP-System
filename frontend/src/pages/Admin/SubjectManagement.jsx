@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BookOpen, Plus, Trash2, Layers, CheckCircle2, BookmarkPlus, X } from 'lucide-react';
+import { BookOpen, Plus, Trash2, Layers, CheckCircle2, BookmarkPlus, X, Pencil, Save } from 'lucide-react';
 import { useMongoState } from '../../components/common/mongoState';
 import { useMasterData } from '../../components/common/masterData';
 
@@ -10,31 +10,88 @@ const SubjectManagement = () => {
 
   // Classwise Subject Assignment Configuration Matrix State
   const [classSubjectMapping, setClassSubjectMapping] = useMongoState('admin-subjects-class-mapping', []);
+  const [, setTeachers] = useMongoState('admin-teacher-management-list', []);
 
   // UI Interactive Form States
   const [newSubject, setNewSubject] = useState({ name: '', code: '' });
+  const [editingSubjectId, setEditingSubjectId] = useState('');
   const [mappingForm, setMappingForm] = useState({ targetClass: '', selectedSubject: '' });
 
-  // ACTION 1: CREATE NEW GLOBAL SUBJECT ENTRY
-  const handleCreateSubject = (e) => {
+  // ACTION 1: CREATE OR UPDATE A GLOBAL SUBJECT ENTRY
+  const handleSaveSubject = (e) => {
     e.preventDefault();
-    if (!newSubject.name.trim() || !newSubject.code.trim()) return;
+    const name = newSubject.name.trim();
+    const code = newSubject.code.trim().toUpperCase();
+    if (!name || !code) return;
 
-    // Check for duplicate codes
-    if (globalSubjects.some(s => s.code.toLowerCase() === newSubject.code.toLowerCase())) {
+    if (globalSubjects.some((subject) =>
+      subject.id !== editingSubjectId && String(subject.code || '').toLowerCase() === code.toLowerCase()
+    )) {
       alert('A subject with this identification code already exists in the registry.');
+      return;
+    }
+
+    if (editingSubjectId) {
+      const existingSubject = globalSubjects.find((subject) => subject.id === editingSubjectId);
+      if (!existingSubject) {
+        setEditingSubjectId('');
+        setNewSubject({ name: '', code: '' });
+        alert('This subject could not be found. Please select it again to edit.');
+        return;
+      }
+
+      setGlobalSubjects((previous) =>
+        previous.map((subject) =>
+          subject.id === editingSubjectId ? { ...subject, name, code } : subject
+        )
+      );
+
+      if (existingSubject.name !== name) {
+        setClassSubjectMapping((previous) =>
+          previous.map((item) => ({
+            ...item,
+            subjects: (item.subjects || []).map((subjectName) =>
+              subjectName === existingSubject.name ? name : subjectName
+            ),
+          }))
+        );
+        setTeachers((previous) =>
+          previous.map((teacher) => ({
+            ...teacher,
+            classAssignments: (teacher.classAssignments || []).map((assignment) =>
+              assignment.subject === existingSubject.name
+                ? { ...assignment, subject: name }
+                : assignment
+            ),
+          }))
+        );
+      }
+
+      setEditingSubjectId('');
+      setNewSubject({ name: '', code: '' });
+      alert(`"${name}" updated successfully.`);
       return;
     }
 
     const createdItem = {
       id: `SUB-${Math.floor(100 + Math.random() * 900)}`,
-      name: newSubject.name.trim(),
-      code: newSubject.code.trim().toUpperCase()
+      name,
+      code,
     };
 
     setGlobalSubjects(prev => [...prev, createdItem]);
     setNewSubject({ name: '', code: '' });
     alert(`"${createdItem.name}" injected into global subject database successfully!`);
+  };
+
+  const handleEditSubject = (subject) => {
+    setEditingSubjectId(subject.id);
+    setNewSubject({ name: subject.name || '', code: subject.code || '' });
+  };
+
+  const handleCancelSubjectEdit = () => {
+    setEditingSubjectId('');
+    setNewSubject({ name: '', code: '' });
   };
 
   // ACTION 2: ASSIGN SUBJECT TO A TARGET CLASS
@@ -112,7 +169,20 @@ const SubjectManagement = () => {
           <div className="glass-card rounded-3xl p-5 space-y-4 shadow-2xs">
             <span className="text-[10px] text-slate-500 uppercase block font-black tracking-wider">1. Master Subject Definition Registry</span>
 
-            <form onSubmit={handleCreateSubject} className="space-y-3 text-xs font-bold text-slate-900">
+            <form onSubmit={handleSaveSubject} className="space-y-3 text-xs font-bold text-slate-900">
+              {editingSubjectId && (
+                <div className="flex items-center justify-between rounded-xl bg-indigo-50 px-3 py-2 text-indigo-700">
+                  <span>Editing subject definition</span>
+                  <button
+                    type="button"
+                    onClick={handleCancelSubjectEdit}
+                    className="p-1 rounded-lg hover:bg-indigo-100"
+                    aria-label="Cancel subject edit"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
               <div className="flex flex-col gap-1">
                 <label className="text-slate-500">Subject Name</label>
                 <input
@@ -141,7 +211,8 @@ const SubjectManagement = () => {
                 type="submit"
                 className="w-full py-2.5 rounded-xl font-black transition-all flex items-center justify-center gap-1 text-[11px] uppercase tracking-wide mt-2 btn-primary"
               >
-                <Plus className="w-4 h-4" /> Save Subject Definition
+                {editingSubjectId ? <Save className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                {editingSubjectId ? 'Update Subject Definition' : 'Save Subject Definition'}
               </button>
             </form>
           </div>
@@ -157,14 +228,26 @@ const SubjectManagement = () => {
                     <p className="truncate text-xs">{sub.name}</p>
                     <span className="font-mono text-[9px] text-slate-500 uppercase tracking-tighter">Code: {sub.code} • ID: {sub.id}</span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => handlePurgeGlobalSubject(sub.id, sub.name)}
-                    className="p-1 hover:bg-red-50 text-slate-500 hover:text-red-600 rounded-lg transition-colors flex-shrink-0"
-                    title="Purge Definition"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => handleEditSubject(sub)}
+                      className="p-1 hover:bg-indigo-50 text-slate-500 hover:text-indigo-600 rounded-lg transition-colors"
+                      title="Edit Definition"
+                      aria-label={`Edit ${sub.name}`}
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handlePurgeGlobalSubject(sub.id, sub.name)}
+                      className="p-1 hover:bg-red-50 text-slate-500 hover:text-red-600 rounded-lg transition-colors"
+                      title="Purge Definition"
+                      aria-label={`Delete ${sub.name}`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
