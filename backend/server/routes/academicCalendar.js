@@ -7,11 +7,10 @@ import { requireRole } from '../middleware/auth.js';
 import { createNotification } from '../utils/notify.js';
 import {
   isCloudinaryConfigured,
-  resourceTypeForMime,
   uploadBuffer,
-  signedUrlFor,
   deleteAsset,
 } from '../utils/cloudinary.js';
+import { mediaUrlFor } from '../utils/mediaToken.js';
 
 const router = express.Router();
 const upload = multer({
@@ -39,36 +38,17 @@ const ensureMongo = (_request, response, next) => {
   next();
 };
 
-// Rebuild the inline base64 dataUrl the frontends expect. For Cloudinary-backed
-// records the bytes no longer live in Mongo, so fetch them back via a short-lived
-// signed URL and re-encode; legacy Mongo records use their inline Buffer.
-const toCalendarPayload = async (calendar) => {
-  let base64;
-  if (calendar.storage === 'cloudinary' && calendar.publicId) {
-    const url = signedUrlFor(
-      calendar.publicId,
-      calendar.resourceType || resourceTypeForMime(calendar.type)
-    );
-    const upstream = await fetch(url);
-    if (!upstream.ok) {
-      throw new Error(`Cloudinary fetch failed (${upstream.status}).`);
-    }
-    const arrayBuffer = await upstream.arrayBuffer();
-    base64 = Buffer.from(arrayBuffer).toString('base64');
-  } else {
-    base64 = calendar.fileData.toString('base64');
-  }
-
-  return {
-    id: calendar._id.toString(),
-    name: calendar.name,
-    size: calendar.size,
-    type: calendar.type,
-    uploadedBy: calendar.uploadedBy,
-    uploadedAt: calendar.updatedAt?.toISOString() || calendar.createdAt?.toISOString(),
-    dataUrl: `data:${calendar.type};base64,${base64}`,
-  };
-};
+// The calendar PDF is served lazily from /api/media/calendar/:id rather than
+// inlined as base64 on every fetch of the calendar metadata.
+const toCalendarPayload = (calendar) => ({
+  id: calendar._id.toString(),
+  name: calendar.name,
+  size: calendar.size,
+  type: calendar.type,
+  uploadedBy: calendar.uploadedBy,
+  uploadedAt: calendar.updatedAt?.toISOString() || calendar.createdAt?.toISOString(),
+  fileUrl: mediaUrlFor('calendar', calendar._id),
+});
 
 router.get('/latest', ensureMongo, async (_request, response) => {
   const calendar = await AcademicCalendar.findOne().sort({ updatedAt: -1 });
@@ -78,11 +58,7 @@ router.get('/latest', ensureMongo, async (_request, response) => {
     return;
   }
 
-  try {
-    response.json(await toCalendarPayload(calendar));
-  } catch (error) {
-    response.status(502).json({ message: 'Failed to load file from storage.' });
-  }
+  response.json(toCalendarPayload(calendar));
 });
 
 router.post('/', ensureMongo, requireRole('admin', 'clerk'), upload.single('calendarPdf'), async (request, response) => {
@@ -168,11 +144,7 @@ router.post('/', ensureMongo, requireRole('admin', 'clerk'), upload.single('cale
     recipientClassName: '',
   }).catch(() => {});
 
-  try {
-    response.status(201).json(await toCalendarPayload(calendar));
-  } catch (error) {
-    response.status(502).json({ message: 'Failed to load file from storage.' });
-  }
+  response.status(201).json(toCalendarPayload(calendar));
 });
 
 router.delete('/', ensureMongo, requireRole('admin', 'clerk'), async (_request, response) => {

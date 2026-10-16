@@ -19,6 +19,7 @@ import {
   removeAcademicCalendar,
   saveAcademicCalendar,
 } from '../../components/common/academicCalendarStore';
+import { mediaUrl } from '../../services/api';
 
 const AcademicCalender = ({ session }) => {
   const [calendarPdf, setCalendarPdf] = useState(() => readAcademicCalendar());

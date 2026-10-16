@@ -4,7 +4,7 @@ const notificationSchema = new mongoose.Schema(
   {
     recipientRole: {
       type: String,
-      enum: ['admin', 'clerk', 'student', 'teacher'],
+      enum: ['admin', 'clerk', 'student', 'teacher', 'employee'],
       required: true,
     },
     recipientUsername: {
@@ -61,11 +61,24 @@ const notificationSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    readReceipts: {
+      type: [
+        {
+          username: { type: String, required: true, trim: true },
+          readAt: { type: Date, required: true },
+        },
+      ],
+      default: [],
+    },
   },
   {
     timestamps: true,
   }
 );
+
+notificationSchema.index({ recipientRole: 1, recipientUsername: 1, createdAt: -1 });
+notificationSchema.index({ recipientRole: 1, recipientStudentId: 1, createdAt: -1 });
+notificationSchema.index({ recipientRole: 1, recipientClassName: 1, createdAt: -1 });
 
 const Notification =
   mongoose.models.Notification || mongoose.model('Notification', notificationSchema);

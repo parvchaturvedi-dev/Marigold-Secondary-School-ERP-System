@@ -55,30 +55,37 @@ const TAB_DEFS = {
   ],
 };
 
-// Format a Date as a LOCAL YYYY-MM-DD. Never use toISOString() here — it converts
-// to UTC, which in ahead-of-UTC zones (e.g. IST +5:30) shifts the day, making the
-// prev arrow jump 2 days and the next arrow appear to do nothing.
-const toLocalKey = (d) => {
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+const ATTENDANCE_TIMEZONE = 'Asia/Kolkata';
+const toLocalKey = (date, timezone = ATTENDANCE_TIMEZONE) => {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone || ATTENDANCE_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const getPart = (type) => parts.find((part) => part.type === type)?.value || '';
+  return `${getPart('year')}-${getPart('month')}-${getPart('day')}`;
 };
 const todayKey = () => toLocalKey(new Date());
 const addDays = (date, days) => {
-  const next = new Date(`${date}T00:00:00`);
-  next.setDate(next.getDate() + days);
-  return toLocalKey(next);
+  const next = new Date(`${date}T00:00:00.000Z`);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next.toISOString().slice(0, 10);
 };
 const statusFromLog = (log) => (log?.status === 'absent' ? 'absent' : log ? 'present' : 'present');
 const bssidPlaceholder = 'AA:BB:CC:DD:EE:FF';
 
 // Format an ISO timestamp string as local hh:mm AM/PM. Returns '—' for null.
-const formatClockTime = (iso) => {
+const formatClockTime = (iso, timezone = ATTENDANCE_TIMEZONE) => {
   if (!iso) return '—';
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+  return date.toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: timezone || ATTENDANCE_TIMEZONE,
+  });
 };
 
 const AttendanceControl = ({ role = 'admin' }) => {
@@ -819,7 +826,7 @@ const MyAttendancePanel = () => {
         <div className="glass-soft rounded-2xl p-5">
           <p className="text-[10px] font-black uppercase text-emerald-700">Done for today</p>
           <p className="mt-2 text-sm font-black text-slate-700">
-            In: {formatClockTime(clockInAt)} &nbsp;·&nbsp; Out: {formatClockTime(clockOutAt)}
+            In: {formatClockTime(clockInAt, data.timezone)} &nbsp;·&nbsp; Out: {formatClockTime(clockOutAt, data.timezone)}
           </p>
           <p className="mt-1 text-[11px] font-bold text-slate-500">
             Your attendance for today is complete. See you tomorrow.
@@ -829,7 +836,7 @@ const MyAttendancePanel = () => {
         <div className="glass-soft rounded-2xl p-5 space-y-3">
           <div>
             <p className="text-[10px] font-black uppercase text-slate-500">Clocked in</p>
-            <p className="mt-1 text-sm font-black text-slate-700">In: {formatClockTime(clockInAt)}</p>
+            <p className="mt-1 text-sm font-black text-slate-700">In: {formatClockTime(clockInAt, data.timezone)}</p>
           </div>
           <button
             type="button"

@@ -1,4 +1,5 @@
 import { v2 as cloudinary } from 'cloudinary';
+import { getCachedAsset, setCachedAsset, invalidateCachedAsset } from './assetCache.js';
 
 // ---------------------------------------------------------------------------
 // Cloudinary file offload.
@@ -93,6 +94,8 @@ export const uploadBuffer = (buffer, { folder = 'mgps', publicId, mimeType } = {
           reject(error || new Error('Cloudinary upload failed.'));
           return;
         }
+        // overwrite:true replaced the bytes — drop any memoised copy.
+        invalidateCachedAsset(`${result.resource_type}:${result.public_id}`);
         resolve({
           publicId: result.public_id,
           resourceType: result.resource_type,
@@ -139,8 +142,27 @@ export const streamAssetToResponse = async (
   response.send(Buffer.from(arrayBuffer));
 };
 
+// Fetch an authenticated asset's raw bytes, memoised in the in-process LRU so a
+// given asset only ever crosses Cloudinary's (metered) wire once per server
+// lifetime. Used by the /api/media routes that serve files to the frontends.
+export const fetchAssetBuffer = async (publicId, resourceType = 'raw') => {
+  if (!configured) throw new Error('Cloudinary is not configured.');
+
+  const key = `${resourceType}:${publicId}`;
+  const cached = getCachedAsset(key);
+  if (cached) return cached;
+
+  const upstream = await fetch(signedUrlFor(publicId, resourceType));
+  if (!upstream.ok) throw new Error(`Cloudinary fetch failed (${upstream.status}).`);
+
+  const buffer = Buffer.from(await upstream.arrayBuffer());
+  setCachedAsset(key, buffer);
+  return buffer;
+};
+
 // Best-effort delete — never let a storage cleanup failure break the request.
 export const deleteAsset = async (publicId, resourceType = 'raw') => {
+  invalidateCachedAsset(`${resourceType}:${publicId}`);
   if (!configured || !publicId) return;
   try {
     await cloudinary.uploader.destroy(publicId, { resource_type: resourceType, type: 'authenticated', invalidate: true });
@@ -155,5 +177,6 @@ export default {
   uploadBuffer,
   signedUrlFor,
   streamAssetToResponse,
+  fetchAssetBuffer,
   deleteAsset,
 };

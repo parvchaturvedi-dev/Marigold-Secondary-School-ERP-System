@@ -17,12 +17,19 @@ import { useMongoState } from './mongoState';
 
 /* ---------------------------------------------------------------- helpers */
 
-const pad2 = (value) => String(value).padStart(2, '0');
+const ATTENDANCE_TIMEZONE = 'Asia/Kolkata';
 
-const todayKey = () => {
-  const now = new Date();
-  return `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
+const dateKeyInTimezone = (date, timezone = ATTENDANCE_TIMEZONE) => {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone || ATTENDANCE_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const getPart = (type) => parts.find((part) => part.type === type)?.value || '';
+  return `${getPart('year')}-${getPart('month')}-${getPart('day')}`;
 };
+const todayKey = () => dateKeyInTimezone(new Date());
 
 // Normalise any ISO / date-ish value to a YYYY-MM-DD key (or '' if invalid).
 const toDateKey = (value) => {
@@ -32,15 +39,20 @@ const toDateKey = (value) => {
   }
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
-  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+  return dateKeyInTimezone(date);
 };
 
 // ISO string -> local "hh:mm AM/PM" (or '—' when null / invalid).
-const formatClockTime = (iso) => {
+const formatClockTime = (iso, timezone = ATTENDANCE_TIMEZONE) => {
   if (!iso) return '—';
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+  return date.toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: timezone || ATTENDANCE_TIMEZONE,
+  });
 };
 
 const STATUS_META = {
@@ -81,6 +93,7 @@ const normaliseStaff = (list, fallbackRole) =>
 const StaffAttendanceReport = () => {
   const [teachers] = useMongoState('admin-teacher-management-list', []);
   const [clerks] = useMongoState('admin-clerk-management-list', []);
+  const [employees] = useMongoState('admin-employee-management-list', []);
 
   const [search, setSearch] = useState('');
   const [selectedStaff, setSelectedStaff] = useState(null); // { entityId, displayName, role }
@@ -89,6 +102,7 @@ const StaffAttendanceReport = () => {
     const merged = [
       ...normaliseStaff(teachers, 'Teacher'),
       ...normaliseStaff(clerks, 'Clerk'),
+      ...normaliseStaff(employees, 'Employee'),
     ];
     const seen = new Set();
     return merged.filter((person) => {
@@ -97,7 +111,7 @@ const StaffAttendanceReport = () => {
       seen.add(key);
       return true;
     });
-  }, [teachers, clerks]);
+  }, [teachers, clerks, employees]);
 
   const filteredStaff = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -120,7 +134,7 @@ const StaffAttendanceReport = () => {
             <UsersRound className="w-4 h-4 text-emerald-700" /> Staff Attendance
           </h3>
           <p className="text-[10px] font-bold text-slate-500 mt-1">
-            Select a teacher or clerk to view their month-by-month attendance report.
+            Select a teacher, clerk or employee to view their month-by-month attendance report.
           </p>
         </div>
         <div className="relative">
@@ -240,8 +254,8 @@ const StaffReportView = ({ staff, onBack }) => {
             key || day.date || '',
             day.weekday || '',
             statusMeta(day.status).label,
-            formatClockTime(day.clockInAt),
-            formatClockTime(day.clockOutAt),
+            formatClockTime(day.clockInAt, data?.timezone),
+            formatClockTime(day.clockOutAt, data?.timezone),
           ]);
         });
       });
@@ -275,6 +289,7 @@ const StaffReportView = ({ staff, onBack }) => {
       <MonthDetailView
         month={selectedMonth}
         staffName={displayName}
+        timezone={report?.timezone}
         onBack={() => setSelectedMonth(null)}
       />
     );
@@ -424,7 +439,7 @@ const Stat = ({ label, value, tone }) => (
 
 /* -------------------------------------------------------------- month detail */
 
-const MonthDetailView = ({ month, staffName, onBack }) => {
+const MonthDetailView = ({ month, staffName, timezone, onBack }) => {
   const days = Array.isArray(month.days) ? month.days : [];
 
   return (
@@ -481,13 +496,13 @@ const MonthDetailView = ({ month, staffName, onBack }) => {
                     <td className="px-3 py-2.5 font-mono text-emerald-700">
                       <span className="inline-flex items-center gap-1">
                         <Clock className="w-3 h-3 text-slate-300" />
-                        {formatClockTime(day.clockInAt)}
+                        {formatClockTime(day.clockInAt, timezone)}
                       </span>
                     </td>
                     <td className="px-3 py-2.5 font-mono text-indigo-700">
                       <span className="inline-flex items-center gap-1">
                         <Clock className="w-3 h-3 text-slate-300" />
-                        {formatClockTime(day.clockOutAt)}
+                        {formatClockTime(day.clockOutAt, timezone)}
                       </span>
                     </td>
                   </tr>

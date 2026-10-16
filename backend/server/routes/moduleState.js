@@ -13,9 +13,15 @@ const STUDENT_BLOCKED_NAMESPACES = new Set([
   'admin-student-management-students',
   'admin-teacher-management-list',
   'admin-clerk-management-list',
+  'admin-employee-management-list',
+  'admin-employee-designations',
   'admin-finance-class-ledgers',
   'admin-finance-alumni-pending',
   'admin-communication-messages',
+]);
+const BACK_OFFICE_ONLY_NAMESPACES = new Set([
+  'admin-employee-management-list',
+  'admin-employee-designations',
 ]);
 
 const ensureMongo = (_request, response, next) => {
@@ -30,7 +36,18 @@ const ensureMongo = (_request, response, next) => {
 };
 
 const guardSensitiveRead = (request, response, next) => {
-  if (request.auth?.role === 'student' && STUDENT_BLOCKED_NAMESPACES.has(request.params.namespace)) {
+  if (
+    BACK_OFFICE_ONLY_NAMESPACES.has(request.params.namespace) &&
+    !['admin', 'clerk'].includes(request.auth?.role)
+  ) {
+    response.status(403).json({ message: 'You do not have permission to read this data.' });
+    return;
+  }
+
+  if (
+    (request.auth?.role === 'student' || request.auth?.role === 'employee') &&
+    STUDENT_BLOCKED_NAMESPACES.has(request.params.namespace)
+  ) {
     response.status(403).json({ message: 'You do not have permission to read this data.' });
     return;
   }

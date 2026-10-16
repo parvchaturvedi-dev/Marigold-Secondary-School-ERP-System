@@ -117,6 +117,7 @@ const detectRoleFromUsername = (username = '') => {
   if (upperUsername.startsWith('ADM-')) return 'admin';
   if (upperUsername.startsWith('CLK-')) return 'clerk';
   if (upperUsername.startsWith('TCH-')) return 'teacher';
+  if (upperUsername.startsWith('EMP-')) return 'employee';
   if (upperUsername.startsWith('STD-') || upperUsername.startsWith('FAM-')) return 'student';
 
   return '';
@@ -211,6 +212,7 @@ const toSessionPayload = (user) => {
     allottedClasses: Array.isArray(profile.allottedClasses) ? profile.allottedClasses : [],
     teacherProfile: profile.teacherProfile || null,
     clerkProfile: profile.clerkProfile || null,
+    employeeProfile: profile.employeeProfile || null,
     adminProfile: profile.adminProfile || null,
     assignedClassTeacherFor: profile.teacherProfile?.assignedClassTeacherFor || profile.assignedClassTeacherFor || '',
     photoDataUrl: profile.photoDataUrl || '',
@@ -278,7 +280,7 @@ router.post('/login', loginLimiter, ensureMongo, async (request, response) => {
   }
 
   if (!requestedRole) {
-    response.status(400).json({ message: 'Use a valid role ID prefix: ADM-, CLK-, TCH-, STD-, or FAM-.' });
+    response.status(400).json({ message: 'Use a valid role ID prefix: ADM-, CLK-, TCH-, EMP-, STD-, or FAM-.' });
     return;
   }
 

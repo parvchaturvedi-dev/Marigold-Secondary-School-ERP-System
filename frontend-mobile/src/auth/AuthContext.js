@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from "react";
+import { AppState } from "react-native";
 import * as Notifications from "expo-notifications";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { loginApi } from "../api/authApi";
@@ -14,6 +15,7 @@ import { connectRealtime, disconnectRealtime } from "../notifications/realtime";
 
 const AuthContext = createContext(null);
 const SESSION_KEY = "mgps_erp_auth_session";
+const SESSION_REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 setupNotificationHandler();
 
@@ -52,6 +54,10 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [selectedModule, setSelectedModule] = useState(null);
   const [loading, setLoading] = useState(false);
+  const lastSessionRefreshRef = useRef(0);
+  const sessionRefreshInFlightRef = useRef(false);
+  const userRef = useRef(user);
+  userRef.current = user;
 
   // Any 401 from the API auto-logs-out to the Login screen (session expired /
   // invalid after a fresh install) instead of leaving the user on an error.
@@ -93,6 +99,7 @@ export function AuthProvider({ children }) {
         // OPTIMISTIC: trust the cached session and go straight to the dashboard.
         // The backend validation runs in the background — if it fails we log out.
         const cachedUser = hydrateUser(session);
+        lastSessionRefreshRef.current = Date.now();
         setUser(cachedUser);
         setScreen(`${session.role}-dashboard`);
         registerPushToken();
@@ -102,6 +109,7 @@ export function AuthProvider({ children }) {
         apiRequest("/auth/session")
           .then(async (serverSession) => {
             if (serverSession && serverSession.role && serverSession.username) {
+              lastSessionRefreshRef.current = Date.now();
               setUser(hydrateUser(serverSession));
               await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(serverSession));
             } else {
@@ -125,6 +133,48 @@ export function AuthProvider({ children }) {
     loadSession();
   }, []);
 
+  useEffect(() => {
+    if (!user?.token) return undefined;
+
+    const refreshSession = async () => {
+      const currentUser = userRef.current;
+      if (!currentUser?.token || sessionRefreshInFlightRef.current) return;
+      if (Date.now() - lastSessionRefreshRef.current < SESSION_REFRESH_INTERVAL_MS) return;
+
+      sessionRefreshInFlightRef.current = true;
+      try {
+        const serverSession = await apiRequest("/auth/session");
+        if (!serverSession?.token || serverSession.username !== currentUser.username) {
+          await AsyncStorage.removeItem(SESSION_KEY);
+          setUser(null);
+          setSelectedModule(null);
+          setScreen("login");
+          disconnectRealtime();
+          return;
+        }
+
+        const nextUser = hydrateUser(serverSession);
+        await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(serverSession));
+        if (userRef.current?.username === serverSession.username) setUser(nextUser);
+        lastSessionRefreshRef.current = Date.now();
+        connectRealtime(serverSession.token);
+      } catch (error) {
+        console.warn("Session refresh failed; keeping the current session:", error?.message || error);
+      } finally {
+        sessionRefreshInFlightRef.current = false;
+      }
+    };
+
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active") refreshSession();
+    });
+    const timer = setInterval(refreshSession, SESSION_REFRESH_INTERVAL_MS);
+    return () => {
+      subscription.remove();
+      clearInterval(timer);
+    };
+  }, [user?.token]);
+
   async function login(username, password) {
     setLoading(true);
 
@@ -135,6 +185,7 @@ export function AuthProvider({ children }) {
       const sessionData = hydrateUser({ ...response, role });
 
       await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(sessionData));
+      lastSessionRefreshRef.current = Date.now();
       setUser(sessionData);
       setScreen(`${role}-dashboard`);
       registerPushToken();

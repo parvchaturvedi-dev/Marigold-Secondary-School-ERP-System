@@ -4,7 +4,7 @@ const attendanceLogSchema = new mongoose.Schema(
   {
     entityType: {
       type: String,
-      enum: ['student', 'teacher', 'clerk', 'admin'],
+      enum: ['student', 'teacher', 'clerk', 'employee', 'admin'],
       required: true,
     },
     entityId: {

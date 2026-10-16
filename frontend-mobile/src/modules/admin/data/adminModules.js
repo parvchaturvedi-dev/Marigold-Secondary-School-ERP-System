@@ -49,6 +49,15 @@ export const adminModules = [
       { title: "Teacher Assignment", icon: "person-add-outline" }
     ]
   },
+  {
+    title: "Employee Desk",
+    icon: "people-outline",
+    color: "#0F766E",
+    subItems: [
+      { title: "Employee Management", icon: "people-circle-outline" },
+      { title: "Employee Assignment Management", icon: "person-add-outline" }
+    ]
+  },
   { title: "Id Card", icon: "card-outline", color: "#06B6D4" },
   { title: "Leave Requests", icon: "airplane-outline", color: "#F97316" },
   { title: "Meetings", icon: "videocam-outline", color: "#3B82F6" },

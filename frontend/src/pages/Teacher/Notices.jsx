@@ -20,6 +20,10 @@ const derivePriority = (notification) => {
 
 const Notices = ({ session }) => {
   const profile = getTeacherProfile(session);
+  const isEmployee = String(session?.role || '').toLowerCase() === 'employee';
+  const displayName = isEmployee
+    ? session?.employeeProfile?.displayName || session?.name || session?.username || 'Employee'
+    : profile.displayName;
   const { notifications, error } = useNotificationsDatabase(session);
   const loading = !error && !session?.username;
   const notices = notifications.map((notification) => ({
@@ -38,7 +42,7 @@ const Notices = ({ session }) => {
           <BellRing className="w-5 h-5" /> Notices
         </h2>
         <p className="text-xs font-bold text-slate-500 mt-1">
-          Faculty and class notices relevant to {profile.displayName}.
+          Notices relevant to {displayName}.
         </p>
       </section>
 
@@ -65,7 +69,7 @@ const Notices = ({ session }) => {
           <div className="glass-card rounded-3xl p-8 text-center">
             <p className="text-sm font-black text-slate-600">No notices yet</p>
             <p className="text-xs font-semibold text-slate-500 mt-1">
-              Notices for {profile.displayName} will appear here once published.
+              Notices for {displayName} will appear here once published.
             </p>
           </div>
         )}

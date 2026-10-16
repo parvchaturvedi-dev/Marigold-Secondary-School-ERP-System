@@ -28,6 +28,7 @@ import {
   getTeacherAllowedClasses,
   updateAssignment,
 } from './assignmentStore';
+import { mediaUrl } from '../../services/api';
 import { sortClassNames, useMasterData } from './masterData';
 
 const emptyForm = {
@@ -574,7 +575,7 @@ const AssignmentCard = ({ assignment, classOrder, getAttachmentMeta, canMutate, 
 
         {assignment.attachment && attachmentMeta && AttachmentIcon && (
           <a
-            href={assignment.attachment.dataUrl}
+            href={mediaUrl(assignment.attachment.url)}
             target="_blank"
             rel="noreferrer"
             className="mt-3 p-2 rounded-xl border border-gray-200 bg-white flex items-center justify-between max-w-sm"

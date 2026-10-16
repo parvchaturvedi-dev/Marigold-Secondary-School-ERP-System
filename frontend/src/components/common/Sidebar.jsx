@@ -34,7 +34,8 @@ import {
   Search,
   UserPlus,
   Award,
-  Info
+  Info,
+  BriefcaseBusiness
 } from 'lucide-react';
 import Logo from '../../assets/logo.png';
 
@@ -190,6 +191,15 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
         { name: 'Teacher Assignment', icon: UserCheck }
       ]
     },
+    {
+      name: 'Employee Desk',
+      icon: BriefcaseBusiness,
+      hasSub: true,
+      subItems: [
+        { name: 'Employee Management', icon: UserCheck },
+        { name: 'Employee Assignment Management', icon: UserPlus }
+      ]
+    },
     { name: 'Id Card', icon: IdCard },
     { name: 'Leave Requests', icon: LogOut },
     { name: 'Meetings', icon: Video },
@@ -235,6 +245,15 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
       subItems: [
         { name: 'Teacher Management', icon: UserPlus },
         { name: 'Teacher Assignment', icon: UserCheck },
+      ],
+    },
+    {
+      name: 'Employee Desk',
+      icon: BriefcaseBusiness,
+      hasSub: true,
+      subItems: [
+        { name: 'Employee Management', icon: UserCheck },
+        { name: 'Employee Assignment Management', icon: UserPlus },
       ],
     },
     {
@@ -327,11 +346,20 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
     { name: 'Settings', icon: Settings },
   ];
 
+  const employeeMenuItems = [
+    { name: 'Attendance', icon: CheckSquare },
+    { name: 'Notices', icon: Bell },
+    { name: 'Payroll', icon: Wallet },
+    { name: 'Id Card', icon: IdCard },
+    { name: 'Academic Calender', icon: Calendar },
+  ];
+
   const roleMenuItems = {
     admin: adminMenuItems,
     clerk: clerkMenuItems,
     student: academicMenuItems,
     teacher: teacherMenuItems,
+    employee: employeeMenuItems,
   };
 
   const menuItems = roleMenuItems[role] || adminMenuItems;

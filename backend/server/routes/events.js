@@ -8,11 +8,10 @@ import { resolveDisplayName } from '../utils/nameLookup.js';
 import { createNotification } from '../utils/notify.js';
 import {
   isCloudinaryConfigured,
-  resourceTypeForMime,
   uploadBuffer,
-  signedUrlFor,
   deleteAsset,
 } from '../utils/cloudinary.js';
+import { mediaUrlFor } from '../utils/mediaToken.js';
 
 // Stable Cloudinary public_id per event so a re-upload overwrites the previous
 // asset instead of orphaning it (one image per event → derived from the id).
@@ -41,31 +40,17 @@ const ensureMongo = (_request, response, next) => {
 
 const toBoolean = (value) => value === true || value === 'true';
 
-// Resolve the inline base64 data URL the frontend renders directly as <img src>.
-// Cloudinary-stored images are fetched back via a short-lived signed URL so the
-// response shape (imageDataUrl) stays identical to the legacy Mongo-Buffer path.
-const resolveImageDataUrl = async (event) => {
-  if (!event.imageType) return '';
-  if (event.storage === 'cloudinary' && event.publicId) {
-    try {
-      const url = signedUrlFor(event.publicId, event.resourceType || resourceTypeForMime(event.imageType));
-      const upstream = await fetch(url);
-      if (!upstream.ok) return '';
-      const arrayBuffer = await upstream.arrayBuffer();
-      return `data:${event.imageType};base64,${Buffer.from(arrayBuffer).toString('base64')}`;
-    } catch {
-      return '';
-    }
-  }
-  if (event.imageData) {
-    return `data:${event.imageType};base64,${event.imageData.toString('base64')}`;
-  }
-  return '';
-};
+// Does this event actually carry a poster? (Cloudinary reference or legacy bytes.)
+const hasImage = (event) =>
+  Boolean(event.imageType) &&
+  Boolean((event.storage === 'cloudinary' && event.publicId) || event.imageData);
 
 const toEventPayload = async (event) => {
   const createdByName = await resolveDisplayName(event.createdByUsername);
-  const imageDataUrl = await resolveImageDataUrl(event);
+  // The poster is served lazily from /api/media/event/:id instead of being
+  // inlined as base64 — a list of events no longer ships every image to every
+  // user on every load, and the browser caches what it does fetch.
+  const imageUrl = hasImage(event) ? mediaUrlFor('event', event._id) : '';
 
   return {
   id: event._id.toString(),
@@ -82,7 +67,7 @@ const toEventPayload = async (event) => {
   imageName: event.imageName,
   imageType: event.imageType,
   imageSize: event.imageSize,
-  imageDataUrl,
+  imageUrl,
   participants: event.participants || [],
   createdByRole: event.createdByRole,
   createdByUsername: event.createdByUsername,

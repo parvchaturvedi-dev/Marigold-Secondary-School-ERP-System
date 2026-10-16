@@ -35,6 +35,7 @@ import {
 const NAMESPACE_BY_TAB = {
   teachers: 'admin-teacher-management-list',
   clerks: 'admin-clerk-management-list',
+  employees: 'admin-employee-management-list',
 };
 
 const getNextSalaryChange = (staff) =>
@@ -58,6 +59,7 @@ const Payroll = () => {
   const [activeTab, setActiveTab] = useState('teachers');
   const [teachers, , teacherState] = useMongoState(NAMESPACE_BY_TAB.teachers, []);
   const [clerks, , clerkState] = useMongoState(NAMESPACE_BY_TAB.clerks, []);
+  const [employees, , employeeState] = useMongoState(NAMESPACE_BY_TAB.employees, []);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedId, setExpandedId] = useState('');
@@ -76,8 +78,8 @@ const Payroll = () => {
   const [payMonth, setPayMonth] = useState('');
   const [salarySlip, setSalarySlip] = useState(null);
 
-  const list = activeTab === 'teachers' ? teachers : clerks;
-  const listState = activeTab === 'teachers' ? teacherState : clerkState;
+  const list = activeTab === 'teachers' ? teachers : activeTab === 'clerks' ? clerks : employees;
+  const listState = activeTab === 'teachers' ? teacherState : activeTab === 'clerks' ? clerkState : employeeState;
 
   const staffList = useMemo(() => {
     const arr = Array.isArray(list) ? list : [];
@@ -191,7 +193,7 @@ const Payroll = () => {
         description: `Your salary payment of ${formatCurrency(amount)} was recorded.`,
         type: 'salary',
         linkPage: 'My Salary',
-        recipientRole: activeTab === 'teachers' ? 'teacher' : 'clerk',
+        recipientRole: activeTab === 'teachers' ? 'teacher' : activeTab === 'clerks' ? 'clerk' : 'employee',
         recipientUsername: staffId,
       }),
     }).catch((error) => {
@@ -261,11 +263,11 @@ const Payroll = () => {
             Staff Payroll <Sparkles className="w-5 h-5 text-neutral-700" />
           </h2>
           <p className="text-xs text-neutral-600 font-medium font-mono mt-1">
-            Month-wise salary ledger for teaching and non-teaching staff.
+            Month-wise salary ledger for teachers, clerks and employees.
           </p>
         </div>
         <div className="flex items-center gap-2 glass-card p-1.5 rounded-2xl">
-          {['teachers', 'clerks'].map((tab) => (
+          {['teachers', 'clerks', 'employees'].map((tab) => (
             <button
               key={tab}
               type="button"
@@ -279,7 +281,7 @@ const Payroll = () => {
                 activeTab === tab ? 'bg-neutral-900 text-white' : 'bg-neutral-100 hover:bg-neutral-200 text-neutral-600'
               }`}
             >
-              {tab === 'teachers' ? 'Teachers' : 'Clerks'}
+              {tab === 'teachers' ? 'Teachers' : tab === 'clerks' ? 'Clerks' : 'Employees'}
             </button>
           ))}
         </div>
@@ -298,7 +300,7 @@ const Payroll = () => {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {[
-          { id: 'staff', title: 'Total Staff', value: summary.count, icon: Users, note: `${activeTab === 'teachers' ? 'Teaching' : 'Non-teaching'} staff on record` },
+          { id: 'staff', title: 'Total Staff', value: summary.count, icon: Users, note: `${activeTab === 'teachers' ? 'Teaching' : activeTab === 'clerks' ? 'Clerical' : 'Employee'} staff on record` },
           { id: 'monthly', title: 'Monthly Payroll', value: formatCurrency(summary.monthlyPayroll), icon: Wallet, note: 'Sum of current salary rates' },
           { id: 'paid', title: 'Total Paid', value: formatCurrency(summary.paid), icon: Banknote, note: 'Paid to date, all months' },
           { id: 'pending', title: 'Total Pending', value: formatCurrency(summary.pending), icon: DollarSign, note: summary.pending ? 'Requires clearance' : 'All dues cleared' },

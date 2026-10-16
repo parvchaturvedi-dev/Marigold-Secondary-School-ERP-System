@@ -1,6 +1,6 @@
 import { createElement, lazy } from 'react';
 
-const pageLoaders = import.meta.glob('../pages/{Admin,Clerk,Student,Teacher,common}/**/*.jsx');
+const pageLoaders = import.meta.glob('../pages/{Admin,Clerk,Student,Teacher,Employee,common}/**/*.jsx');
 
 const resolvePageLoader = (path) => {
   const loader = pageLoaders[`${path}.jsx`] || pageLoaders[path];
@@ -62,6 +62,8 @@ export const portalRoutes = {
       'Teacher Management': lazyPage('../pages/Admin/TeacherManagement'),
       'Teacher Assignment': lazyPage('../pages/Admin/TeacherAssignment'),
       'Teacher Profile': lazyPage('../pages/Admin/TeacherProfile'),
+      'Employee Management': lazyPage('../pages/Admin/EmployeeManagement'),
+      'Employee Assignment Management': lazyPage('../pages/Admin/EmployeeAssignment'),
       'Class Finance List': lazyPage('../pages/Admin/ClassFinanceList'),
       Timetable: lazyPage('../pages/Admin/Timetable'),
       Settings: lazyPage('../pages/Admin/Settings'),
@@ -111,6 +113,8 @@ export const portalRoutes = {
       'Teacher Assignment': lazyPage('../pages/Clerk/TeacherAssignment'),
       'Teacher Management': lazyPage('../pages/Clerk/TeacherManagement'),
       'Teacher Profile': lazyPage('../pages/Clerk/TeacherProfile'),
+      'Employee Management': lazyPage('../pages/Admin/EmployeeManagement'),
+      'Employee Assignment Management': lazyPage('../pages/Admin/EmployeeAssignment'),
       Timetable: lazyPage('../pages/Clerk/Timetable'),
       Vault: lazyPage('../pages/Clerk/Vault'),
       Certification: lazyPage('../pages/common/Certification'),
@@ -169,6 +173,16 @@ export const portalRoutes = {
       Vault: lazyPage('../pages/Teacher/Vault'),
       Certification: lazyPage('../pages/common/Certification'),
       'About Us': lazyPage('../pages/common/About'),
+    },
+  },
+  employee: {
+    defaultPage: 'Attendance',
+    pages: {
+      Attendance: lazyPage('../pages/Employee/Attendance'),
+      Notices: lazyPage('../pages/Teacher/Notices'),
+      Payroll: lazyPage('../pages/common/MySalary'),
+      'Id Card': lazyPage('../pages/Employee/IdCard'),
+      'Academic Calender': lazyPage('../pages/Teacher/AcademicCalender'),
     },
   },
 };

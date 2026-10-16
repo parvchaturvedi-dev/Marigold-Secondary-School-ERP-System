@@ -10,6 +10,8 @@ import ClerkManagementScreen from "./clerks/ClerkManagementScreen";
 import SubjectManagementScreen from "./subjects/SubjectManagementScreen";
 import DocumentsManagementScreen from "./documents/DocumentsManagementScreen";
 import TeacherManagementScreen from "./faculty/TeacherManagementScreen";
+import EmployeeManagementScreen from "./faculty/EmployeeManagementScreen";
+import EmployeeAssignmentScreen from "./faculty/EmployeeAssignmentScreen";
 import AcademicCalendarScreen from "./academic/AcademicCalendarScreen";
 import ClassManagementScreen from "./classes/ClassManagementScreen";
 import TimetableEditorScreen from "./timetable/TimetableEditorScreen";
@@ -40,6 +42,8 @@ export const moduleScreens = {
   "Subject Management": SubjectManagementScreen,
   "Documents Management": DocumentsManagementScreen,
   "Teacher Management": TeacherManagementScreen,
+  "Employee Management": EmployeeManagementScreen,
+  "Employee Assignment Management": EmployeeAssignmentScreen,
   "Academic Calendar": AcademicCalendarScreen,
   "Class Management": ClassManagementScreen,
   "Class Preferences": ClassManagementScreen,

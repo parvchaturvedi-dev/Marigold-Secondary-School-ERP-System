@@ -21,6 +21,7 @@ import gmailRoutes from './routes/gmail.js';
 import leaveRequestRoutes from './routes/leaveRequests.js';
 import meetingRoutes from './routes/meetings.js';
 import moduleStateRoutes from './routes/moduleState.js';
+import mediaRoutes from './routes/media.js';
 import noticeRoutes from './routes/notices.js';
 import notificationRoutes from './routes/notifications.js';
 import payrollRoutes from './routes/payroll.js';
@@ -157,7 +158,43 @@ app.get('/api/health', (_request, response) => {
 });
 
 app.use('/api/auth', authRoutes);
+// Media URLs are consumed by <img src> / <Image uri>, which cannot send a
+// Bearer header — they authenticate with a per-asset signed token instead, so
+// they must be mounted ahead of the global guard.
+app.use('/api/media', mediaRoutes);
 app.use('/api', requireAuth);
+app.use('/api', (request, response, next) => {
+  if (request.auth?.role !== 'employee') {
+    next();
+    return;
+  }
+
+  const pathname = request.path.replace(/\/+$/, '') || '/';
+  const isRead = request.method === 'GET';
+  const isAllowed =
+    (isRead && [
+      '/academic-calendar/latest',
+      '/attendance/my-clock-status',
+      '/attendance/settings',
+      '/module-state/admin-notices-list',
+      '/notifications',
+      '/notices',
+      '/payroll/me',
+    ].includes(pathname)) ||
+    (request.method === 'POST' && [
+      '/attendance/clock',
+      '/notifications/register-token',
+      '/notifications/unregister-token',
+    ].includes(pathname)) ||
+    (request.method === 'PATCH' && pathname === '/notifications/read');
+
+  if (!isAllowed) {
+    response.status(403).json({ message: 'This module is not available to employee accounts.' });
+    return;
+  }
+
+  next();
+});
 app.use('/api/academic-calendar', academicCalendarRoutes);
 app.use('/api/ai/assistant', assistantRoutes);
 app.use('/api/ai', aiRoutes);

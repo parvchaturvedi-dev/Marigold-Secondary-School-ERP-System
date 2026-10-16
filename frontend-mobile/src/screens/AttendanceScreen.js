@@ -56,22 +56,33 @@ const WEEKDAYS = [
   { n: 6, label: "Sat" },
 ];
 
-// Local-time YYYY-MM-DD formatter. IMPORTANT: never use toISOString() here — it
-// converts to UTC and shifts the calendar day backwards in IST (and any tz east
-// of GMT), which used to make "today" resolve to yesterday after ~05:30 local.
+const ATTENDANCE_TIMEZONE = "Asia/Kolkata";
 const pad2 = (value) => String(value).padStart(2, "0");
-const formatDateKey = (date) => `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+const formatDateKey = (date, timezone = ATTENDANCE_TIMEZONE) => {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone || ATTENDANCE_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const getPart = (type) => parts.find((part) => part.type === type)?.value || "";
+  return `${getPart("year")}-${getPart("month")}-${getPart("day")}`;
+};
 const todayKey = () => formatDateKey(new Date());
 const addDays = (dateKey, days) => {
-  const date = new Date(`${dateKey}T00:00:00`);
-  date.setDate(date.getDate() + days);
-  return formatDateKey(date);
+  const date = new Date(`${dateKey}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
 };
-const formatClockTime = (value) => {
+const formatClockTime = (value, timezone = ATTENDANCE_TIMEZONE) => {
   if (!value) return "--";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
-  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return date.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: timezone || ATTENDANCE_TIMEZONE,
+  });
 };
 const normalize = (value = "") => String(value || "").trim();
 const isPresentStatus = (status) => ["present", "manual", "half-day"].includes(status);
@@ -137,12 +148,20 @@ export default function AttendanceScreen({ role, onBack }) {
   const isClerk = role === "clerk";
   const isTeacher = role === "teacher";
   const isStudent = role === "student";
+  const isEmployee = role === "employee";
   const teacherClass = normalize(user?.assignedClassTeacherFor || user?.teacherProfile?.assignedClassTeacherFor);
   const canEditStudents = isAdmin || isClerk || (isTeacher && Boolean(teacherClass));
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
+      if (isEmployee) {
+        const settingsPayload = await apiRequest("/attendance/settings");
+        setOverview({ settings: settingsPayload, roster: [] });
+        setLogs([]);
+        setClassOptions([]);
+        return;
+      }
       const className = isTeacher ? teacherClass : selectedClass;
       const [overviewPayload, logPayload, directoryPayload] = await Promise.all([
         isStudent ? Promise.resolve(null) : fetchAttendanceOverview({ date, className }),
@@ -190,13 +209,13 @@ export default function AttendanceScreen({ role, onBack }) {
     } finally {
       setLoading(false);
     }
-  }, [date, isStudent, isTeacher, selectedClass, teacherClass]);
+  }, [date, isEmployee, isStudent, isTeacher, selectedClass, teacherClass]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  const isSelfClockRole = role === "clerk" || role === "teacher";
+  const isSelfClockRole = role === "clerk" || role === "teacher" || role === "employee";
   const refetchClockStatus = useCallback(async () => {
     if (!isSelfClockRole) return;
     setClockStatusLoading(true);
@@ -253,15 +272,13 @@ export default function AttendanceScreen({ role, onBack }) {
   }, [logs, user?.studentProfiles]);
 
   const monthDays = useMemo(() => {
-    const cursor = new Date();
-    const year = cursor.getFullYear();
-    const month = cursor.getMonth();
-    const days = new Date(year, month + 1, 0).getDate();
+    const [year, month] = todayKey().split("-").map(Number);
+    const days = new Date(Date.UTC(year, month, 0)).getUTCDate();
     const byDate = new Map(studentLogs.map((log) => [log.attendanceDate, log]));
     return Array.from({ length: days }, (_, index) => {
       const day = index + 1;
-      const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-      const weekday = new Date(`${key}T00:00:00`).getDay();
+      const key = `${year}-${pad2(month)}-${pad2(day)}`;
+      const weekday = new Date(`${key}T00:00:00.000Z`).getUTCDay();
       const log = byDate.get(key);
       return { day, key, status: log?.status || (weekday === 0 ? "holiday" : "none") };
     });
@@ -313,7 +330,7 @@ export default function AttendanceScreen({ role, onBack }) {
       const device = await getDeviceIdentity();
       const payload = await clockAttendance({
         action,
-        source: isTeacher ? "teacher-mobile" : "clerk-self",
+        source: isTeacher ? "teacher-mobile" : role === "employee" ? "employee-self" : "clerk-self",
         requiresGeofence: true,
         gpsLatitude: point.latitude,
         gpsLongitude: point.longitude,
@@ -408,7 +425,9 @@ export default function AttendanceScreen({ role, onBack }) {
         { value: "staff", label: "Staff" },
         { value: "manage", label: "Manage" },
       ]
-    : [
+    : isEmployee
+      ? [{ value: "my", label: "My Attendance" }]
+      : [
         { value: "my", label: "My Attendance" },
         { value: "class", label: "Class" },
       ];
@@ -440,9 +459,11 @@ export default function AttendanceScreen({ role, onBack }) {
           <StudentLedger metrics={studentMetrics} monthDays={monthDays} logs={studentLogs} />
         ) : (
           <>
-            <View style={{ marginBottom: 14 }}>
-              <Segmented options={deskTabs} value={activeTab} onChange={setActiveTab} />
-            </View>
+            {deskTabs.length > 1 && (
+              <View style={{ marginBottom: 14 }}>
+                <Segmented options={deskTabs} value={activeTab} onChange={setActiveTab} />
+              </View>
+            )}
 
             {/* ---- Admin: Students Attendance ---- */}
             {isAdmin && activeTab === "students" && (
@@ -491,7 +512,7 @@ export default function AttendanceScreen({ role, onBack }) {
             )}
 
             {/* ---- Clerk / Teacher: My Attendance (self clock-in/out) ---- */}
-            {(isClerk || isTeacher) && activeTab === "my" && (
+            {(isClerk || isTeacher || isEmployee) && activeTab === "my" && (
               <ClockCard
                 role={role}
                 locationState={locationState}
@@ -501,6 +522,7 @@ export default function AttendanceScreen({ role, onBack }) {
                 status={clockStatus}
                 statusLoading={clockStatusLoading}
                 banner={clockBanner}
+                timezone={settings.timezone}
               />
             )}
 
@@ -837,7 +859,7 @@ function SessionHolidayConfigurator({ settingsDraft, setSettingsDraft, savedSett
   );
 }
 
-function ClockCard({ role, locationState, onCheck, onClock, saving, status, statusLoading, banner }) {
+function ClockCard({ role, locationState, onCheck, onClock, saving, status, statusLoading, banner, timezone }) {
   const enabled = Boolean(locationState.point?.inside && !locationState.point?.isMockLocation);
   const clockedIn = Boolean(status?.clockedIn);
   const clockedOut = Boolean(status?.clockedOut);
@@ -846,7 +868,7 @@ function ClockCard({ role, locationState, onCheck, onClock, saving, status, stat
   return (
     <GlassCard style={styles.card}>
       <Text style={styles.cardTitle}>My Attendance</Text>
-      <Text style={styles.muted}>{role === "teacher" ? "Teacher" : "Clerk"} self-service clock-in and clock-out requires verified GPS.</Text>
+      <Text style={styles.muted}>{role === "teacher" ? "Teacher" : role === "employee" ? "Employee" : "Clerk"} self-service clock-in and clock-out requires verified GPS.</Text>
 
       {!!banner?.error && <Banner type="error" message={banner.error} />}
       {!!banner?.success && <Banner type="success" message={banner.success} />}
@@ -858,7 +880,7 @@ function ClockCard({ role, locationState, onCheck, onClock, saving, status, stat
           <Ionicons name="checkmark-circle" size={30} color="#16A34A" />
           <Text style={styles.doneTitle}>Done for today</Text>
           <Text style={styles.doneMeta}>
-            In: {formatClockTime(status?.clockInAt)}   •   Out: {formatClockTime(status?.clockOutAt)}
+            In: {formatClockTime(status?.clockInAt, timezone)}   •   Out: {formatClockTime(status?.clockOutAt, timezone)}
           </Text>
         </View>
       ) : (
@@ -875,7 +897,7 @@ function ClockCard({ role, locationState, onCheck, onClock, saving, status, stat
           )}
           {clockedIn && (
             <Text style={styles.clockedInHint}>
-              Clocked in at {formatClockTime(status?.clockInAt)}. Clock out when you leave.
+              Clocked in at {formatClockTime(status?.clockInAt, timezone)}. Clock out when you leave.
             </Text>
           )}
           {/* Show ONLY the next valid action: Clock In if not yet in, else Clock Out. */}

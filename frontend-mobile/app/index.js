@@ -12,6 +12,7 @@ import ConnectedModuleScreen from "../src/screens/ConnectedModuleScreen";
 import AdminDashboardScreen from "../src/modules/admin/screens/AdminDashboardScreen";
 import TeacherDashboardScreen from "../src/modules/teacher/screens/TeacherDashboardScreen";
 import ClerkDashboardScreen from "../src/modules/clerk/screens/ClerkDashboardScreen";
+import EmployeeDashboardScreen from "../src/modules/employee/screens/EmployeeDashboardScreen";
 
 function SplashScreen() {
   return (
@@ -41,6 +42,7 @@ function AppShell() {
   if (screen === "admin-dashboard") return <AdminDashboardScreen />;
   if (screen === "teacher-dashboard") return <TeacherDashboardScreen />;
   if (screen === "clerk-dashboard") return <ClerkDashboardScreen />;
+  if (screen === "employee-dashboard") return <EmployeeDashboardScreen />;
 
   // Default: login
   return <LoginScreen />;

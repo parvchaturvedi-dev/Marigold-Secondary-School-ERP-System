@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { AppState } from "react-native";
 import { fetchDashboardSummary } from "../api/dashboardApi";
 
 export function useDashboardSummary() {
@@ -8,8 +9,12 @@ export function useDashboardSummary() {
 
   useEffect(() => {
     let mounted = true;
+    let requestInFlight = false;
+    let timer = null;
 
     async function loadSummary() {
+      if (requestInFlight) return;
+      requestInFlight = true;
       try {
         const data = await fetchDashboardSummary();
         if (!mounted) return;
@@ -20,15 +25,34 @@ export function useDashboardSummary() {
         setError(err?.message || "Dashboard data could not be loaded.");
       } finally {
         if (mounted) setLoading(false);
+        requestInFlight = false;
       }
     }
 
+    const startPolling = () => {
+      if (!timer) timer = setInterval(loadSummary, 30000);
+    };
+    const stopPolling = () => {
+      if (!timer) return;
+      clearInterval(timer);
+      timer = null;
+    };
+
     loadSummary();
-    const timer = setInterval(loadSummary, 30000);
+    if (AppState.currentState === "active") startPolling();
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        loadSummary();
+        startPolling();
+      } else {
+        stopPolling();
+      }
+    });
 
     return () => {
       mounted = false;
-      clearInterval(timer);
+      stopPolling();
+      subscription.remove();
     };
   }, []);
 

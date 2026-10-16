@@ -8,6 +8,7 @@ export const ROLE_DASHBOARD_PATHS = {
   clerk: '/clerk/dashboard',
   student: '/student/dashboard',
   teacher: '/teacher/dashboard',
+  employee: '/employee/attendance',
 };
 
 export const VALID_ROLES = Object.keys(ROLE_DASHBOARD_PATHS);
@@ -109,6 +110,14 @@ export const detectRoleFromUsername = (input = '') => {
       id: 'teacher',
       label: 'Academic Faculty Console',
       color: 'text-purple-600 bg-purple-50 border-purple-200',
+    };
+  }
+
+  if (upperInput.startsWith('EMP-')) {
+    return {
+      id: 'employee',
+      label: 'Employee Desk',
+      color: 'text-teal-600 bg-teal-50 border-teal-200',
     };
   }
 

@@ -10,6 +10,14 @@ function normalizeApiBaseUrl(value) {
 
 export const API_BASE_URL = normalizeApiBaseUrl(process.env.EXPO_PUBLIC_API_BASE_URL);
 
+// Origin without the trailing /api — media paths already include it.
+const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, "");
+
+// Turn a relative media path from the API ('/api/media/event/123?t=…') into an
+// absolute URL. These links carry their own per-asset signed token, so they load
+// in a plain <Image uri> without an Authorization header.
+export const mediaUrl = (path) => (path ? `${API_ORIGIN}${path}` : "");
+
 // AuthContext registers a handler here so that any 401 (missing/expired/invalid
 // session) auto-logs-out to the login screen instead of surfacing a raw
 // "Authentication required" error that leaves the user stuck.

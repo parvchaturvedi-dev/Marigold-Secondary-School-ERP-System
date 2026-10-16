@@ -526,6 +526,9 @@ export function useBanner() {
 // In-memory cache shared across all useModuleState instances so hopping
 // between screens is instant instead of refetching every namespace each time.
 const moduleStateCache = new Map();
+const moduleStateCacheUpdatedAt = new Map();
+const moduleStateRequests = new Map();
+const MODULE_STATE_CACHE_TTL_MS = 15 * 1000;
 
 // Load & persist a module-state array namespace (admin/clerk write access).
 export function useModuleState(namespace) {
@@ -534,16 +537,39 @@ export function useModuleState(namespace) {
   const [loading, setLoading] = useState(!cached);
   const [error, setError] = useState("");
 
-  const reload = useCallback(async () => {
+  const reload = useCallback(async ({ force = true } = {}) => {
+    const cachedItems = moduleStateCache.get(namespace);
+    const cacheIsFresh =
+      cachedItems &&
+      Date.now() - (moduleStateCacheUpdatedAt.get(namespace) || 0) < MODULE_STATE_CACHE_TTL_MS;
+    if (!force && cacheIsFresh) {
+      setItems(cachedItems);
+      setLoading(false);
+      return;
+    }
+
     // If we already have cached data, refresh in the background — no spinner.
     if (!moduleStateCache.has(namespace)) setLoading(true);
     setError("");
     try {
-      const payload = await apiRequest(`/module-state/${encodeURIComponent(namespace)}`);
-      const value = payload?.value;
-      const next = Array.isArray(value) ? value : value ? [value] : [];
-      moduleStateCache.set(namespace, next);
-      setItems(next);
+      let request = moduleStateRequests.get(namespace);
+      if (!request) {
+        request = apiRequest(`/module-state/${encodeURIComponent(namespace)}`)
+          .then((payload) => {
+            const value = payload?.value;
+            const next = Array.isArray(value) ? value : value ? [value] : [];
+            moduleStateCache.set(namespace, next);
+            moduleStateCacheUpdatedAt.set(namespace, Date.now());
+            return next;
+          })
+          .finally(() => {
+            if (moduleStateRequests.get(namespace) === request) {
+              moduleStateRequests.delete(namespace);
+            }
+          });
+        moduleStateRequests.set(namespace, request);
+      }
+      setItems(await request);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -552,7 +578,7 @@ export function useModuleState(namespace) {
   }, [namespace]);
 
   useEffect(() => {
-    reload();
+    reload({ force: false });
   }, [reload]);
 
   // Live-refresh on backend broadcasts, throttled so we don't stampede reloads.
@@ -579,6 +605,7 @@ export function useModuleState(namespace) {
         body: JSON.stringify({ value: nextItems }),
       });
       moduleStateCache.set(namespace, nextItems);
+      moduleStateCacheUpdatedAt.set(namespace, Date.now());
       setItems(nextItems);
     },
     [namespace]

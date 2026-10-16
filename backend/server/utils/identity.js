@@ -5,12 +5,14 @@ import User from '../models/User.js';
 const STUDENT_NAMESPACE = 'admin-student-management-students';
 const TEACHER_NAMESPACE = 'admin-teacher-management-list';
 const CLERK_NAMESPACE = 'admin-clerk-management-list';
+const EMPLOYEE_NAMESPACE = 'admin-employee-management-list';
 const CLASS_PREFERENCES_NAMESPACE = 'admin-class-preferences';
 
 export const IDENTITY_SOURCE_NAMESPACES = new Set([
   STUDENT_NAMESPACE,
   TEACHER_NAMESPACE,
   CLERK_NAMESPACE,
+  EMPLOYEE_NAMESPACE,
   CLASS_PREFERENCES_NAMESPACE,
 ]);
 
@@ -71,6 +73,7 @@ const usernameFor = (role, rawId) => {
   if (role === 'student') return id.startsWith('STD-') || id.startsWith('FAM-') ? id : `STD-${id}`;
   if (role === 'teacher') return id.startsWith('TCH-') ? id : `TCH-${id}`;
   if (role === 'clerk') return id.startsWith('CLK-') ? id : `CLK-${id}`;
+  if (role === 'employee') return id.startsWith('EMP-') ? id : `EMP-${id}`;
   if (role === 'admin') return id.startsWith('ADM-') ? id : `ADM-${id}`;
   return id;
 };
@@ -167,10 +170,11 @@ const deactivateGeneratedUsersNotIn = async (role, activeUsernames) => {
 };
 
 export const syncIdentityUsersFromState = async () => {
-  const [students, teachers, clerks, classPreferences] = await Promise.all([
+  const [students, teachers, clerks, employees, classPreferences] = await Promise.all([
     getStateValue(STUDENT_NAMESPACE, []),
     getStateValue(TEACHER_NAMESPACE, []),
     getStateValue(CLERK_NAMESPACE, []),
+    getStateValue(EMPLOYEE_NAMESPACE, []),
     getStateValue(CLASS_PREFERENCES_NAMESPACE, []),
   ]);
   const preferredClassNames = (Array.isArray(classPreferences) ? classPreferences : [])
@@ -290,10 +294,30 @@ export const syncIdentityUsersFromState = async () => {
     });
   }
 
+  const activeEmployeeUsernames = new Set();
+  for (const employee of Array.isArray(employees) ? employees : []) {
+    const username = usernameFor('employee', employee.id || employee.empId);
+    if (!username) continue;
+    activeEmployeeUsernames.add(username);
+    await upsertGeneratedUser({
+      username,
+      role: 'employee',
+      displayName: employee.name || username,
+      profile: {
+        email: employee.email || '',
+        mobile: employee.mobile || '',
+        photoDataUrl: employee.photoDataUrl || '',
+        employeeProfile: employee,
+      },
+      isActive: employee.status !== 'Inactive',
+    });
+  }
+
   await Promise.all([
     deactivateGeneratedUsersNotIn('student', activeStudentUsernames),
     deactivateGeneratedUsersNotIn('teacher', activeTeacherUsernames),
     deactivateGeneratedUsersNotIn('clerk', activeClerkUsernames),
+    deactivateGeneratedUsersNotIn('employee', activeEmployeeUsernames),
   ]);
 };
 

@@ -4,12 +4,11 @@
 // `StaffAttendanceReport` (frontend/src/components/common/StaffAttendanceReport.jsx).
 //
 // Three local-state screens (no navigator needed):
-//   1. Staff list  — a searchable list of teacher / clerk cards.
+//   1. Staff list  — a searchable list of teacher / clerk / employee cards.
 //   2. Report view — per-staff header, From/To CSV export, month-by-month cards.
 //   3. Month detail — a datewise Status / Clock-In / Clock-Out list.
 //
-// Staff lists are read from module-state (`admin-teacher-management-list` and
-// `admin-clerk-management-list`) via formKit's `useModuleState`. The month
+// Staff lists are read from module-state via formKit's `useModuleState`. The month
 // report comes from `GET /attendance/staff-report`.
 //
 // CSV export uses the Expo SDK 54 File API (`new File(Paths.cache, name)` +
@@ -38,12 +37,18 @@ import {
 
 /* --------------------------------------------------------------- helpers */
 
-const pad2 = (value) => String(value).padStart(2, "0");
-
-const todayKey = () => {
-  const now = new Date();
-  return `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
+const ATTENDANCE_TIMEZONE = "Asia/Kolkata";
+const dateKeyInTimezone = (date, timezone = ATTENDANCE_TIMEZONE) => {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone || ATTENDANCE_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const getPart = (type) => parts.find((part) => part.type === type)?.value || "";
+  return `${getPart("year")}-${getPart("month")}-${getPart("day")}`;
 };
+const todayKey = () => dateKeyInTimezone(new Date());
 
 // Never let a picked date run into the future.
 const clampToToday = (key) => {
@@ -59,15 +64,19 @@ const toDateKey = (value) => {
   }
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+  return dateKeyInTimezone(date);
 };
 
-// ISO string -> local "hh:mm AM/PM" (or "—" when null / invalid).
-const formatClockTime = (iso) => {
+const formatClockTime = (iso, timezone = ATTENDANCE_TIMEZONE) => {
   if (!iso) return "—";
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true });
+  return date.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: timezone || ATTENDANCE_TIMEZONE,
+  });
 };
 
 // Fixed status chip palette (solid tones, independent of light/dark theme).
@@ -116,17 +125,19 @@ export default function MobileStaffAttendanceReport({ onBack }) {
   const { palette } = useTheme();
   const teachers = useModuleState("admin-teacher-management-list");
   const clerks = useModuleState("admin-clerk-management-list");
+  const employees = useModuleState("admin-employee-management-list");
 
   const [search, setSearch] = useState("");
   const [selectedStaff, setSelectedStaff] = useState(null);
 
-  const loading = teachers.loading || clerks.loading;
-  const loadError = teachers.error || clerks.error;
+  const loading = teachers.loading || clerks.loading || employees.loading;
+  const loadError = teachers.error || clerks.error || employees.error;
 
   const staffList = useMemo(() => {
     const merged = [
       ...normaliseStaff(teachers.items, "Teacher"),
       ...normaliseStaff(clerks.items, "Clerk"),
+      ...normaliseStaff(employees.items, "Employee"),
     ];
     const seen = new Set();
     return merged.filter((person) => {
@@ -135,7 +146,7 @@ export default function MobileStaffAttendanceReport({ onBack }) {
       seen.add(key);
       return true;
     });
-  }, [teachers.items, clerks.items]);
+  }, [teachers.items, clerks.items, employees.items]);
 
   const filteredStaff = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -160,7 +171,7 @@ export default function MobileStaffAttendanceReport({ onBack }) {
         <View style={{ flex: 1 }}>
           <SectionTitle>Staff Attendance</SectionTitle>
           <Text style={[styles.subtle, { color: palette.inkSoft }]}>
-            Select a teacher or clerk to view their month-by-month report.
+            Select a teacher, clerk or employee to view their month-by-month report.
           </Text>
         </View>
       </View>
@@ -276,8 +287,8 @@ function StaffReportView({ staff, onBack }) {
             key || day.date || "",
             day.weekday || "",
             statusMeta(day.status).label,
-            formatClockTime(day.clockInAt),
-            formatClockTime(day.clockOutAt),
+            formatClockTime(day.clockInAt, data?.timezone),
+            formatClockTime(day.clockOutAt, data?.timezone),
           ]);
         });
       });
@@ -322,7 +333,14 @@ function StaffReportView({ staff, onBack }) {
   }, [banner, displayName, range.from, range.to, staff.entityId]);
 
   if (selectedMonth) {
-    return <MonthDetailView month={selectedMonth} staffName={displayName} onBack={() => setSelectedMonth(null)} />;
+    return (
+      <MonthDetailView
+        month={selectedMonth}
+        staffName={displayName}
+        timezone={report?.timezone}
+        onBack={() => setSelectedMonth(null)}
+      />
+    );
   }
 
   return (
@@ -439,7 +457,7 @@ function StatTile({ label, value, tone }) {
 
 /* ================================================================ screen 3 */
 
-function MonthDetailView({ month, staffName, onBack }) {
+function MonthDetailView({ month, staffName, timezone, onBack }) {
   const { palette } = useTheme();
   const days = Array.isArray(month.days) ? month.days : [];
   const percent = clamp(month.percent);
@@ -480,9 +498,9 @@ function MonthDetailView({ month, staffName, onBack }) {
                   <Text style={[styles.dayWeekday, { color: palette.inkFaint }]}>{day.weekday || "—"}</Text>
                   <View style={styles.clockRow}>
                     <Ionicons name="log-in-outline" size={13} color="#047857" />
-                    <Text style={[styles.clockText, { color: palette.inkSoft }]}>{formatClockTime(day.clockInAt)}</Text>
+                    <Text style={[styles.clockText, { color: palette.inkSoft }]}>{formatClockTime(day.clockInAt, timezone)}</Text>
                     <Ionicons name="log-out-outline" size={13} color={palette.accentDeep} style={{ marginLeft: 10 }} />
-                    <Text style={[styles.clockText, { color: palette.inkSoft }]}>{formatClockTime(day.clockOutAt)}</Text>
+                    <Text style={[styles.clockText, { color: palette.inkSoft }]}>{formatClockTime(day.clockOutAt, timezone)}</Text>
                   </View>
                 </View>
                 <View style={[styles.chip, { backgroundColor: meta.bg, borderColor: meta.border }]}>

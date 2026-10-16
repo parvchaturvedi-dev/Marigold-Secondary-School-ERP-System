@@ -122,8 +122,21 @@ export function getModuleConfig(moduleName) {
 }
 
 export async function fetchModuleData(moduleName, user) {
-  const config = getModuleConfig(moduleName);
+  let config = getModuleConfig(moduleName);
   const scoped = scopedParams(user);
+  if (user?.role === "employee" && config.title === "Academic Calendar") {
+    config = { ...config, endpoint: "/academic-calendar/latest", extractor: (payload) => payload ? [payload] : [] };
+  }
+  if (user?.role === "employee" && config.title === "Payroll") {
+    config = { ...config, endpoint: "/payroll/me", extractor: (payload) => payload?.staff ? [payload.staff] : [] };
+  }
+  if ((config.title === "ID Card" || config.title === "Id Card") && user?.role === "employee") {
+    return {
+      config,
+      payload: { profile: user.employeeProfile || {} },
+      rows: [user.employeeProfile || {}],
+    };
+  }
   if ((config.title === "ID Card" || config.title === "Id Card") && (user?.role === "admin" || user?.role === "clerk")) {
     const payload = await apiRequest("/auth/users");
     return {

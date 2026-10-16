@@ -14,6 +14,7 @@ const router = express.Router();
 const STUDENTS_NAMESPACE = 'admin-student-management-students';
 const TEACHERS_NAMESPACE = 'admin-teacher-management-list';
 const CLERKS_NAMESPACE = 'admin-clerk-management-list';
+const DEFAULT_ATTENDANCE_TIMEZONE = 'Asia/Kolkata';
 const eventName = 'mgps-erp-attendance:updated';
 
 const ensureMongo = (_request, response, next) => {
@@ -27,7 +28,17 @@ const ensureMongo = (_request, response, next) => {
   next();
 };
 
-const todayKey = () => new Date().toISOString().slice(0, 10);
+const dateKeyInTimezone = (date, timezone = DEFAULT_ATTENDANCE_TIMEZONE) => {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone || DEFAULT_ATTENDANCE_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const getPart = (type) => parts.find((part) => part.type === type)?.value || '';
+  return `${getPart('year')}-${getPart('month')}-${getPart('day')}`;
+};
+const todayKey = (timezone = DEFAULT_ATTENDANCE_TIMEZONE) => dateKeyInTimezone(new Date(), timezone);
 const clean = (value = '') => String(value || '').trim();
 const upper = (value = '') => clean(value).toUpperCase();
 const toNumber = (value) => {
@@ -122,7 +133,7 @@ const isOffDay = (dateKey, group, setting = {}) => {
       ? setting.teacherWeeklyOffDays
       : setting.studentWeeklyOffDays
     : [];
-  const weekday = new Date(`${key}T00:00:00`).getDay();
+  const weekday = new Date(`${key}T00:00:00.000Z`).getUTCDay();
   if (weeklyOffDays.map(Number).includes(weekday)) return true;
 
   const offDays = Array.isArray(setting.offDays) ? setting.offDays : [];
@@ -248,7 +259,7 @@ const normalizeStudent = (student = {}, index = 0) => {
 
 const normalizeStaffRecord = (person = {}, role = 'teacher', index = 0) => {
   const profile = person.profile || {};
-  const source = profile.teacherProfile || profile.clerkProfile || person;
+  const source = profile.teacherProfile || profile.clerkProfile || profile.employeeProfile || person;
   const entityId = upper(person.username || source.id || source.empId || `${role}-${index + 1}`);
   return {
     entityType: role,
@@ -273,10 +284,11 @@ const normalizeStaffRecord = (person = {}, role = 'teacher', index = 0) => {
 };
 
 const listDirectory = async () => {
-  const [students, teachers, clerks, admins] = await Promise.all([
+  const [students, teachers, clerks, employees, admins] = await Promise.all([
     readStateArray(STUDENTS_NAMESPACE),
     readStateArray(TEACHERS_NAMESPACE),
     readStateArray(CLERKS_NAMESPACE),
+    readStateArray('admin-employee-management-list'),
     User.find({ role: 'admin' }).lean(),
   ]);
 
@@ -284,6 +296,7 @@ const listDirectory = async () => {
     ...students.map(normalizeStudent).filter((item) => item.entityId),
     ...teachers.map((item, index) => normalizeStaffRecord(item, 'teacher', index)).filter((item) => item.entityId),
     ...clerks.map((item, index) => normalizeStaffRecord(item, 'clerk', index)).filter((item) => item.entityId),
+    ...employees.map((item, index) => normalizeStaffRecord(item, 'employee', index)).filter((item) => item.entityId),
     ...admins.map((item, index) => normalizeStaffRecord(item, 'admin', index)).filter((item) => item.entityId),
   ];
 };
@@ -339,7 +352,7 @@ const buildLogPayload = (person, body, status, setting, scannedAt) => ({
   fatherName: person.fatherName,
   motherName: person.motherName,
   mobileNumber: person.mobileNumber,
-  attendanceDate: clean(body.attendanceDate) || todayKey(),
+  attendanceDate: clean(body.attendanceDate) || dateKeyInTimezone(scannedAt, setting.timezone),
   scannedAt,
   // clockInAt / clockOutAt only apply to staff clock flows; omit the keys
   // entirely for scans/registers so a full-document update never nulls them.
@@ -365,18 +378,19 @@ const buildLogPayload = (person, body, status, setting, scannedAt) => ({
   },
 });
 
-const getPeriodRange = (period = 'monthly') => {
-  const now = new Date();
+const getPeriodRange = (period = 'monthly', timezone = DEFAULT_ATTENDANCE_TIMEZONE) => {
+  const [year, month, day] = todayKey(timezone).split('-').map(Number);
+  const now = new Date(Date.UTC(year, month - 1, day));
   const start = new Date(now);
-  if (period === 'weekly') start.setDate(now.getDate() - 6);
-  else if (period === 'yearly') start.setMonth(now.getMonth() - 11);
-  else start.setDate(now.getDate() - 30);
+  if (period === 'weekly') start.setUTCDate(now.getUTCDate() - 6);
+  else if (period === 'yearly') start.setUTCMonth(now.getUTCMonth() - 11);
+  else start.setUTCDate(now.getUTCDate() - 30);
   return start.toISOString().slice(0, 10);
 };
 
 router.use(ensureMongo);
 
-router.get('/settings', requireRole('admin', 'clerk', 'teacher'), async (_request, response) => {
+router.get('/settings', requireRole('admin', 'clerk', 'teacher', 'employee'), async (_request, response) => {
   response.json(await getSettings());
 });
 
@@ -422,7 +436,7 @@ const resolveSessionStart = (savedValue, incomingValue, today) => {
 
 router.put('/settings', requireRole('admin'), async (request, response) => {
   const current = await getSettings();
-  const today = todayKey();
+  const today = todayKey(current.timezone);
 
   const studentStart = resolveSessionStart(
     current.studentSessionStart,
@@ -496,7 +510,12 @@ router.get('/directory', requireRole('admin', 'clerk', 'teacher'), async (reques
   const type = clean(request.query.type).toLowerCase();
   const className = clean(request.query.className);
   const directory = await listDirectory();
-  const biometrics = await BiometricProfile.find({}).lean();
+  const biometricQuery = {};
+  if (type && type !== 'all') biometricQuery.entityType = type;
+  if (className) biometricQuery.className = className;
+  const biometrics = await BiometricProfile.find(biometricQuery)
+    .select('entityType entityId isActive')
+    .lean();
   const biometricByKey = new Map(biometrics.map((item) => [`${item.entityType}:${item.entityId}`, item]));
   const rows = directory
     .filter((item) => !type || type === 'all' || item.entityType === type)
@@ -610,12 +629,12 @@ router.post('/scan', requireRole('admin', 'clerk', 'teacher'), validateAttendanc
   response.json({ message: 'Attendance marked.', log, setting });
 });
 
-router.post('/clock', requireRole('admin', 'clerk', 'teacher'), validateAttendanceExecution, async (request, response) => {
+router.post('/clock', requireRole('admin', 'clerk', 'teacher', 'employee'), validateAttendanceExecution, async (request, response) => {
   const source = clean(request.body.source || 'self-service').toLowerCase();
   const action = clean(request.body.action || 'clock-in').toLowerCase();
   const setting = request.attendanceSetting || (await getSettings());
 
-  if (isOffDay(todayKey(), 'teacher', setting)) {
+  if (isOffDay(todayKey(setting.timezone), 'teacher', setting)) {
     response.status(409).json({ message: 'Today is a holiday. Attendance is closed.' });
     return;
   }
@@ -630,7 +649,7 @@ router.post('/clock', requireRole('admin', 'clerk', 'teacher'), validateAttendan
     return;
   }
 
-  const attendanceDate = todayKey();
+  const attendanceDate = todayKey(setting.timezone);
   const isClockOut = action === 'clock-out';
   const now = request.serverTimestamp || new Date();
 
@@ -704,9 +723,9 @@ router.post('/clock', requireRole('admin', 'clerk', 'teacher'), validateAttendan
 
 // Today's clock state for the signed-in staff member so the client can render
 // exactly one action (Clock In → Clock Out → done).
-router.get('/my-clock-status', requireRole('admin', 'clerk', 'teacher'), async (request, response) => {
-  const attendanceDate = todayKey();
+router.get('/my-clock-status', requireRole('admin', 'clerk', 'teacher', 'employee'), async (request, response) => {
   const setting = await getSettings();
+  const attendanceDate = todayKey(setting.timezone);
   const person = await findDirectoryPerson({
     entityType: request.auth.role,
     entityId: request.auth.username,
@@ -724,6 +743,7 @@ router.get('/my-clock-status', requireRole('admin', 'clerk', 'teacher'), async (
       clockOutAt: null,
       status: 'off',
       isOffDay: true,
+      timezone: setting.timezone || DEFAULT_ATTENDANCE_TIMEZONE,
     });
     return;
   }
@@ -745,14 +765,16 @@ router.get('/my-clock-status', requireRole('admin', 'clerk', 'teacher'), async (
     clockInAt,
     clockOutAt,
     status: log?.status || 'absent',
+    timezone: setting.timezone || DEFAULT_ATTENDANCE_TIMEZONE,
   });
 });
 
 router.post('/students/batch', requireRole('admin', 'clerk', 'teacher'), async (request, response) => {
-  const attendanceDate = clean(request.body.attendanceDate) || todayKey();
+  const setting = await getSettings();
+  const attendanceDate = clean(request.body.attendanceDate) || todayKey(setting.timezone);
   const className = clean(request.body.className);
   const overrideToken = clean(request.body.adminOverrideToken);
-  const isHistorical = attendanceDate !== todayKey();
+  const isHistorical = attendanceDate !== todayKey(setting.timezone);
   const isTeacher = request.auth.role === 'teacher';
 
   if (!className || !Array.isArray(request.body.records)) {
@@ -773,7 +795,6 @@ router.post('/students/batch', requireRole('admin', 'clerk', 'teacher'), async (
     }
   }
 
-  const setting = await getSettings();
   if (isOffDay(attendanceDate, 'student', setting)) {
     response.status(409).json({
       message: 'This day is a declared holiday / off day. Student attendance is closed for this date.',
@@ -865,18 +886,11 @@ router.get('/logs', requireRole('admin', 'clerk', 'teacher', 'student'), async (
   response.json({ logs });
 });
 
-const toLocalKey = (date) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
+const toLocalKey = (date) => dateKeyInTimezone(date);
 const monthBounds = (reference = new Date()) => {
-  const year = reference.getFullYear();
-  const month = reference.getMonth();
-  const first = new Date(year, month, 1);
-  const last = new Date(year, month + 1, 0);
+  const [year, month] = dateKeyInTimezone(reference).split('-').map(Number);
+  const first = new Date(Date.UTC(year, month - 1, 1));
+  const last = new Date(Date.UTC(year, month, 0));
   return { from: toLocalKey(first), to: toLocalKey(last) };
 };
 
@@ -888,18 +902,18 @@ router.get('/staff-records', requireRole('admin', 'clerk'), async (request, resp
   const [directory, logs] = await Promise.all([
     listDirectory(),
     AttendanceLog.find({
-      entityType: { $in: ['teacher', 'clerk'] },
+      entityType: { $in: ['teacher', 'clerk', 'employee'] },
       attendanceDate: { $gte: from, $lte: to },
     })
       .sort({ attendanceDate: 1, scannedAt: 1 })
       .lean(),
   ]);
 
-  // Seed with every teacher/clerk from the directory so admins can see who
+  // Seed with every staff member from the directory so admins can see who
   // never clocked in (daysPresent 0, empty days list).
   const staffById = new Map();
   directory
-    .filter((person) => person.entityType === 'teacher' || person.entityType === 'clerk')
+    .filter((person) => ['teacher', 'clerk', 'employee'].includes(person.entityType))
     .forEach((person) => {
       staffById.set(person.entityId, {
         entityId: person.entityId,
@@ -986,7 +1000,7 @@ router.get('/staff-report', requireRole('admin', 'clerk'), async (request, respo
   const [directory, logs, setting] = await Promise.all([
     listDirectory(),
     AttendanceLog.find({
-      entityType: { $in: ['teacher', 'clerk', 'admin'] },
+      entityType: { $in: ['teacher', 'clerk', 'employee', 'admin'] },
       entityId,
       ...(fromInput || toInput
         ? {
@@ -1004,7 +1018,7 @@ router.get('/staff-report', requireRole('admin', 'clerk'), async (request, respo
 
   const person = directory.find(
     (item) =>
-      ['teacher', 'clerk', 'admin'].includes(item.entityType) && item.entityId === entityId
+      ['teacher', 'clerk', 'employee', 'admin'].includes(item.entityType) && item.entityId === entityId
   );
 
   // One AttendanceLog row per staff/day; index it by date for O(1) day lookups.
@@ -1024,7 +1038,7 @@ router.get('/staff-report', requireRole('admin', 'clerk'), async (request, respo
     logByDate.set(log.attendanceDate, { status: log.status, clockInAt, clockOutAt });
   });
 
-  const today = todayKey();
+  const today = todayKey(setting.timezone);
   const earliestLog = logs.length ? logs[0].attendanceDate : '';
   const joinDate = normalizeDateKey(person?.joinDate) || earliestLog || today;
 
@@ -1054,8 +1068,9 @@ router.get('/staff-report', requireRole('admin', 'clerk'), async (request, respo
     for (let dayNum = dayFrom; dayNum <= dayTo; dayNum += 1) {
       const dateKey = `${monthKey}-${pad2(dayNum)}`;
       const entry = logByDate.get(dateKey);
-      const weekday = new Date(`${dateKey}T00:00:00`).toLocaleDateString('en-US', {
+      const weekday = new Date(`${dateKey}T00:00:00.000Z`).toLocaleDateString('en-US', {
         weekday: 'short',
+        timeZone: 'UTC',
       });
 
       let status;
@@ -1118,26 +1133,40 @@ router.get('/staff-report', requireRole('admin', 'clerk'), async (request, respo
     displayName: person?.displayName || logs[0]?.displayName || entityId,
     role: person?.entityType || logs[0]?.entityType || 'teacher',
     joinDate,
+    timezone: setting.timezone || DEFAULT_ATTENDANCE_TIMEZONE,
     months,
   });
 });
 
 router.get('/overview', requireRole('admin', 'clerk', 'teacher'), async (request, response) => {
-  const date = clean(request.query.date) || todayKey();
+  const settings = await getSettings();
+  const date = clean(request.query.date) || todayKey(settings.timezone);
   const className = clean(request.query.className);
   const period = clean(request.query.period || 'monthly').toLowerCase();
-  const [directory, logs, trendLogs, settings] = await Promise.all([
+  const [directory, logs, trend] = await Promise.all([
     listDirectory(),
     AttendanceLog.find({
       attendanceDate: date,
       ...(className ? { className } : {}),
     }).lean(),
-    AttendanceLog.find({ attendanceDate: { $gte: getPeriodRange(period) } }).lean(),
-    getSettings(),
+    AttendanceLog.aggregate([
+      { $match: { attendanceDate: { $gte: getPeriodRange(period, settings.timezone) } } },
+      {
+        $group: {
+          _id: '$attendanceDate',
+          present: { $sum: { $cond: [{ $eq: ['$status', 'present'] }, 1, 0] } },
+          halfDay: { $sum: { $cond: [{ $eq: ['$status', 'half-day'] }, 1, 0] } },
+          absent: { $sum: { $cond: [{ $eq: ['$status', 'absent'] }, 1, 0] } },
+          manual: { $sum: { $cond: [{ $eq: ['$status', 'manual'] }, 1, 0] } },
+        },
+      },
+      { $project: { _id: 0, date: '$_id', present: 1, halfDay: 1, absent: 1, manual: 1 } },
+      { $sort: { date: 1 } },
+    ]),
   ]);
 
   const logByKey = new Map(logs.map((log) => [`${log.entityType}:${log.entityId}`, log]));
-  const isPastDate = date < todayKey();
+  const isPastDate = date < todayKey(settings.timezone);
   const buildCountsForType = (entityType) => {
     const group = entityType === 'student' ? 'student' : 'teacher';
     const people = directory.filter((item) => item.entityType === entityType);
@@ -1174,16 +1203,6 @@ router.get('/overview', requireRole('admin', 'clerk', 'teacher'), async (request
     },
     { total: 0, present: 0, 'half-day': 0, absent: 0, manual: 0, closed: 0, unmarked: 0 }
   );
-  const trend = trendLogs.reduce((acc, log) => {
-    const key = log.attendanceDate;
-    acc[key] = acc[key] || { date: key, present: 0, halfDay: 0, absent: 0, manual: 0 };
-    if (log.status === 'present') acc[key].present += 1;
-    if (log.status === 'half-day') acc[key].halfDay += 1;
-    if (log.status === 'absent') acc[key].absent += 1;
-    if (log.status === 'manual') acc[key].manual += 1;
-    return acc;
-  }, {});
-
   response.json({
     date,
     settings,
@@ -1197,7 +1216,7 @@ router.get('/overview', requireRole('admin', 'clerk', 'teacher'), async (request
     },
     roster,
     logs,
-    trend: Object.values(trend).sort((a, b) => a.date.localeCompare(b.date)),
+    trend,
   });
 });
 

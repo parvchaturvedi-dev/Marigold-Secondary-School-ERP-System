@@ -66,7 +66,7 @@ export function getTeacherProfile(user = {}) {
 }
 
 export function getStaffProfile(user = {}) {
-  const source = user.clerkProfile || user.adminProfile || {};
+  const source = user.employeeProfile || user.clerkProfile || user.adminProfile || {};
   const username = clean(user.username || source.id || source.empId).toUpperCase();
   const displayName = clean(firstValue(source.name, source.displayName, user.displayName, user.name, username));
 

@@ -341,21 +341,22 @@ const Header = ({ session, onLogout, onPageChange, onStudentChange }) => {
           {showUnreadBox && (
             <div className="absolute right-0 mt-3 w-72 glass-strong rounded-2xl z-50 text-xs font-bold overflow-hidden animate-scaleUp">
               <div className="bg-gradient-to-r from-indigo-500/10 to-violet-500/10 px-4 py-2.5 border-b border-white/60 flex justify-between items-center">
-                <span className="text-slate-900">Unread Alerts</span>
+                <span className="text-slate-900">Recent Notifications</span>
                 <span className="bg-gradient-to-r from-rose-500 to-pink-500 text-white font-mono text-[9px] px-1.5 py-0.5 rounded-md font-black shadow-sm">{unreadCount} NEW</span>
               </div>
 
               <div className="max-h-48 overflow-y-auto divide-y divide-slate-100/80">
                 {notificationError ? (
                   <p className="p-4 text-center text-rose-600 text-[11px] font-semibold">{notificationError}</p>
-                ) : notifications.filter(n => n.unread).length === 0 ? (
-                  <p className="p-4 text-center text-slate-500 text-[11px] italic font-semibold">No unread alerts in database.</p>
+                ) : notifications.length === 0 ? (
+                  <p className="p-4 text-center text-slate-500 text-[11px] italic font-semibold">No recent notifications.</p>
                 ) : (
-                  notifications.filter(n => n.unread).map((notif) => (
+                  notifications.slice(0, 10).map((notif) => (
                     <div key={notif.id} className="p-3 hover:bg-white/70 transition-colors">
                       <p className="text-slate-900 text-[11px] leading-tight font-black">{notif.title}</p>
                       <p className="text-slate-500 text-[10px] leading-tight font-semibold mt-1">{notif.text}</p>
                       <span className="text-[9px] text-slate-400 font-mono block mt-1">{formatNotificationTime(notif.time)}</span>
+                      {!notif.unread && <span className="text-[9px] font-bold uppercase tracking-wide text-slate-400">Read</span>}
                     </div>
                   ))
                 )}
@@ -447,8 +448,8 @@ const Header = ({ session, onLogout, onPageChange, onStudentChange }) => {
             {/* Drawer Header Block */}
             <div className="p-4 bg-gradient-to-r from-indigo-500/10 to-violet-500/10 border-b border-white/60 flex items-center justify-between">
               <div>
-                <h4 className="text-xs font-black uppercase tracking-wider text-slate-900">Master Alert History</h4>
-                <p className="text-[9px] text-slate-500 font-semibold">Chronological Timeline Buffer</p>
+                <h4 className="text-xs font-black uppercase tracking-wider text-slate-900">Recent Notifications</h4>
+                <p className="text-[9px] text-slate-500 font-semibold">Read notifications are kept for 24 hours.</p>
               </div>
               <button
                 type="button"
@@ -462,7 +463,7 @@ const Header = ({ session, onLogout, onPageChange, onStudentChange }) => {
             {/* Timewise Notification Rows Data Container */}
             <div className="flex-1 overflow-y-auto p-4 space-y-3 stagger">
               {notifications.length === 0 ? (
-                <p className="p-4 text-center text-slate-500 text-[11px] italic font-semibold">No notification history in database.</p>
+                <p className="p-4 text-center text-slate-500 text-[11px] italic font-semibold">No recent notifications.</p>
               ) : notifications.map((notif) => (
                 <div
                   key={notif.id}

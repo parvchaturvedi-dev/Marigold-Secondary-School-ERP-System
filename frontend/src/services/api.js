@@ -42,6 +42,11 @@ export const API_ORIGIN = (() => {
   }
 })();
 
+// Turn a relative media path from the API ('/api/media/event/123?t=…') into an
+// absolute URL. These links carry their own per-asset signed token, so they work
+// in a plain <img src> / <a href>, which cannot send an Authorization header.
+export const mediaUrl = (path) => (path ? `${API_ORIGIN}${path}` : '');
+
 const AUTH_STORAGE_KEY = 'mgps_erp_auth_session';
 
 export const getAuthToken = () => {

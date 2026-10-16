@@ -22,6 +22,15 @@ export const clerkModules = [
     ]
   },
   {
+    title: "Employee Desk",
+    icon: "people-outline",
+    color: "#0F766E",
+    subItems: [
+      { title: "Employee Management", icon: "people-circle-outline" },
+      { title: "Employee Assignment Management", icon: "person-add-outline" }
+    ]
+  },
+  {
     title: "Student Desk",
     icon: "school-outline",
     color: "#2563EB",

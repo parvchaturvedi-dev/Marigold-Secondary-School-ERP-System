@@ -7,6 +7,7 @@ const router = express.Router();
 
 const TEACHER_NAMESPACE = 'admin-teacher-management-list';
 const CLERK_NAMESPACE = 'admin-clerk-management-list';
+const EMPLOYEE_NAMESPACE = 'admin-employee-management-list';
 
 const ensureMongo = (_request, response, next) => {
   if (!isMongoConnected()) {
@@ -184,8 +185,13 @@ const staffSummary = (staff = {}) => ({
 });
 
 // Any authenticated teacher/clerk can pull their own payroll ledger.
-router.get('/me', ensureMongo, requireRole('teacher', 'clerk'), async (request, response) => {
-  const namespace = request.auth?.role === 'clerk' ? CLERK_NAMESPACE : TEACHER_NAMESPACE;
+router.get('/me', ensureMongo, requireRole('teacher', 'clerk', 'employee'), async (request, response) => {
+  const namespace =
+    request.auth?.role === 'clerk'
+      ? CLERK_NAMESPACE
+      : request.auth?.role === 'employee'
+        ? EMPLOYEE_NAMESPACE
+        : TEACHER_NAMESPACE;
   const list = await readStaffList(namespace);
   const record = findOwnRecord(list, request.auth?.username);
 
@@ -202,11 +208,12 @@ router.get('/me', ensureMongo, requireRole('teacher', 'clerk'), async (request, 
   });
 });
 
-// Admin roster: totals for every teacher + clerk.
+// Admin roster: totals for each staff category.
 router.get('/all', ensureMongo, requireRole('admin'), async (_request, response) => {
-  const [teachers, clerks] = await Promise.all([
+  const [teachers, clerks, employees] = await Promise.all([
     readStaffList(TEACHER_NAMESPACE),
     readStaffList(CLERK_NAMESPACE),
+    readStaffList(EMPLOYEE_NAMESPACE),
   ]);
 
   const summarize = (staff) => ({
@@ -219,6 +226,7 @@ router.get('/all', ensureMongo, requireRole('admin'), async (_request, response)
   response.json({
     teachers: teachers.map(summarize),
     clerks: clerks.map(summarize),
+    employees: employees.map(summarize),
   });
 });
 

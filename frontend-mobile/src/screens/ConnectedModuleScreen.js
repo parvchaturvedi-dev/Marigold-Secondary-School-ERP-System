@@ -212,7 +212,14 @@ function normalizeStudentCardRecord(student = {}, index = 0) {
 }
 
 function normalizeStaffCardRecord(person = {}, role = "staff", index = 0) {
-  const source = person.teacherProfile || person.clerkProfile || person.profile?.teacherProfile || person.profile?.clerkProfile || person;
+  const source =
+    person.teacherProfile ||
+    person.clerkProfile ||
+    person.employeeProfile ||
+    person.profile?.teacherProfile ||
+    person.profile?.clerkProfile ||
+    person.profile?.employeeProfile ||
+    person;
   const id = person.username || source.id || source.empId || `${role.toUpperCase()}-${index + 1}`;
   const designation = source.designation || source.role || (role === "admin" ? "Administrator" : role);
   return {

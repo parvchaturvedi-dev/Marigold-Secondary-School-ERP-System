@@ -8,6 +8,7 @@ import {
   formatFileSize,
   readAcademicCalendar,
 } from './academicCalendarStore';
+import { mediaUrl } from '../../services/api';
 
 const AcademicCalendarViewer = ({ portalLabel = 'Portal' }) => {
   const [calendarPdf, setCalendarPdf] = useState(() => readAcademicCalendar());

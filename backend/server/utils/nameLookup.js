@@ -95,6 +95,38 @@ export const resolveDisplayName = async (username) => {
  */
 export const resolveDisplayNames = async (usernames = []) => {
   const unique = [...new Set((Array.isArray(usernames) ? usernames : []).map((u) => String(u ?? '').trim()).filter(Boolean))];
-  const entries = await Promise.all(unique.map(async (username) => [username, await resolveDisplayName(username)]));
-  return new Map(entries);
+  const [teachers, clerks, students] = await Promise.all([
+    getStateArray(TEACHER_NAMESPACE),
+    getStateArray(CLERK_NAMESPACE),
+    getStateArray(STUDENT_NAMESPACE),
+  ]);
+  const resolved = new Map();
+  const unresolved = [];
+
+  unique.forEach((username) => {
+    const bareId = stripRolePrefix(username);
+    const fromLists =
+      teachers.get(bareId) ||
+      teachers.get(norm(username)) ||
+      clerks.get(bareId) ||
+      clerks.get(norm(username)) ||
+      students.get(bareId) ||
+      students.get(norm(username));
+
+    if (fromLists) resolved.set(username, fromLists);
+    else unresolved.push(username);
+  });
+
+  const users = unresolved.length
+    ? await User.find({ username: { $in: unresolved.map(norm) } })
+      .select('username displayName')
+      .lean()
+    : [];
+  const userNames = new Map(users.map((user) => [norm(user.username), user.displayName]));
+
+  unresolved.forEach((username) => {
+    resolved.set(username, userNames.get(norm(username)) || username);
+  });
+
+  return resolved;
 };

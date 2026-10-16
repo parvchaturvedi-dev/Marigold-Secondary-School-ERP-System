@@ -25,6 +25,7 @@ import {
   removeEvent,
   updateEvent,
 } from './eventStore';
+import { mediaUrl } from '../../services/api';
 
 const emptyForm = {
   title: '',
@@ -462,11 +463,12 @@ const EventHub = ({ role, session }) => {
                     : ''
                 }`}
               >
-                {event.imageDataUrl && (
+                {event.imageUrl && (
                   <div className="w-full h-44 rounded-2xl overflow-hidden border border-slate-100/80 bg-white/50">
                     <img
-                      src={event.imageDataUrl}
+                      src={mediaUrl(event.imageUrl)}
                       alt={event.title}
+                      loading="lazy"
                       className="w-full h-full object-cover"
                     />
                   </div>
@@ -565,11 +567,12 @@ const EventHub = ({ role, session }) => {
                 </p>
               </div>
 
-              {selectedEvent.imageDataUrl && (
+              {selectedEvent.imageUrl && (
                 <div className="w-full h-48 rounded-2xl overflow-hidden border border-slate-100/80 bg-white/50">
                   <img
-                    src={selectedEvent.imageDataUrl}
+                    src={mediaUrl(selectedEvent.imageUrl)}
                     alt={selectedEvent.title}
+                    loading="lazy"
                     className="w-full h-full object-cover"
                   />
                 </div>

@@ -23,6 +23,7 @@ import AdminLayout from './layouts/AdminLayout';
 import ClerkLayout from './layouts/ClerkLayout';
 import StudentLayout from './layouts/StudentLayout';
 import TeacherLayout from './layouts/TeacherLayout';
+import EmployeeLayout from './layouts/EmployeeLayout';
 import Login from './pages/Auth/Login';
 import AuroraBackground from './components/common/AuroraBackground';
 import { portalRoutes } from './routes/portalRoutes';
@@ -32,6 +33,7 @@ const portalLayouts = {
   clerk: ClerkLayout,
   student: StudentLayout,
   teacher: TeacherLayout,
+  employee: EmployeeLayout,
 };
 
 const slugify = (pageName) =>
@@ -305,6 +307,10 @@ function AppRoutes() {
       <Route
         path="/teacher/*"
         element={<ProtectedPortal allowedRole="teacher" session={session} onLogout={handleLogout} onStudentChange={handleStudentChange} onPasswordChanged={handlePasswordChanged} />}
+      />
+      <Route
+        path="/employee/*"
+        element={<ProtectedPortal allowedRole="employee" session={session} onLogout={handleLogout} onStudentChange={handleStudentChange} onPasswordChanged={handlePasswordChanged} />}
       />
       <Route path="*" element={<Navigate to={homePath} replace />} />
     </Routes>

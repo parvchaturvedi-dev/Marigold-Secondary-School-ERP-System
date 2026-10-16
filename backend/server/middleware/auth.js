@@ -40,6 +40,7 @@ const toAuthContext = (user, baseAuth = {}) => {
     accountDisplayName: profile.accountDisplayName || user.displayName || user.username,
     allottedClasses: Array.isArray(profile.allottedClasses) ? profile.allottedClasses : [],
     teacherProfile: profile.teacherProfile || null,
+    employeeProfile: profile.employeeProfile || null,
     clerkProfile: profile.clerkProfile || null,
     adminProfile: profile.adminProfile || null,
     assignedClassTeacherFor:

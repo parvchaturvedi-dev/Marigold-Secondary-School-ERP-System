@@ -3,7 +3,7 @@ import Notification from '../models/Notification.js';
 import User from '../models/User.js';
 import { isMongoConnected } from '../db.js';
 import { emitRealtimeEvent } from '../realtime.js';
-import { resolveDisplayName } from '../utils/nameLookup.js';
+import { resolveDisplayNames } from '../utils/nameLookup.js';
 import { createNotification, notifyMany } from '../utils/notify.js';
 import { requireRole } from '../middleware/auth.js';
 
@@ -22,12 +22,13 @@ const ensureMongo = (_request, response, next) => {
   next();
 };
 
-const toPayload = async (notification, username = '') => {
-  // Resolve the sender (createdByUsername) to a human name so "sent by TCH-983"
-  // renders as "sent by <name>". Falls back to the username string if unresolved.
+const toPayload = (notification, username = '', authorNames = new Map()) => {
   const authorName = notification.createdByUsername
-    ? await resolveDisplayName(notification.createdByUsername)
+    ? authorNames.get(notification.createdByUsername) || notification.createdByUsername
     : '';
+  const readReceipt = notification.readReceipts?.find((receipt) => receipt.username === username);
+  const isRead = notification.readBy?.includes(username);
+  const readAt = readReceipt?.readAt || (isRead ? notification.updatedAt : null);
 
   return {
     id: notification._id.toString(),
@@ -45,7 +46,8 @@ const toPayload = async (notification, username = '') => {
     createdByUsername: notification.createdByUsername,
     createdByName: authorName,
     authorName,
-    unread: !notification.readBy?.includes(username),
+    unread: !isRead,
+    readAt: readAt?.toISOString?.() || null,
     time: notification.createdAt?.toISOString(),
     createdAt: notification.createdAt?.toISOString(),
   };
@@ -85,27 +87,73 @@ router.get('/', ensureMongo, async (request, response) => {
   const studentId = role === 'student'
     ? (activeStudent.admissionNumber || activeStudent.id || username)
     : String(request.query.studentId || '');
+  const retentionCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  await Notification.deleteMany({
+    recipientRole: role,
+    recipientUsername: username,
+    readBy: username,
+    $or: [
+      {
+        readReceipts: {
+          $elemMatch: { username, readAt: { $lte: retentionCutoff } },
+        },
+      },
+      {
+        readReceipts: { $not: { $elemMatch: { username } } },
+        updatedAt: { $lte: retentionCutoff },
+      },
+    ],
+  });
   const notifications = await Notification.find(
     getRecipientQuery({ role, username, className, studentId })
   )
     .sort({ createdAt: -1 })
-    .limit(80);
+    .limit(120);
 
-  response.json(await Promise.all(notifications.map((item) => toPayload(item, username))));
+  const isExpiredRead = (item) => {
+    if (!item.readBy?.includes(username)) return false;
+    const readAt = item.readReceipts?.find((receipt) => receipt.username === username)?.readAt || item.updatedAt;
+    return Boolean(readAt && readAt <= retentionCutoff);
+  };
+
+  const recentNotifications = notifications.filter((item) => !isExpiredRead(item));
+  const authorNames = await resolveDisplayNames(
+    recentNotifications.map((item) => item.createdByUsername)
+  );
+  response.json(recentNotifications.map((item) => toPayload(item, username, authorNames)));
 });
 
 router.patch('/read', ensureMongo, async (request, response) => {
-  const ids = Array.isArray(request.body.ids) ? request.body.ids : [];
+  const ids = Array.isArray(request.body?.ids) ? request.body.ids : [];
   const username = request.auth?.username || '';
+  const role = request.auth?.role || '';
+  const activeStudent = request.auth?.activeStudent || {};
+  const className = role === 'student'
+    ? activeStudent.className || ''
+    : String(request.body.className || '');
+  const studentId = role === 'student'
+    ? activeStudent.admissionNumber || activeStudent.id || username
+    : String(request.body.studentId || '');
 
   if (!ids.length) {
     response.json({ updated: 0 });
     return;
   }
 
+  const now = new Date();
   const result = await Notification.updateMany(
-    { _id: { $in: ids } },
-    { $addToSet: { readBy: username } }
+    {
+      $and: [
+        { _id: { $in: ids }, readBy: { $ne: username } },
+        getRecipientQuery({ role, username, className, studentId }),
+      ],
+    },
+    {
+      $addToSet: {
+        readBy: username,
+        readReceipts: { username, readAt: now },
+      },
+    }
   );
 
   emitRealtimeEvent(NOTIFICATIONS_UPDATED_EVENT);

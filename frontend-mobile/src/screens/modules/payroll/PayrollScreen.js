@@ -35,6 +35,7 @@ import {
 const NAMESPACE_BY_TAB = {
   teachers: "admin-teacher-management-list",
   clerks: "admin-clerk-management-list",
+  employees: "admin-employee-management-list",
 };
 
 const PAY_MODES = ["Bank", "Cash", "Cheque", "UPI"];
@@ -283,12 +284,79 @@ function StatusBadge({ status }) {
    ============================================================================ */
 
 export default function PayrollScreen({ user }) {
+  if (String(user?.role || "").toLowerCase() === "employee") return <EmployeePayrollScreen />;
+  return <StaffPayrollScreen />;
+}
+
+function EmployeePayrollScreen() {
+  const { palette } = useTheme();
+  const [payroll, setPayroll] = useState(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    apiRequest("/payroll/me")
+      .then((result) => {
+        if (active) setPayroll(result);
+      })
+      .catch((err) => {
+        if (active) setError(err.message || "Could not load your payroll.");
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  return (
+    <ScreenShell title="My Payroll">
+      <Hero icon="cash-outline" title="My Payroll" subtitle="Your salary and payment history." />
+      {!!error && <Banner type="error" message={error} />}
+      {!payroll && !error ? (
+        <Card><Text style={{ color: palette.inkSoft }}>Loading payroll...</Text></Card>
+      ) : null}
+      {payroll ? (
+        payroll.staff ? (
+          <>
+            <Card>
+              <SectionTitle>{payroll.staff.name || "Salary summary"}</SectionTitle>
+              <Text style={{ color: palette.inkSoft, marginTop: 4 }}>
+                Monthly salary: {formatCurrency(payroll.staff.monthlySalary)}
+              </Text>
+              <Text style={{ color: palette.inkSoft, marginTop: 4 }}>
+                Total paid: {formatCurrency(payroll.totals?.paid)}
+              </Text>
+              <Text style={{ color: palette.inkSoft, marginTop: 4 }}>
+                Pending: {formatCurrency(payroll.totals?.pending)}
+              </Text>
+            </Card>
+            <SectionTitle>Payment history</SectionTitle>
+            {!payroll.ledger?.length ? (
+              <Card><Text style={{ color: palette.inkSoft }}>No salary payments recorded yet.</Text></Card>
+            ) : payroll.ledger.map((entry) => (
+              <Card key={entry.month}>
+                <Text style={{ color: palette.ink, fontWeight: "700" }}>{entry.month}</Text>
+                <Text style={{ color: palette.inkSoft, marginTop: 4 }}>
+                  Due {formatCurrency(entry.due)} | Paid {formatCurrency(entry.paid)} | Pending {formatCurrency(entry.pending)}
+                </Text>
+              </Card>
+            ))}
+          </>
+        ) : (
+          <Card><Text style={{ color: palette.inkSoft }}>Your salary record is not available yet.</Text></Card>
+        )
+      ) : null}
+    </ScreenShell>
+  );
+}
+
+function StaffPayrollScreen() {
   const { palette } = useTheme();
   const banner = useBanner();
   const [activeTab, setActiveTab] = useState("teachers");
 
   const teacherState = useModuleState(NAMESPACE_BY_TAB.teachers);
   const clerkState = useModuleState(NAMESPACE_BY_TAB.clerks);
+  const employeeState = useModuleState(NAMESPACE_BY_TAB.employees);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [expandedId, setExpandedId] = useState("");
@@ -330,7 +398,7 @@ export default function PayrollScreen({ user }) {
     return () => sub.remove();
   }, [payStaffId, salaryStaffId, expandedId]);
 
-  const state = activeTab === "teachers" ? teacherState : clerkState;
+  const state = activeTab === "teachers" ? teacherState : activeTab === "clerks" ? clerkState : employeeState;
   const list = state.items;
   const loading = state.loading;
 
@@ -431,7 +499,7 @@ export default function PayrollScreen({ user }) {
         description: `Your salary payment of ${formatCurrency(amount)} was recorded.`,
         type: "salary",
         linkPage: "My Salary",
-        recipientRole: activeTab === "teachers" ? "teacher" : "clerk",
+        recipientRole: activeTab === "teachers" ? "teacher" : activeTab === "clerks" ? "clerk" : "employee",
         recipientUsername: staffId,
       }),
     }).catch((error) => {
@@ -513,13 +581,14 @@ export default function PayrollScreen({ user }) {
       <Hero
         icon="cash-outline"
         title="Staff Payroll"
-        subtitle="Month-wise salary ledger for teaching and non-teaching staff."
+        subtitle="Month-wise salary ledger for teachers, clerks and employees."
       />
 
       <Segmented
         options={[
           { value: "teachers", label: "Teachers" },
           { value: "clerks", label: "Clerks" },
+          { value: "employees", label: "Employees" },
         ]}
         value={activeTab}
         onChange={switchTab}
@@ -551,7 +620,7 @@ export default function PayrollScreen({ user }) {
         autoCapitalize="none"
       />
 
-      <SectionTitle>{activeTab === "teachers" ? "Teachers" : "Clerks"}</SectionTitle>
+      <SectionTitle>{activeTab === "teachers" ? "Teachers" : activeTab === "clerks" ? "Clerks" : "Employees"}</SectionTitle>
 
       {loading && !staffList.length ? (
         <Card>
@@ -560,7 +629,7 @@ export default function PayrollScreen({ user }) {
       ) : !staffList.length ? (
         <Card>
           <Text style={[styles.emptyText, { color: palette.inkSoft }]}>
-            No {activeTab === "teachers" ? "teacher" : "clerk"} records found.
+            No {activeTab === "teachers" ? "teacher" : activeTab === "clerks" ? "clerk" : "employee"} records found.
           </Text>
         </Card>
       ) : (

@@ -8,11 +8,10 @@ import { resolveDisplayName } from '../utils/nameLookup.js';
 import { notifyMany } from '../utils/notify.js';
 import {
   isCloudinaryConfigured,
-  resourceTypeForMime,
   uploadBuffer,
-  signedUrlFor,
   deleteAsset,
 } from '../utils/cloudinary.js';
+import { mediaUrlFor } from '../utils/mediaToken.js';
 
 const router = express.Router();
 const upload = multer({
@@ -92,41 +91,22 @@ const deleteAttachmentAsset = async (attachment) => {
   }
 };
 
-// Build the attachment portion of the API payload. Keeps the exact
-// { name, mimeType, size, dataUrl } | null shape the frontends expect: legacy
-// Mongo attachments encode their inline Buffer; Cloudinary-offloaded attachments
-// have their bytes fetched back (via a short-lived signed URL) and re-encoded so
-// the contract is byte-for-byte identical and no frontend change is needed.
-const resolveAttachmentPayload = async (attachment) => {
+// Build the attachment portion of the API payload as { name, mimeType, size,
+// url } | null. The bytes are NOT inlined: a class with twenty attachments used
+// to ship all twenty files on every list load. Instead we hand out a lazily
+// fetched, cacheable URL (/api/media/assignment/:id).
+const resolveAttachmentPayload = (assignmentId, attachment) => {
   if (!attachment) return null;
 
-  const base = {
+  const hasBytes = Boolean((attachment.storage === 'cloudinary' && attachment.publicId) || attachment.data);
+  if (!hasBytes) return null;
+
+  return {
     name: attachment.name,
     mimeType: attachment.mimeType,
     size: attachment.size,
+    url: mediaUrlFor('assignment', assignmentId),
   };
-
-  if (attachment.storage === 'cloudinary' && attachment.publicId) {
-    try {
-      const url = signedUrlFor(
-        attachment.publicId,
-        attachment.resourceType || resourceTypeForMime(attachment.mimeType)
-      );
-      const upstream = await fetch(url);
-      if (!upstream.ok) return null;
-      const arrayBuffer = await upstream.arrayBuffer();
-      const base64 = Buffer.from(arrayBuffer).toString('base64');
-      return { ...base, dataUrl: `data:${attachment.mimeType};base64,${base64}` };
-    } catch (error) {
-      return null;
-    }
-  }
-
-  if (attachment.data) {
-    return { ...base, dataUrl: `data:${attachment.mimeType};base64,${attachment.data.toString('base64')}` };
-  }
-
-  return null;
 };
 
 const toAssignmentPayload = async (assignment) => {
@@ -145,7 +125,7 @@ const toAssignmentPayload = async (assignment) => {
     subject: assignment.subject,
     targetClasses: assignment.targetClasses,
     checkingDate: assignment.checkingDate,
-    attachment: await resolveAttachmentPayload(assignment.attachment),
+    attachment: resolveAttachmentPayload(assignment._id, assignment.attachment),
     createdByRole: assignment.createdByRole,
     createdByUsername: assignment.createdByUsername,
     createdByName,

@@ -19,10 +19,21 @@ import {
   useAttendanceOverview,
 } from '../../components/common/attendanceStore';
 
-const todayKey = () => new Date().toISOString().slice(0, 10);
+const ATTENDANCE_TIMEZONE = 'Asia/Kolkata';
+const formatDateKey = (date) => {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: ATTENDANCE_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const getPart = (type) => parts.find((part) => part.type === type)?.value || '';
+  return `${getPart('year')}-${getPart('month')}-${getPart('day')}`;
+};
+const todayKey = () => formatDateKey(new Date());
 const addDays = (date, days) => {
-  const next = new Date(`${date}T00:00:00`);
-  next.setDate(next.getDate() + days);
+  const next = new Date(`${date}T00:00:00.000Z`);
+  next.setUTCDate(next.getUTCDate() + days);
   return next.toISOString().slice(0, 10);
 };
 const toRad = (degree) => (degree * Math.PI) / 180;

@@ -24,7 +24,17 @@ const ensureMongo = (_request, response, next) => {
   next();
 };
 
-const todayKey = () => new Date().toISOString().slice(0, 10);
+const ATTENDANCE_TIMEZONE = 'Asia/Kolkata';
+const todayKey = () => {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: ATTENDANCE_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const getPart = (type) => parts.find((part) => part.type === type)?.value || '';
+  return `${getPart('year')}-${getPart('month')}-${getPart('day')}`;
+};
 const clean = (value = '') => String(value || '').trim();
 const upper = (value = '') => clean(value).toUpperCase();
 const countArrayState = async (namespace) => {
@@ -100,7 +110,9 @@ const buildStudentSummary = async (auth) => {
     action: {
       label: 'Today Attendance',
       title: latestLog?.status ? latestLog.status.replace('-', ' ').toUpperCase() : 'Not marked',
-      subtitle: latestLog?.scannedAt ? new Date(latestLog.scannedAt).toLocaleTimeString('en-IN') : 'No attendance scan yet today',
+      subtitle: latestLog?.scannedAt
+        ? new Date(latestLog.scannedAt).toLocaleTimeString('en-IN', { timeZone: ATTENDANCE_TIMEZONE })
+        : 'No attendance scan yet today',
     },
     stats: [
       { title: 'Attendance', value: `${attendancePercent}%`, subtitle: `${presentLogs.length}/${countedLogs.length || 0}`, color: '#22C55E' },
