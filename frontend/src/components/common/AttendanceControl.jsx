@@ -726,7 +726,7 @@ const MyAttendancePanel = () => {
       setGps({ checking: false, allowed: false, text: 'GPS unavailable on this device', coords: null });
       return;
     }
-    setGps((current) => ({ ...current, checking: true, text: 'Checking GPS...' }));
+    setGps({ checking: true, allowed: false, text: 'Checking GPS...', coords: null });
     navigator.geolocation.getCurrentPosition(
       (position) => {
         setGps({
@@ -777,6 +777,9 @@ const MyAttendancePanel = () => {
     } catch (clockError) {
       setBanner(clockError.message || 'Clock action failed.');
     } finally {
+      if (action === 'clock-in') {
+        setGps({ checking: false, allowed: false, text: 'Check GPS again before clocking out', coords: null });
+      }
       setWorking(false);
     }
   };
@@ -838,10 +841,19 @@ const MyAttendancePanel = () => {
             <p className="text-[10px] font-black uppercase text-slate-500">Clocked in</p>
             <p className="mt-1 text-sm font-black text-slate-700">In: {formatClockTime(clockInAt, data.timezone)}</p>
           </div>
+          <p className="text-xs font-bold text-slate-500">{gps.text}</p>
+          <button
+            type="button"
+            onClick={checkGps}
+            disabled={gps.checking || working}
+            className="h-11 px-4 rounded-2xl btn-ghost text-xs font-black inline-flex items-center gap-2 disabled:opacity-40"
+          >
+            <LocateFixed className="w-4 h-4" /> {gps.checking ? 'Checking...' : 'Check GPS'}
+          </button>
           <button
             type="button"
             onClick={() => doClock('clock-out')}
-            disabled={working}
+            disabled={!gps.allowed || working}
             className="h-11 px-5 rounded-2xl btn-primary text-xs font-black inline-flex items-center gap-2 disabled:opacity-40"
           >
             <Clock3 className="w-4 h-4" /> {working ? 'Please wait...' : 'Clock Out'}

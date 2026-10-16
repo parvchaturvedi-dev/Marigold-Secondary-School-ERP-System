@@ -6,6 +6,7 @@ const EmployeeAttendance = () => {
   const [status, setStatus] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [gps, setGps] = useState({ checking: false, location: null });
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
@@ -35,23 +36,39 @@ const EmployeeAttendance = () => {
     );
   });
 
+  const checkGps = async () => {
+    setGps({ checking: true, location: null });
+    setError('');
+    try {
+      const location = await getLocation();
+      setGps({ checking: false, location });
+    } catch (locationError) {
+      setGps({ checking: false, location: null });
+      setError(locationError.message);
+    }
+  };
+
   const recordAttendance = async () => {
+    if (!gps.location) {
+      setError('Check GPS before marking attendance.');
+      return;
+    }
+    const action = status?.clockedIn ? 'clock-out' : 'clock-in';
     setIsSaving(true);
     setError('');
     setMessage('');
     try {
-      const location = await getLocation();
-      const action = status?.clockedIn ? 'clock-out' : 'clock-in';
       const payload = await apiFetch('/attendance/clock', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...location, action, source: 'self-service', requiresGeofence: true }),
+        body: JSON.stringify({ ...gps.location, action, source: 'self-service', requiresGeofence: true }),
       });
       setMessage(payload.message || 'Attendance recorded.');
       await loadStatus();
     } catch (saveError) {
       setError(saveError.message);
     } finally {
+      if (action === 'clock-in') setGps({ checking: false, location: null });
       setIsSaving(false);
     }
   };
@@ -83,9 +100,29 @@ const EmployeeAttendance = () => {
             </div>
             <p className="mb-4 text-xs font-bold text-slate-600">Status: {status?.isOffDay ? 'Holiday / off day' : done ? 'Completed' : status?.clockedIn ? 'Clocked in' : 'Not clocked in'}</p>
             {!status?.isOffDay && !done && (
-              <button type="button" onClick={recordAttendance} disabled={isSaving} className="btn-primary flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3 text-xs font-black disabled:opacity-50">
-                <LocateFixed className="h-4 w-4" /> {isSaving ? 'Verifying location…' : status?.clockedIn ? 'Clock Out' : 'Clock In'}
-              </button>
+              <div className="space-y-3">
+                {status?.clockedIn && !status?.clockedOut && (
+                  <p className="text-xs font-bold text-slate-500">
+                    {gps.location ? 'GPS checked. You can clock out.' : 'Check GPS again before clocking out.'}
+                  </p>
+                )}
+                <button
+                  type="button"
+                  onClick={checkGps}
+                  disabled={gps.checking || isSaving}
+                  className="btn-ghost flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3 text-xs font-black disabled:opacity-50"
+                >
+                  <LocateFixed className="h-4 w-4" /> {gps.checking ? 'Checking GPS…' : 'Check GPS'}
+                </button>
+                <button
+                  type="button"
+                  onClick={recordAttendance}
+                  disabled={!gps.location || isSaving}
+                  className="btn-primary flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3 text-xs font-black disabled:opacity-50"
+                >
+                  <Clock className="h-4 w-4" /> {isSaving ? 'Saving…' : status?.clockedIn ? 'Clock Out' : 'Clock In'}
+                </button>
+              </div>
             )}
           </>
         )}

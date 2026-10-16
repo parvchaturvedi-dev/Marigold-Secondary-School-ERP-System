@@ -344,6 +344,13 @@ export default function AttendanceScreen({ role, onBack }) {
         },
       });
       clockBanner.showSuccess(payload.message || "Attendance recorded.");
+      if (action === "clock-in") {
+        setLocationState({
+          checking: false,
+          point: null,
+          message: "Clock-in complete. Check school boundary again before clocking out.",
+        });
+      }
       // Refetch the once-per-day clock state so the UI collapses to the next
       // valid action (or the "done for today" card). Also refresh overview.
       await refetchClockStatus();
@@ -353,6 +360,13 @@ export default function AttendanceScreen({ role, onBack }) {
       // / already-clocked-out. apiRequest surfaces the server message — show it as
       // a friendly banner and resync the status so buttons reflect reality.
       clockBanner.showError(error.message || "Could not record attendance.");
+      if (action === "clock-in") {
+        setLocationState({
+          checking: false,
+          point: null,
+          message: "Check school boundary again before clocking out.",
+        });
+      }
       await refetchClockStatus();
     } finally {
       setSaving(false);
@@ -898,6 +912,11 @@ function ClockCard({ role, locationState, onCheck, onClock, saving, status, stat
           {clockedIn && (
             <Text style={styles.clockedInHint}>
               Clocked in at {formatClockTime(status?.clockInAt, timezone)}. Clock out when you leave.
+            </Text>
+          )}
+          {clockedIn && !enabled && (
+            <Text style={styles.statusText}>
+              Check school boundary again to enable clock out.
             </Text>
           )}
           {/* Show ONLY the next valid action: Clock In if not yet in, else Clock Out. */}

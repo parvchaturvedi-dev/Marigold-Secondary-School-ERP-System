@@ -14,6 +14,7 @@ const tabs = [
   ['students', 'Students'],
   ['teachers', 'Teachers'],
   ['clerks', 'Clerks'],
+  ['employees', 'Employees'],
   ['admins', 'Admins'],
 ];
 
@@ -39,6 +40,7 @@ const IdCard = () => {
     if (tab === 'students') return masterData.students.map(normalizeStudentCard);
     if (tab === 'teachers') return masterData.teachers.map((teacher, index) => normalizeStaffCard(teacher, 'teacher', index));
     if (tab === 'clerks') return masterData.clerks.map((clerk, index) => normalizeStaffCard(clerk, 'clerk', index));
+    if (tab === 'employees') return users.filter((user) => user.role === 'employee').map((user, index) => normalizeStaffCard(user, 'employee', index));
     return users.filter((user) => user.role === 'admin').map((user, index) => normalizeStaffCard(user, 'admin', index));
   }, [masterData.clerks, masterData.students, masterData.teachers, tab, users]);
 

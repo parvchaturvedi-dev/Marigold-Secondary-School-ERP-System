@@ -84,6 +84,7 @@ const normaliseStaff = (list, fallbackRole) =>
         entityId: String(id),
         displayName: name,
         role: entry.role || fallbackRole,
+        designation: String(entry.designation || entry.role || fallbackRole).trim(),
       };
     })
     .filter(Boolean);
@@ -117,7 +118,7 @@ const StaffAttendanceReport = () => {
     const term = search.trim().toLowerCase();
     if (!term) return staffList;
     return staffList.filter((person) =>
-      `${person.displayName} ${person.role} ${person.entityId}`.toLowerCase().includes(term)
+      `${person.displayName} ${person.designation} ${person.entityId}`.toLowerCase().includes(term)
     );
   }, [staffList, search]);
 
@@ -177,7 +178,7 @@ const StaffAttendanceReport = () => {
                   <h4 className="text-sm font-black text-slate-900 truncate mt-1">{person.displayName}</h4>
                   <p className="text-[10px] font-bold text-slate-500 flex items-center gap-1 mt-0.5">
                     {isTeacher ? <GraduationCap className="w-3 h-3" /> : <UserRound className="w-3 h-3" />}
-                    <span className="capitalize">{person.role}</span>
+                    <span>{person.designation}</span>
                   </p>
                 </div>
                 <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-emerald-600 transition-colors" />
@@ -230,7 +231,7 @@ const StaffReportView = ({ staff, onBack }) => {
 
   const report = state.report;
   const displayName = report?.displayName || staff.displayName;
-  const role = report?.role || staff.role;
+  const designation = report?.designation || staff.designation || report?.role || staff.role;
   const joinKey = toDateKey(report?.joinDate);
 
   // Newest month first.
@@ -318,7 +319,7 @@ const StaffReportView = ({ staff, onBack }) => {
                 {displayName}
               </h3>
               <p className="text-[10px] font-bold text-slate-500 mt-0.5">
-                <span className="capitalize">{role}</span>
+                <span>{designation}</span>
                 <span className="font-mono text-slate-400"> · {staff.entityId}</span>
                 {joinKey && <span> · Joined: {joinKey}</span>}
               </p>

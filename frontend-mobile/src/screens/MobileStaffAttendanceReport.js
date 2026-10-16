@@ -107,7 +107,12 @@ const normaliseStaff = (list, fallbackRole) =>
       const id = entry.id || entry.teacherId || entry.empId || entry.clerkId || entry.entityId || "";
       const name = entry.name || entry.displayName || entry.fullName || "Unnamed Staff";
       if (!id && !name) return null;
-      return { entityId: String(id), displayName: name, role: entry.role || fallbackRole };
+      return {
+        entityId: String(id),
+        displayName: name,
+        role: entry.role || fallbackRole,
+        designation: String(entry.designation || entry.role || fallbackRole).trim(),
+      };
     })
     .filter(Boolean);
 
@@ -152,7 +157,7 @@ export default function MobileStaffAttendanceReport({ onBack }) {
     const term = search.trim().toLowerCase();
     if (!term) return staffList;
     return staffList.filter((person) =>
-      `${person.displayName} ${person.role} ${person.entityId}`.toLowerCase().includes(term)
+      `${person.displayName} ${person.designation} ${person.entityId}`.toLowerCase().includes(term)
     );
   }, [staffList, search]);
 
@@ -219,7 +224,7 @@ function StaffCard({ person, onOpen }) {
             </Text>
             <View style={styles.metaRow}>
               <Ionicons name={isTeacher ? "school-outline" : "person-outline"} size={13} color={palette.inkSoft} />
-              <Text style={[styles.metaText, { color: palette.inkSoft }]}>{person.role}</Text>
+              <Text style={[styles.metaText, { color: palette.inkSoft }]}>{person.designation}</Text>
               <Text style={[styles.metaText, { color: palette.inkFaint }]}>· {person.entityId || "—"}</Text>
             </View>
           </View>
@@ -264,7 +269,7 @@ function StaffReportView({ staff, onBack }) {
 
   const report = state.report;
   const displayName = report?.displayName || staff.displayName;
-  const role = report?.role || staff.role;
+  const designation = report?.designation || staff.designation || report?.role || staff.role;
   const joinKey = toDateKey(report?.joinDate);
 
   const months = useMemo(() => {
@@ -362,7 +367,7 @@ function StaffReportView({ staff, onBack }) {
             </Text>
           </View>
           <Text style={[styles.metaText, { color: palette.inkSoft }]} numberOfLines={1}>
-            {role} · {staff.entityId}
+            {designation} · {staff.entityId}
             {joinKey ? ` · Joined: ${joinKey}` : ""}
           </Text>
         </View>

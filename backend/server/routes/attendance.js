@@ -266,6 +266,7 @@ const normalizeStaffRecord = (person = {}, role = 'teacher', index = 0) => {
     entityId,
     admissionNumber: '',
     displayName: clean(person.displayName || source.displayName || source.name || entityId),
+    designation: clean(source.designation || source.role || role),
     className: clean(source.assignedClassTeacherFor || ''),
     section: clean(source.section || ''),
     rollNo: index + 1,
@@ -919,6 +920,7 @@ router.get('/staff-records', requireRole('admin', 'clerk'), async (request, resp
         entityId: person.entityId,
         displayName: person.displayName || person.entityId,
         role: person.entityType,
+        designation: person.designation || person.entityType,
         _days: new Map(),
       });
     });
@@ -933,6 +935,7 @@ router.get('/staff-records', requireRole('admin', 'clerk'), async (request, resp
         entityId: log.entityId,
         displayName: log.displayName || log.entityId,
         role: log.entityType,
+        designation: log.entityType,
         _days: new Map(),
       };
       staffById.set(log.entityId, staff);
@@ -1132,6 +1135,7 @@ router.get('/staff-report', requireRole('admin', 'clerk'), async (request, respo
     entityId,
     displayName: person?.displayName || logs[0]?.displayName || entityId,
     role: person?.entityType || logs[0]?.entityType || 'teacher',
+    designation: person?.designation || person?.entityType || logs[0]?.entityType || 'teacher',
     joinDate,
     timezone: setting.timezone || DEFAULT_ATTENDANCE_TIMEZONE,
     months,

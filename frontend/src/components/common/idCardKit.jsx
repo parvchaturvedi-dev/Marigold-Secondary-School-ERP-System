@@ -85,7 +85,7 @@ export const normalizeStudentCard = (student = {}, index = 0) => {
 
 export const normalizeStaffCard = (person = {}, role = 'staff', index = 0) => {
   const profile = person.profile || {};
-  const source = profile.teacherProfile || profile.clerkProfile || person;
+  const source = profile.teacherProfile || profile.clerkProfile || profile.employeeProfile || person;
   const id = pick(person.username, source.id, source.empId, `${role.toUpperCase()}-${index + 1}`);
   const designation = pick(source.designation, source.role, role === 'admin' ? 'Administrator' : titleCaseRole(role));
 
@@ -93,13 +93,13 @@ export const normalizeStaffCard = (person = {}, role = 'staff', index = 0) => {
     type: role,
     id,
     displayName: pick(person.displayName, source.displayName, source.name, id),
-    roleLabel: titleCaseRole(role),
+    roleLabel: designation,
     primaryLine: designation,
     photoDataUrl: pick(profile.photoDataUrl, source.photoDataUrl),
     frontFields: [
       ['NAME', pick(person.displayName, source.displayName, source.name, id)],
       ['EMP ID', id],
-      ['ROLE', designation],
+      ['DESIGNATION', designation],
       ['DEPARTMENT', pick(source.department, role === 'admin' ? 'Administration' : 'Office')],
       ['MOBILE NUMBER', pick(profile.mobile, source.mobile, source.phone)],
       ['EMAIL', pick(profile.email, source.email)],
