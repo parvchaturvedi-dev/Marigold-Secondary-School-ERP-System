@@ -19,6 +19,7 @@ export const teacherModules = [
   { title: "Meetings", icon: "videocam-outline", color: "#3B82F6" },
   { title: "Notices", icon: "notifications-outline", color: "#F59E0B" },
   { title: "Profile", icon: "person-circle-outline", color: "#7C3AED" },
+  { title: "My Salary", icon: "cash-outline", color: "#059669" },
   { title: "Vault", icon: "lock-closed-outline", color: "#10B981" },
   { title: "Certification", icon: "ribbon-outline", color: "#EAB308" },
   { title: "About Us", icon: "information-circle-outline", color: "#0EA5E9" },

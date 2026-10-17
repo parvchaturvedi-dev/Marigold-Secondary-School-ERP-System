@@ -284,7 +284,7 @@ function StatusBadge({ status }) {
    ============================================================================ */
 
 export default function PayrollScreen({ user }) {
-  if (["employee", "clerk"].includes(String(user?.role || "").toLowerCase())) {
+  if (["employee", "clerk", "teacher"].includes(String(user?.role || "").toLowerCase())) {
     return <EmployeePayrollScreen role={user.role} />;
   }
   return <StaffPayrollScreen />;
@@ -292,6 +292,7 @@ export default function PayrollScreen({ user }) {
 
 function EmployeePayrollScreen({ role }) {
   const { palette } = useTheme();
+  const title = role === "employee" ? "My Payroll" : "My Salary";
   const [payroll, setPayroll] = useState(null);
   const [error, setError] = useState("");
 
@@ -310,10 +311,10 @@ function EmployeePayrollScreen({ role }) {
   }, []);
 
   return (
-    <ScreenShell title={role === "clerk" ? "My Salary" : "My Payroll"}>
+    <ScreenShell title={title}>
       <Hero
         icon="cash-outline"
-        title={role === "clerk" ? "My Salary" : "My Payroll"}
+        title={title}
         subtitle="Your salary and payment history."
       />
       {!!error && <Banner type="error" message={error} />}
