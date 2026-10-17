@@ -71,7 +71,9 @@ const toAuthContext = (user, baseAuth = {}) => {
 const hydrateAuthFromDatabase = async (auth) => {
   if (!auth?.username || !isMongoConnected()) return auth;
 
-  const user = await User.findOne({ username: auth.username });
+  const user = await User.findOne({ username: auth.username })
+    .select('username role displayName profile isActive')
+    .lean();
   if (!user || !user.isActive || user.role !== auth.role) return null;
 
   return toAuthContext(user, auth);

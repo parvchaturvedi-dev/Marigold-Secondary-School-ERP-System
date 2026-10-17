@@ -17,7 +17,6 @@ import {
 import {
   createPasswordHash,
   listIdentityUsers,
-  syncIdentityUsersFromState,
   verifyPassword,
 } from '../utils/identity.js';
 
@@ -284,7 +283,6 @@ router.post('/login', loginLimiter, ensureMongo, async (request, response) => {
     return;
   }
 
-  await syncIdentityUsersFromState();
   let user = await User.findOne({ username });
 
   const autoProvisionAdmin = process.env.AUTH_AUTO_PROVISION === 'true';
@@ -446,7 +444,6 @@ router.delete('/users/:username', ensureMongo, requireAuth, requireRole('admin')
 });
 
 router.post('/users/send-credentials-all', ensureMongo, requireAuth, requireRole('admin', 'clerk'), async (_request, response) => {
-  await syncIdentityUsersFromState();
   const mailConfig = getMailConfig();
   if (!mailConfig.isReady) {
     handleMailError(response, new Error('Email is not configured. Set BREVO_API_KEY and BREVO_SENDER_EMAIL in backend/.env.'));
@@ -508,7 +505,6 @@ router.post('/users/send-credentials-all', ensureMongo, requireAuth, requireRole
 });
 
 router.post('/users/:username/request-password-otp', otpLimiter, ensureMongo, requireAuth, requireRole('admin', 'clerk'), async (request, response) => {
-  await syncIdentityUsersFromState();
   const username = String(request.params.username || '').trim().toUpperCase();
   const user = await User.findOne({ username }).lean();
   const email = getEmailForUser(user);
@@ -540,7 +536,6 @@ router.post('/users/:username/request-password-otp', otpLimiter, ensureMongo, re
 });
 
 router.post('/users/:username/reveal-password', otpLimiter, ensureMongo, requireAuth, requireRole('admin', 'clerk'), async (request, response) => {
-  await syncIdentityUsersFromState();
   const username = String(request.params.username || '').trim().toUpperCase();
 
   if (!validatePasswordAccessOtp({
@@ -557,7 +552,6 @@ router.post('/users/:username/reveal-password', otpLimiter, ensureMongo, require
 });
 
 router.post('/users/:username/send-credentials', ensureMongo, requireAuth, requireRole('admin', 'clerk'), async (request, response) => {
-  await syncIdentityUsersFromState();
   const username = String(request.params.username || '').trim().toUpperCase();
   const user = await User.findOne({ username }).lean();
   const email = getEmailForUser(user);

@@ -3,6 +3,15 @@ export const adminModules = [
   { title: "Application", icon: "document-text-outline", color: "#22C55E" },
   { title: "Assignment", icon: "clipboard-outline", color: "#F97316" },
   { title: "Attendance", icon: "checkbox-outline", color: "#10B981" },
+  {
+    title: "Employee Desk",
+    icon: "people-outline",
+    color: "#0F766E",
+    subItems: [
+      { title: "Employee Management", icon: "people-circle-outline" },
+      { title: "Employee Assignment Management", icon: "person-add-outline" }
+    ]
+  },
   { title: "Admin Management", icon: "shield-checkmark-outline", color: "#475569" },
   {
     title: "Class Desk",
@@ -47,15 +56,6 @@ export const adminModules = [
     subItems: [
       { title: "Teacher Management", icon: "people-circle-outline" },
       { title: "Teacher Assignment", icon: "person-add-outline" }
-    ]
-  },
-  {
-    title: "Employee Desk",
-    icon: "people-outline",
-    color: "#0F766E",
-    subItems: [
-      { title: "Employee Management", icon: "people-circle-outline" },
-      { title: "Employee Assignment Management", icon: "person-add-outline" }
     ]
   },
   { title: "Id Card", icon: "card-outline", color: "#06B6D4" },

@@ -155,13 +155,23 @@ export async function createNotification({
 
     if (tokens.length) {
       const { emoji, categoryId } = metaForType(type);
-      await sendExpoPush(tokens, {
+      const pushResult = await sendExpoPush(tokens, {
         title: decorateTitle(title, emoji),
         body: description || title,
         data: { type, linkPage },
         categoryId,
         image,
       });
+      if (pushResult.errors.length) {
+        console.error('[notify] Expo push delivery errors:', pushResult.errors);
+      }
+
+      if (pushResult.invalidTokens.length) {
+        await User.updateMany(
+          { pushTokens: { $in: pushResult.invalidTokens } },
+          { $pull: { pushTokens: { $in: pushResult.invalidTokens } } }
+        );
+      }
     }
   } catch (error) {
     // Swallow: notification is already persisted.

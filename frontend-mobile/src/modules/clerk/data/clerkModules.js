@@ -4,6 +4,15 @@ export const clerkModules = [
   { title: "Assignment", icon: "clipboard-outline", color: "#F97316" },
   { title: "Attendance", icon: "checkbox-outline", color: "#10B981" },
   {
+    title: "Employee Desk",
+    icon: "people-outline",
+    color: "#0F766E",
+    subItems: [
+      { title: "Employee Management", icon: "people-circle-outline" },
+      { title: "Employee Assignment Management", icon: "person-add-outline" }
+    ]
+  },
+  {
     title: "Class Desk",
     icon: "easel-outline",
     color: "#3B82F6",
@@ -19,15 +28,6 @@ export const clerkModules = [
     subItems: [
       { title: "Teacher Management", icon: "people-circle-outline" },
       { title: "Teacher Assignment", icon: "person-add-outline" }
-    ]
-  },
-  {
-    title: "Employee Desk",
-    icon: "people-outline",
-    color: "#0F766E",
-    subItems: [
-      { title: "Employee Management", icon: "people-circle-outline" },
-      { title: "Employee Assignment Management", icon: "person-add-outline" }
     ]
   },
   {
@@ -60,6 +60,7 @@ export const clerkModules = [
   { title: "Timetable", icon: "calendar-clear-outline", color: "#0F766E" },
   { title: "Notices", icon: "notifications-outline", color: "#F59E0B" },
   { title: "Profile", icon: "person-circle-outline", color: "#7C3AED" },
+  { title: "My Salary", icon: "cash-outline", color: "#059669" },
   { title: "Vault", icon: "lock-closed-outline", color: "#10B981" },
   { title: "Subject Management", icon: "book-outline", color: "#4F46E5" },
   { title: "Certification", icon: "ribbon-outline", color: "#EAB308" },

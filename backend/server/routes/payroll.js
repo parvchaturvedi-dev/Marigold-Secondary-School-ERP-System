@@ -165,14 +165,26 @@ const readStaffList = async (namespace) => {
   return Array.isArray(record?.value) ? record.value : [];
 };
 
-const findOwnRecord = (list = [], username = '') => {
+const findOwnRecord = (list = [], username = '', role = '') => {
   const target = String(username || '').trim().toLowerCase();
   if (!target) return null;
+  const prefix = role === 'clerk' ? 'clk-' : role === 'teacher' ? 'tch-' : role === 'employee' ? 'emp-' : '';
+  const unprefixedTarget = prefix && target.startsWith(prefix) ? target.slice(prefix.length) : target;
+
   return (
     list.find((staff) => {
-      const id = String(staff?.id ?? '').trim().toLowerCase();
-      const uname = String(staff?.username ?? '').trim().toLowerCase();
-      return (id && id === target) || (uname && uname === target);
+      const raw = staff?.rawProfile || {};
+      const identifiers = [staff?.id, staff?.username, staff?.empId, staff?.clerkId, staff?.employeeId, staff?.staffId,
+        raw.id, raw.username, raw.empId, raw.clerkId, raw.employeeId, raw.staffId]
+        .map((value) => String(value ?? '').trim().toLowerCase())
+        .filter(Boolean);
+
+      return identifiers.some(
+        (identifier) =>
+          identifier === target ||
+          (prefix && identifier === unprefixedTarget) ||
+          (prefix && `${prefix}${identifier}` === target)
+      );
     }) || null
   );
 };
@@ -193,7 +205,7 @@ router.get('/me', ensureMongo, requireRole('teacher', 'clerk', 'employee'), asyn
         ? EMPLOYEE_NAMESPACE
         : TEACHER_NAMESPACE;
   const list = await readStaffList(namespace);
-  const record = findOwnRecord(list, request.auth?.username);
+  const record = findOwnRecord(list, request.auth?.username, request.auth?.role);
 
   if (!record) {
     response.json({ staff: null, ledger: [], totals: { due: 0, paid: 0, pending: 0 } });

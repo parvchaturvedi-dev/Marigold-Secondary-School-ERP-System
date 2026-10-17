@@ -124,7 +124,9 @@ const isOffDay = (dateKey, group, setting = {}) => {
     group === 'teacher' ? setting.teacherSessionEnd : setting.studentSessionEnd
   );
   if (sessionStart && key < sessionStart) return true;
-  if (sessionEnd && key > sessionEnd) return true;
+  // Older settings may contain an end date before the start date. Ignore that
+  // invalid end boundary so it cannot incorrectly close the active session.
+  if (sessionEnd && (!sessionStart || sessionEnd >= sessionStart) && key > sessionEnd) return true;
 
   const weeklyOffDays = Array.isArray(
     group === 'teacher' ? setting.teacherWeeklyOffDays : setting.studentWeeklyOffDays
@@ -462,6 +464,28 @@ router.put('/settings', requireRole('admin'), async (request, response) => {
     return;
   }
 
+  const studentEnd =
+    request.body.studentSessionEnd !== undefined
+      ? normalizeDateKey(request.body.studentSessionEnd)
+      : clean(current.studentSessionEnd);
+  if (studentStart.value && studentEnd && studentEnd < studentStart.value) {
+    response.status(400).json({
+      message: 'Student session end date must be on or after its start date.',
+    });
+    return;
+  }
+
+  const teacherEnd =
+    request.body.teacherSessionEnd !== undefined
+      ? normalizeDateKey(request.body.teacherSessionEnd)
+      : clean(current.teacherSessionEnd);
+  if (teacherStart.value && teacherEnd && teacherEnd < teacherStart.value) {
+    response.status(400).json({
+      message: 'Teacher session end date must be on or after its start date.',
+    });
+    return;
+  }
+
   const setting = await AttendanceSetting.findOneAndUpdate(
     { key: 'default' },
     {
@@ -477,15 +501,9 @@ router.put('/settings', requireRole('admin'), async (request, response) => {
       authorizedWifiBssid: normalizeBssid(request.body.authorizedWifiBssid),
       enforceReceptionQr: request.body.enforceReceptionQr === true,
       studentSessionStart: studentStart.value,
-      studentSessionEnd:
-        request.body.studentSessionEnd !== undefined
-          ? normalizeDateKey(request.body.studentSessionEnd)
-          : clean(current.studentSessionEnd),
+      studentSessionEnd: studentEnd,
       teacherSessionStart: teacherStart.value,
-      teacherSessionEnd:
-        request.body.teacherSessionEnd !== undefined
-          ? normalizeDateKey(request.body.teacherSessionEnd)
-          : clean(current.teacherSessionEnd),
+      teacherSessionEnd: teacherEnd,
       studentWeeklyOffDays:
         request.body.studentWeeklyOffDays !== undefined
           ? normalizeWeeklyOffDays(request.body.studentWeeklyOffDays)
@@ -1109,7 +1127,7 @@ router.get('/staff-report', requireRole('admin', 'clerk'), async (request, respo
     const halfDays = days.filter((day) => day.status === 'half-day').length;
     const absentDays = days.filter((day) => day.status === 'absent').length;
     const percent = schoolDays
-      ? Number(((presentDays / schoolDays) * 100).toFixed(1))
+      ? Number((((presentDays + halfDays * 0.5) / schoolDays) * 100).toFixed(1))
       : 0;
 
     months.push({

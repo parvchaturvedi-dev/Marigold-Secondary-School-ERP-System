@@ -322,7 +322,6 @@ export const syncIdentityUsersFromState = async () => {
 };
 
 export const listIdentityUsers = async () => {
-  await syncIdentityUsersFromState();
   const users = await User.find().sort({ role: 1, username: 1 }).lean();
 
   return users.map((user) => {

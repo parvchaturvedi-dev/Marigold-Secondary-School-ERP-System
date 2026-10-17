@@ -50,6 +50,7 @@ export const moduleScreens = {
   Timetable: TimetableEditorScreen,
   Finance: FinanceScreen,
   Payroll: PayrollScreen,
+  "My Salary": PayrollScreen,
   "Exam Creation": ExaminationManageScreen,
   "Paper Creation": ExaminationManageScreen,
   "Marks Management": ExaminationManageScreen,

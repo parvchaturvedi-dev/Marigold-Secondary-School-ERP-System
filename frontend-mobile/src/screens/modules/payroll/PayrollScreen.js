@@ -284,11 +284,13 @@ function StatusBadge({ status }) {
    ============================================================================ */
 
 export default function PayrollScreen({ user }) {
-  if (String(user?.role || "").toLowerCase() === "employee") return <EmployeePayrollScreen />;
+  if (["employee", "clerk"].includes(String(user?.role || "").toLowerCase())) {
+    return <EmployeePayrollScreen role={user.role} />;
+  }
   return <StaffPayrollScreen />;
 }
 
-function EmployeePayrollScreen() {
+function EmployeePayrollScreen({ role }) {
   const { palette } = useTheme();
   const [payroll, setPayroll] = useState(null);
   const [error, setError] = useState("");
@@ -308,8 +310,12 @@ function EmployeePayrollScreen() {
   }, []);
 
   return (
-    <ScreenShell title="My Payroll">
-      <Hero icon="cash-outline" title="My Payroll" subtitle="Your salary and payment history." />
+    <ScreenShell title={role === "clerk" ? "My Salary" : "My Payroll"}>
+      <Hero
+        icon="cash-outline"
+        title={role === "clerk" ? "My Salary" : "My Payroll"}
+        subtitle="Your salary and payment history."
+      />
       {!!error && <Banner type="error" message={error} />}
       {!payroll && !error ? (
         <Card><Text style={{ color: palette.inkSoft }}>Loading payroll...</Text></Card>
