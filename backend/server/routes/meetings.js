@@ -113,7 +113,7 @@ const createMeetingNotifications = async (meeting, request) => {
       }))
     );
   } catch (error) {
-    console.error('[meetings] push notify failed:', error?.message || error);
+    console.error('[meetings] push notify failed:', { name: error?.name, code: error?.code });
   }
 };
 

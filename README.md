@@ -5,7 +5,7 @@ codebase that ships **three applications** sharing one backend and one database:
 
 | App | Stack | Who uses it |
 |-----|-------|-------------|
-| **Backend API** | Node.js (Express 5, ESM) + Mongoose + MongoDB Atlas + Socket.IO | serves both frontends |
+| **Backend API** | Node.js (Express 5, ESM) + PostgreSQL (`pg`) + Socket.IO | serves both frontends |
 | **Web Portal** | React 19 + Vite + Tailwind CSS 4 | Admin, Clerk, Teacher, Student (desktop/tablet) |
 | **Mobile App** | Expo SDK 54 (React Native, JS) | Admin, Clerk, Teacher, Student (Android/iOS) |
 
@@ -56,7 +56,7 @@ Everything a user can *do* on the web, they can also do on mobile.
 ## 2. Tech Stack
 
 **Backend**
-`express` · `mongoose` · `socket.io` · `express-session` + `connect-mongo` · `multer` (uploads) ·
+`express` · `pg` · `mongoose` schemas (legacy model compatibility) · `socket.io` · `express-session` + `connect-pg-simple` · `multer` (uploads) ·
 `express-rate-limit` · `cors` · `cookie-parser` · `dotenv`
 
 **Web**
@@ -92,8 +92,8 @@ manual `AuthContext` routing · `@react-native-community/datetimepicker` · `exp
         └────────────────────┬─────────────────────┘
                              ▼
                   ┌─────────────────────┐
-                  │  MongoDB Atlas       │
-                  │  Mongoose models     │
+                  │  PostgreSQL          │
+                  │  ERP + BYTEA tables  │
                   └─────────────────────┘
 ```
 
@@ -114,7 +114,7 @@ notifications (Expo) are fanned out server-side on the same events.
 
 ```
 mgps-erp/
-├── backend/            # Express + Mongoose API (the server)
+├── backend/            # Express + PostgreSQL API (the server)
 ├── frontend/           # React web portal (Vite)
 ├── frontend-mobile/    # Expo React Native app
 ├── app.json            # (root) Expo config mirror
@@ -430,7 +430,7 @@ All under `/api`. `A`=admin, `C`=clerk, `T`=teacher, `S`=student, `*`=any authen
 
 ## 13. Getting Started (Local Dev)
 
-**Prerequisites:** Node 22.x, npm, a MongoDB connection string, (mobile) an Expo account + the Expo
+**Prerequisites:** Node 22.x, npm, a PostgreSQL database, (mobile) an Expo account + the Expo
 Go app or a dev build.
 
 ```bash
@@ -456,10 +456,39 @@ npx expo start              # open in Expo Go / dev client
 |--------|----------------|
 | **Web** | `npm run build:frontend` → deploy `frontend/dist` (Vercel). |
 | **Backend** | `npm start` (Render); auto-deploys on push to `main`. |
+| **Clerk Windows desktop (development)** | `npm run dev:desktop` opens the Clerk app against the local Vite frontend. |
+| **Clerk Windows installer** | `npm run build:desktop` creates an NSIS installer under `release/`. |
 | **Mobile (installable APK)** | `cd frontend-mobile && npx eas-cli build --platform android --profile production` (the `production` profile outputs an APK). Use `--profile preview` for internal test APKs. |
 | **Mobile (Play Store AAB)** | switch the `production` profile to the default bundle output, then `eas submit`. |
 
 Push to `main` triggers Render (backend) + Vercel (web) auto-deploys.
+
+The `.github/workflows/keep-alive.yml` workflow requests `/api/health` every five minutes to reduce
+Render free-tier cold starts. GitHub schedule timing can drift or pause after prolonged repository
+inactivity, so it cannot guarantee the backend will always stay awake.
+
+The Windows Clerk app uses an isolated Electron renderer and stores local session archives in an
+AES-256-GCM encrypted SQLite database. Windows `safeStorage` protects the encryption key. Clerk
+Settings exposes session selection, editable local past-session drafts, read-only completed snapshots,
+and current-session backup/rollover actions only inside Electron. Completed rollover snapshots include
+the PostgreSQL-backed model data and stored asset bytes; the server verifies the snapshot hash before
+changing the online session. Rollover promotion, attendance/assignment/examination resets, and
+fee-ledger preservation run transactionally on the backend.
+
+While a local archive is selected, module-state and examination data are read from the local archive;
+snapshot edits are rejected, and other cloud API operations are blocked rather than sent to the live
+session. The ordinary web portal continues to use the online database and does not expose local
+archives. Deploy the updated backend before distributing a desktop installer that uses the session
+backup or rollover endpoints.
+
+Student and teacher management screens support bulk imports from `.xlsx`, `.xls`, and `.csv` in the
+web portal and Clerk desktop app. Downloadable demo templates are in `frontend/public/templates/`;
+replace the demo rows before importing. Teacher class assignments use `Class:Subject` pairs separated
+by semicolons, and experience uses `Organization|Position|Years` pairs separated by semicolons. The
+Clerk installer and Windows app window use the school logo. When creating a local past session, the
+Clerk can optionally copy the currently selected session's classes, class order, global subjects, and
+class-to-subject mappings; student and teacher records remain empty, and old class-teacher assignments
+are cleared.
 
 ---
 
@@ -468,7 +497,9 @@ Push to `main` triggers Render (backend) + Vercel (web) auto-deploys.
 Create `backend/.env`:
 
 ```
-MONGODB_URI=mongodb+srv://<user>:<pass>@<cluster>/<db>
+DATABASE_URL=postgresql://<user>:<pass>@localhost:5432/<db>
+# Optional, only for re-running the MongoDB-to-PostgreSQL migration:
+# MONGODB_URI=mongodb+srv://<user>:<pass>@<cluster>/<db>
 JWT_SECRET=<long-random-secret>          # required in production
 SESSION_SECRET=<long-random-secret>
 CORS_ORIGIN=https://<your-web-domain>    # comma-separated allowed origins
@@ -476,6 +507,26 @@ PORT=5055
 # Mail (optional, for credentials/receipts):
 SMTP_HOST=... SMTP_PORT=... SMTP_USER=... SMTP_PASS=... MAIL_FROM=...
 ```
+
+For local development, the backend also loads the repository-root `.env.local`
+after `backend/.env`; values in `.env.local` take precedence. This lets the Neon
+CLI connection settings drive the local API without replacing the existing
+`backend/.env`. Keep both files out of version control. On the hosted backend,
+set its `DATABASE_URL` to Neon's pooled connection string after verifying the
+deployment environment.
+
+To reconcile newer MongoDB records and valid sessions into PostgreSQL without
+deleting PostgreSQL-only records, run `npm --prefix backend run sync:mongo-to-postgres`.
+Existing records are updated only when MongoDB has a newer substantive change;
+unresolved timestamp conflicts abort the transaction.
+
+The backend stores ERP documents and sessions in PostgreSQL. It uses a PostgreSQL-backed
+compatibility layer for existing model operations; each ERP table retains typed scalar columns
+alongside its original `legacy_document` JSONB record. File uploads and downloads use
+`public.cloudinary_assets` BYTEA storage. Brevo messages are written to an encrypted PostgreSQL
+outbox and dispatched/retried by the backend; configure `BREVO_OUTBOX_ENCRYPTION_KEY` as a stable
+64-character hex secret alongside the Brevo API key and sender address. Legacy MongoDB and
+Cloudinary import scripts are optional and are not used by the running backend.
 
 Mobile reads the API base URL from `EXPO_PUBLIC_API_BASE_URL` (defaults to the deployed Render URL).
 
@@ -501,9 +552,9 @@ Mobile reads the API base URL from `EXPO_PUBLIC_API_BASE_URL` (defaults to the d
 
 1. **Real-device runtime test** of the key flows (login → sibling switch → fee collect → notification
    → attendance clock-in).
-2. **Rotate the MongoDB Atlas password** and update the Render env var.
-3. Move Render off the free tier (**$7 plan** removes the 30–60 s cold start) and enable **Atlas
-   backups**.
+2. Configure a hosted PostgreSQL URL reachable from Render; a local `localhost` URL cannot be used
+   by the deployed backend.
+3. Enable PostgreSQL backups before production use.
 
 **Deferred (safe for a single-admin operation):**
 

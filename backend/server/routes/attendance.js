@@ -74,7 +74,11 @@ const logFraudAlert = async (request, reason, payload = {}, severity = 'high') =
     severity,
     payload,
   }).catch((error) => {
-    console.error('[attendance:fraud-alert]', { reason, message: error.message });
+    console.error('[attendance:fraud-alert]', {
+      reason,
+      name: error.name,
+      code: error.code,
+    });
   });
 
 const parseMinutes = (value = '00:00') => {

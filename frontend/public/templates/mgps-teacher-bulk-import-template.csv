@@ -1,0 +1,2 @@
+teacherId,name,email,mobile,gender,dob,maritalStatus,category,aadharNumber,fatherName,husbandName,address,dateOfJoining,isClassTeacher,assignedClassTeacherFor,classAssignments,experience,status
+TCH-DEMO-001,Demo Teacher,demo.teacher@example.com,9000000001,Female,1990-05-12,Single,General,,Demo Parent,,Demo Address,2024-04-01,Yes,Class 6,Class 6:Mathematics;Class 7:Science,Demo School|Teacher|3,Active

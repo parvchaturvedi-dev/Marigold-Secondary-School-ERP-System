@@ -6,7 +6,11 @@
   "scripts": {
     "dev": "node server/index.js",
     "start": "node server/index.js",
-    "seed:demo": "node scripts/seedDemoData.js"
+    "seed:demo": "node scripts/seedDemoData.js",
+    "migrate:mongo-to-postgres": "node scripts/migrateMongoToPostgres.js",
+    "sync:mongo-to-postgres": "node scripts/syncMongoToPostgres.js",
+    "db:initialize-postgres": "node scripts/initializePostgresErpSchema.js",
+    "migrate:cloudinary-to-postgres": "node scripts/migrateCloudinaryToPostgres.js"
   },
   "engines": {
     "node": "22.x"
@@ -14,7 +18,7 @@
   "dependencies": {
     "cloudinary": "^2.10.0",
     "compression": "^1.8.1",
-    "connect-mongo": "^6.0.0",
+    "connect-pg-simple": "^10.0.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
@@ -23,6 +27,7 @@
     "express-session": "^1.19.0",
     "mongoose": "^9.6.2",
     "multer": "^2.1.1",
+    "pg": "^8.23.1",
     "socket.io": "^4.8.3"
   }
 }

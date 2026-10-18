@@ -1,5 +1,5 @@
 import Event from '../models/Event.js';
-import { deleteAsset } from './cloudinary.js';
+import { deleteAsset, isFileStoredExternally } from './cloudinary.js';
 import { emitRealtimeEvent } from '../realtime.js';
 import { isMongoConnected } from '../db.js';
 
@@ -62,7 +62,7 @@ export const cleanupExpiredEvents = async () => {
     // 'YYYY-MM-DD' strings compare correctly with <=.
     if (endKey > cutoffKey) continue;
 
-    if (event.storage === 'cloudinary' && event.publicId) {
+    if (isFileStoredExternally(event) && event.publicId) {
       await deleteAsset(event.publicId, event.resourceType || 'raw');
     }
     await Event.deleteOne({ _id: event._id });
@@ -83,7 +83,7 @@ const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 export const scheduleEventCleanup = () => {
   const run = () => {
     cleanupExpiredEvents().catch((error) => {
-      console.error('[eventCleanup] failed:', error?.message || error);
+      console.error('[eventCleanup] failed:', { name: error?.name, code: error?.code });
     });
   };
 

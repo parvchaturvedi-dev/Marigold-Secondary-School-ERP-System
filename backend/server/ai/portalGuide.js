@@ -128,7 +128,7 @@ export const PORTAL_GUIDE = `
 - Filter tabs "All/Teachers/Clerks/Students" + search → on an open request card click green "Approve" or red "X" (Reject).
 
 ### Required-documents config  (Sidebar → "Documents Management", header "Document Configuration Control")
-- Click a role card (Admin/Clerk/Teacher/Student Checklists) → "Document Label Name" → "Add Required Record Field". Allowed: JPG/JPEG/PNG/WEBP/PDF, max 2 MB.
+- Click a role card (Admin/Clerk/Teacher/Employee/Student Checklists) → "Document Label Name" → "Add Required Record Field". Employee requirements appear as individual upload fields during employee assignment. Allowed: JPG/JPEG/PNG/WEBP/PDF, max 2 MB.
 
 ### ID cards  (Sidebar → "Id Card", header "ID Card Generation")
 - Pick a role tab (Students/Teachers/Clerks/Admins) → optional class + search → select a person to preview → "Export Selected PDF" (one) or "Generate All Visible" (all).

@@ -175,7 +175,7 @@ export async function createNotification({
     }
   } catch (error) {
     // Swallow: notification is already persisted.
-    console.error('[notify] push fan-out failed:', error?.message || error);
+    console.error('[notify] push fan-out failed:', { name: error?.name, code: error?.code });
   }
 
   emitRealtimeEvent(NOTIFICATIONS_UPDATED_EVENT);

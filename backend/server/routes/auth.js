@@ -75,7 +75,7 @@ const sendMail = async ({ to, subject, text }) => {
 
   const transporter = await createMailTransporter(mailConfig);
   try {
-    await transporter.sendMail({
+    return await transporter.sendMail({
       from: getSenderAddress(mailConfig),
       to,
       subject,
@@ -241,8 +241,8 @@ const saveSessionAuth = (request, payload, response) => {
   request.session.save((saveError) => {
     if (saveError) {
       console.error('[auth:session-save]', {
-        username: payload?.username,
-        message: saveError.message,
+        name: saveError.name,
+        code: saveError.code,
       });
       response.status(500).json({ message: 'Could not persist authenticated session.' });
       return;
@@ -256,8 +256,8 @@ const persistSessionAuth = (request, payload, response) => {
   request.session.regenerate((regenerateError) => {
     if (regenerateError) {
       console.error('[auth:session-regenerate]', {
-        username: payload?.username,
-        message: regenerateError.message,
+        name: regenerateError.name,
+        code: regenerateError.code,
       });
       response.status(500).json({ message: 'Could not create authenticated session.' });
       return;
@@ -453,6 +453,7 @@ router.post('/users/send-credentials-all', ensureMongo, requireAuth, requireRole
   const users = await User.find().sort({ role: 1, username: 1 }).lean();
   let transporter;
   const sent = [];
+  const queued = [];
   const skipped = [];
   const failed = [];
 
@@ -474,10 +475,16 @@ router.post('/users/send-credentials-all', ensureMongo, requireAuth, requireRole
 
       try {
         const info = await sendCredentialMail(transporter, mailConfig, user, email);
-        sent.push({ username: user.username, email, messageId: info.messageId || '' });
+        const item = { username: user.username, email, messageId: info.messageId || '' };
+        if (info.queued) queued.push({ ...item, outboxId: info.outboxId });
+        else sent.push(item);
       } catch (error) {
-        logSmtpError(error, { phase: 'send', username: user.username, to: email });
-        failed.push({ username: user.username, email, error: error?.message || 'Email dispatch failed.' });
+        logSmtpError(error, { phase: 'send' });
+        if (error?.outboxQueued) {
+          queued.push({ username: user.username, email, outboxId: error.outboxId });
+        } else {
+          failed.push({ username: user.username, email, error: error?.message || 'Email dispatch failed.' });
+        }
       }
     }
   } catch (error) {
@@ -489,16 +496,16 @@ router.post('/users/send-credentials-all', ensureMongo, requireAuth, requireRole
 
   response.json({
     message:
-      failed.length > 0
-        ? `Credentials sent to ${sent.length} users. ${failed.length} failed and ${skipped.length} skipped.`
-        : `Credentials sent to ${sent.length} users. ${skipped.length} skipped.`,
+      `Credentials sent to ${sent.length} users; ${queued.length} queued for retry, ${failed.length} failed, and ${skipped.length} skipped.`,
     counts: {
       total: users.length,
       sent: sent.length,
+      queued: queued.length,
       skipped: skipped.length,
       failed: failed.length,
     },
     sent,
+    queued,
     skipped,
     failed,
   });
@@ -521,8 +528,9 @@ router.post('/users/:username/request-password-otp', otpLimiter, ensureMongo, re
     expiresAt: Date.now() + OTP_TTL_MS,
   });
 
+  let delivery;
   try {
-    await sendMail({
+    delivery = await sendMail({
       to: email,
       subject: 'MGPS ERP password access OTP',
       text: `Your OTP for admin password access on MGPS ERP account ${username} is ${otp}. Share it only if you approve this password view or update request. It expires in 5 minutes.`,
@@ -532,7 +540,13 @@ router.post('/users/:username/request-password-otp', otpLimiter, ensureMongo, re
     return;
   }
 
-  response.json({ message: `OTP sent to ${email}.`, email });
+  response.status(delivery?.queued ? 202 : 200).json({
+    message: delivery?.queued
+      ? `OTP email is queued for retry to ${email}.`
+      : `OTP sent to ${email}.`,
+    email,
+    ...(delivery?.queued ? { outboxId: delivery.outboxId } : {}),
+  });
 });
 
 router.post('/users/:username/reveal-password', otpLimiter, ensureMongo, requireAuth, requireRole('admin', 'clerk'), async (request, response) => {
@@ -561,11 +575,12 @@ router.post('/users/:username/send-credentials', ensureMongo, requireAuth, requi
     return;
   }
 
+  let delivery;
   try {
     const mailConfig = getMailConfig();
     const transporter = await createMailTransporter(mailConfig);
     try {
-      await sendCredentialMail(transporter, mailConfig, user, email);
+      delivery = await sendCredentialMail(transporter, mailConfig, user, email);
     } finally {
       closeMailTransporter(transporter);
     }
@@ -574,7 +589,12 @@ router.post('/users/:username/send-credentials', ensureMongo, requireAuth, requi
     return;
   }
 
-  response.json({ message: `Credentials sent to ${email}.` });
+  response.status(delivery?.queued ? 202 : 200).json({
+    message: delivery?.queued
+      ? `Credentials email is queued for retry to ${email}.`
+      : `Credentials sent to ${email}.`,
+    ...(delivery?.queued ? { outboxId: delivery.outboxId } : {}),
+  });
 });
 
 router.post('/change-password', ensureMongo, requireAuth, async (request, response) => {
@@ -622,8 +642,8 @@ router.post('/change-password', ensureMongo, requireAuth, async (request, respon
     request.session.save((saveError) => {
       if (saveError) {
         console.error('[auth:change-password-session-save]', {
-          username: request.auth?.username,
-          message: saveError.message,
+          name: saveError.name,
+          code: saveError.code,
         });
         response.status(500).json({ message: 'Password changed, but the session could not be refreshed.' });
         return;
@@ -689,9 +709,8 @@ router.get('/session', optionalAuth, async (request, response) => {
     saveSessionAuth(request, payload, response);
   } catch (error) {
     console.error('[auth:session]', {
-      username: request.auth?.username,
-      message: error.message,
-      stack: process.env.NODE_ENV === 'production' ? undefined : error.stack,
+      name: error.name,
+      code: error.code,
     });
     response.status(500).json({ message: 'Could not load authenticated session.' });
   }

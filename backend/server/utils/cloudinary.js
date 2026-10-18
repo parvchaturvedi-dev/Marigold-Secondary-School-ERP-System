@@ -1,25 +1,13 @@
 import { v2 as cloudinary } from 'cloudinary';
+import { createHash, randomUUID } from 'node:crypto';
+import { getPostgresPool, isDatabaseConnected } from '../db.js';
 import { getCachedAsset, setCachedAsset, invalidateCachedAsset } from './assetCache.js';
 
 // ---------------------------------------------------------------------------
-// Cloudinary file offload.
+// PostgreSQL-backed file storage with Cloudinary support for legacy assets.
 //
-// The ERP historically stored every uploaded file (student/teacher documents,
-// board results, assignment & event attachments, calendar files) as a raw
-// `Buffer` inside MongoDB. That works but eats the small Atlas free-tier quota
-// fast. This helper offloads the bytes to Cloudinary (25 GB free, no card) and
-// keeps only a lightweight reference (publicId + resourceType) in Mongo.
-//
-// SECURITY: everything is uploaded with `type: 'authenticated'`, so the raw
-// Cloudinary URL is NOT publicly guessable/openable. The plain URL is never
-// handed to the browser — our own download routes keep enforcing auth and then
-// stream the bytes from Cloudinary via a short-lived signed URL. The public
-// API contract (GET .../:id streams the file) is therefore unchanged, so the
-// web + mobile frontends need no edits.
-//
-// GRACEFUL FALLBACK: if no Cloudinary credentials are configured, every helper
-// reports "not configured" and the callers transparently fall back to the old
-// Mongo Buffer storage. Nothing breaks before the keys are added to the env.
+// New uploads and imported legacy assets are stored in PostgreSQL. Existing
+// Cloudinary references fall back to Cloudinary only if they are not imported.
 // ---------------------------------------------------------------------------
 
 let configured = false;
@@ -57,60 +45,68 @@ const configure = () => {
 configure();
 
 export const isCloudinaryConfigured = () => configured;
+export const isFileStorageConfigured = () => isDatabaseConnected();
+export const isFileStoredExternally = (record) =>
+  ['cloudinary', 'postgres'].includes(record?.storage);
 
-// We store EVERY uploaded file as a Cloudinary 'raw' asset — including image
-// scans (JPG/PNG). Cloudinary's 'image' pipeline re-encodes/optimizes images on
-// upload, which silently changes the bytes and can degrade a scanned document
-// (e.g. an Aadhaar/birth-certificate photo). 'raw' preserves the original file
-// byte-for-byte, which is what a document store must do. Our own download route
-// sets the correct Content-Type from the stored mimeType, so files still open
-// and display normally in the browser/app.
+// Preserve uploaded bytes regardless of MIME type; the download route sets
+// the correct response content type from the stored metadata.
 export const resourceTypeForMime = () => 'raw';
 
-// Upload a Buffer to Cloudinary as an authenticated (non-public) asset.
+// Store a Buffer in PostgreSQL.
 // Returns { publicId, resourceType, bytes, format } or throws.
 export const uploadBuffer = (buffer, { folder = 'mgps', publicId, mimeType } = {}) =>
   new Promise((resolve, reject) => {
-    if (!configured) {
-      reject(new Error('Cloudinary is not configured.'));
+    if (!isDatabaseConnected()) {
+      reject(new Error('PostgreSQL file storage is not connected.'));
       return;
     }
 
-    const resourceType = resourceTypeForMime(mimeType);
-
-    const stream = cloudinary.uploader.upload_stream(
-      {
-        folder,
-        public_id: publicId,
-        resource_type: resourceType,
-        type: 'authenticated',
-        overwrite: true,
-        invalidate: true,
-        use_filename: false,
-        unique_filename: false,
-      },
-      (error, result) => {
-        if (error || !result) {
-          reject(error || new Error('Cloudinary upload failed.'));
-          return;
-        }
-        // overwrite:true replaced the bytes — drop any memoised copy.
-        invalidateCachedAsset(`${result.resource_type}:${result.public_id}`);
-        resolve({
-          publicId: result.public_id,
-          resourceType: result.resource_type,
-          bytes: result.bytes,
-          format: result.format,
-        });
-      }
-    );
-
-    stream.end(buffer);
+    const bytes = Buffer.from(buffer);
+    const assetId = randomUUID();
+    const id = publicId || assetId;
+    const resourceType = 'postgres';
+    getPostgresPool()
+      .query(
+        `INSERT INTO public.cloudinary_assets (
+           asset_id, public_id, asset_folder, resource_type, delivery_type,
+           original_filename, format, mime_type, byte_size, sha256, created_at,
+           source_metadata, data
+         ) VALUES ($1, $2, $3, $4, 'postgres', $5, $6, $7, $8, $9, now(), $10::jsonb, $11)
+         ON CONFLICT (resource_type, delivery_type, public_id) DO UPDATE SET
+           asset_folder = EXCLUDED.asset_folder,
+           original_filename = EXCLUDED.original_filename,
+           format = EXCLUDED.format,
+           mime_type = EXCLUDED.mime_type,
+           byte_size = EXCLUDED.byte_size,
+           sha256 = EXCLUDED.sha256,
+           imported_at = now(),
+           source_metadata = EXCLUDED.source_metadata,
+           data = EXCLUDED.data`,
+        [
+          assetId,
+          id,
+          folder,
+          resourceType,
+          id,
+          mimeType?.split('/')[1] || null,
+          mimeType || 'application/octet-stream',
+          bytes.length,
+          createHash('sha256').update(bytes).digest('hex'),
+          JSON.stringify({ source: 'erp-upload' }),
+          bytes,
+        ]
+      )
+      .then(() => {
+        invalidateCachedAsset(`${resourceType}:${id}`);
+        resolve({ publicId: id, resourceType, bytes: bytes.length, format: mimeType?.split('/')[1] || '' });
+      })
+      .catch(reject);
   });
 
-// Build a short-lived signed URL for an authenticated asset (server-side use
-// only — used to fetch the bytes back so we can stream them to the client).
+// Return a PostgreSQL key or a signed URL for a legacy Cloudinary asset.
 export const signedUrlFor = (publicId, resourceType = 'raw') => {
+  if (resourceType === 'postgres') return publicId;
   if (!configured) throw new Error('Cloudinary is not configured.');
   return cloudinary.url(publicId, {
     resource_type: resourceType,
@@ -127,30 +123,44 @@ export const streamAssetToResponse = async (
   response,
   { publicId, resourceType = 'raw', mimeType = 'application/octet-stream', fileName = 'file', disposition = 'inline' }
 ) => {
-  if (!configured) throw new Error('Cloudinary is not configured.');
-
-  const url = signedUrlFor(publicId, resourceType);
-  const upstream = await fetch(url);
-  if (!upstream.ok || !upstream.body) {
-    throw new Error(`Cloudinary fetch failed (${upstream.status}).`);
-  }
-
+  const buffer = await fetchAssetBuffer(publicId, resourceType);
   response.setHeader('Content-Type', mimeType || 'application/octet-stream');
   response.setHeader('Content-Disposition', `${disposition}; filename="${fileName}"`);
-
-  const arrayBuffer = await upstream.arrayBuffer();
-  response.send(Buffer.from(arrayBuffer));
+  response.send(buffer);
 };
 
-// Fetch an authenticated asset's raw bytes, memoised in the in-process LRU so a
-// given asset only ever crosses Cloudinary's (metered) wire once per server
-// lifetime. Used by the /api/media routes that serve files to the frontends.
+// Read file bytes from PostgreSQL first, then fall back to Cloudinary for
+// legacy references that have not been imported.
 export const fetchAssetBuffer = async (publicId, resourceType = 'raw') => {
-  if (!configured) throw new Error('Cloudinary is not configured.');
-
   const key = `${resourceType}:${publicId}`;
+  if (resourceType === 'postgres') {
+    const result = await getPostgresPool().query(
+      `SELECT data FROM public.cloudinary_assets
+       WHERE public_id = $1 AND resource_type = 'postgres'
+       ORDER BY imported_at DESC LIMIT 1`,
+      [publicId]
+    );
+    if (!result.rowCount) throw new Error('File was not found in PostgreSQL storage.');
+    const buffer = result.rows[0].data;
+    setCachedAsset(key, buffer);
+    return buffer;
+  }
+
+  const imported = await getPostgresPool().query(
+    `SELECT data FROM public.cloudinary_assets
+     WHERE public_id = $1 AND resource_type = $2
+     ORDER BY imported_at DESC LIMIT 1`,
+    [publicId, resourceType]
+  );
+  if (imported.rowCount) {
+    const buffer = imported.rows[0].data;
+    setCachedAsset(key, buffer);
+    return buffer;
+  }
+
   const cached = getCachedAsset(key);
   if (cached) return cached;
+  if (!configured) throw new Error('Asset is not available in PostgreSQL storage.');
 
   const upstream = await fetch(signedUrlFor(publicId, resourceType));
   if (!upstream.ok) throw new Error(`Cloudinary fetch failed (${upstream.status}).`);
@@ -163,7 +173,16 @@ export const fetchAssetBuffer = async (publicId, resourceType = 'raw') => {
 // Best-effort delete — never let a storage cleanup failure break the request.
 export const deleteAsset = async (publicId, resourceType = 'raw') => {
   invalidateCachedAsset(`${resourceType}:${publicId}`);
-  if (!configured || !publicId) return;
+  if (!publicId) return;
+  if (resourceType === 'postgres') {
+    await getPostgresPool().query(
+      `DELETE FROM public.cloudinary_assets
+       WHERE public_id = $1 AND resource_type = 'postgres'`,
+      [publicId]
+    );
+    return;
+  }
+  if (!configured) return;
   try {
     await cloudinary.uploader.destroy(publicId, { resource_type: resourceType, type: 'authenticated', invalidate: true });
   } catch {
@@ -173,6 +192,8 @@ export const deleteAsset = async (publicId, resourceType = 'raw') => {
 
 export default {
   isCloudinaryConfigured,
+  isFileStorageConfigured,
+  isFileStoredExternally,
   resourceTypeForMime,
   uploadBuffer,
   signedUrlFor,

@@ -16,13 +16,13 @@ const academicCalendarSchema = new mongoose.Schema(
       required: true,
       default: 'application/pdf',
     },
-    // Where the bytes live: 'cloudinary' (offloaded) or 'mongo' (legacy Buffer).
+    // 'mongo' is the legacy inline Buffer value; new files use PostgreSQL storage.
     storage: {
       type: String,
-      enum: ['mongo', 'cloudinary'],
+      enum: ['mongo', 'cloudinary', 'postgres'],
       default: 'mongo',
     },
-    // Cloudinary reference (set when storage === 'cloudinary').
+    // External-file reference used by PostgreSQL storage and legacy Cloudinary assets.
     publicId: {
       type: String,
       trim: true,

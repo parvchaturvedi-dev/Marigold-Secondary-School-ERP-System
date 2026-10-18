@@ -6,7 +6,8 @@ import { emitRealtimeEvent } from '../realtime.js';
 import { requireRole } from '../middleware/auth.js';
 import { createNotification } from '../utils/notify.js';
 import {
-  isCloudinaryConfigured,
+  isFileStorageConfigured,
+  isFileStoredExternally,
   uploadBuffer,
   deleteAsset,
 } from '../utils/cloudinary.js';
@@ -75,11 +76,10 @@ router.post('/', ensureMongo, requireRole('admin', 'clerk'), upload.single('cale
     return;
   }
 
-  // Offload the bytes to Cloudinary when configured; otherwise keep the legacy
-  // inline Buffer so the app still works before keys are set.
+  // Store the bytes in PostgreSQL; keep the legacy inline field for old records.
   const mimeType = file.mimetype || 'application/pdf';
   let storageFields;
-  if (isCloudinaryConfigured()) {
+  if (isFileStorageConfigured()) {
     try {
       const uploaded = await uploadBuffer(file.buffer, {
         folder: CALENDAR_FOLDER,
@@ -87,7 +87,7 @@ router.post('/', ensureMongo, requireRole('admin', 'clerk'), upload.single('cale
         mimeType,
       });
       storageFields = {
-        storage: 'cloudinary',
+        storage: 'postgres',
         publicId: uploaded.publicId,
         resourceType: uploaded.resourceType,
         fileData: undefined,
@@ -105,9 +105,12 @@ router.post('/', ensureMongo, requireRole('admin', 'clerk'), upload.single('cale
     };
   }
 
-  // Best-effort cleanup of any previously offloaded calendar asset before we
+  // Best-effort cleanup of any previously stored calendar asset before we
   // drop the old records (only one calendar is ever kept).
-  const previous = await AcademicCalendar.find({ storage: 'cloudinary', publicId: { $ne: '' } })
+  const previous = await AcademicCalendar.find({
+    storage: { $in: ['cloudinary', 'postgres'] },
+    publicId: { $ne: '' },
+  })
     .select('publicId resourceType');
   await AcademicCalendar.deleteMany({});
   for (const old of previous) {
@@ -148,8 +151,11 @@ router.post('/', ensureMongo, requireRole('admin', 'clerk'), upload.single('cale
 });
 
 router.delete('/', ensureMongo, requireRole('admin', 'clerk'), async (_request, response) => {
-  // Remove any offloaded Cloudinary assets alongside the Mongo records.
-  const previous = await AcademicCalendar.find({ storage: 'cloudinary', publicId: { $ne: '' } })
+  // Remove any external-file assets alongside the PostgreSQL records.
+  const previous = await AcademicCalendar.find({
+    storage: { $in: ['cloudinary', 'postgres'] },
+    publicId: { $ne: '' },
+  })
     .select('publicId resourceType');
   await AcademicCalendar.deleteMany({});
   for (const old of previous) {

@@ -1,3 +1,10 @@
+import { getPostgresPool } from '../db.js';
+import {
+  dispatchBrevoEmail,
+  enqueueBrevoEmail,
+  startBrevoOutboxWorker as startOutboxWorker,
+} from './brevoOutbox.js';
+
 const DEFAULT_FROM_NAME = 'MGPS ERP Portal';
 const DEFAULT_MAX_CONNECTIONS = 3;
 const BREVO_API_BASE_URL = 'https://api.brevo.com/v3';
@@ -17,8 +24,6 @@ const parsePositiveInteger = (value, fallback) => {
 };
 
 const isEmailAddress = (value = '') => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value).trim());
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const normalizeRecipients = (recipients) => {
   if (Array.isArray(recipients)) {
@@ -46,7 +51,6 @@ export const logSmtpError = (error, context = {}) => {
     code: error?.code,
     status: error?.status,
     statusText: error?.statusText,
-    message: error?.message || 'Unknown Brevo API error.',
   };
 
   console.error('[brevo-api] Mail error', details);
@@ -118,6 +122,16 @@ const sendBrevoRequest = async (mailConfig, payload) => {
   }
 };
 
+const deliverOutboxPayload = (payload) => sendBrevoRequest(getMailConfig(), payload);
+
+export const startBrevoOutboxWorker = () => {
+  if (!getMailConfig().isReady) {
+    console.warn('[brevo-outbox] Worker not started; Brevo or outbox encryption configuration is missing.');
+    return () => {};
+  }
+  return startOutboxWorker(deliverOutboxPayload);
+};
+
 const createBrevoPayload = ({ senderEmail, senderName, to, subject, text, html }) => {
   const recipients = normalizeRecipients(to);
 
@@ -141,13 +155,15 @@ export const getMailConfig = () => {
   const apiKey = String(firstEnv('BREVO_API_KEY')).trim();
   const senderEmail = String(firstEnv('BREVO_SENDER_EMAIL', 'BREVO_FROM_EMAIL')).trim();
   const senderName = String(firstEnv('BREVO_SENDER_NAME', 'BREVO_FROM_NAME', 'EMAIL_FROM_NAME') || DEFAULT_FROM_NAME).trim();
+  const outboxEncryptionKey = String(firstEnv('BREVO_OUTBOX_ENCRYPTION_KEY')).trim();
 
   return {
     apiKey,
     senderEmail,
     senderName,
     maxConnections: parsePositiveInteger(firstEnv('BREVO_MAX_CONNECTIONS'), DEFAULT_MAX_CONNECTIONS),
-    isReady: Boolean(apiKey && senderEmail),
+    hasOutboxEncryptionKey: /^[a-f\d]{64}$/i.test(outboxEncryptionKey),
+    isReady: Boolean(apiKey && senderEmail && /^[a-f\d]{64}$/i.test(outboxEncryptionKey)),
   };
 };
 
@@ -156,7 +172,9 @@ export const getSenderAddress = (mailConfig = getMailConfig()) =>
 
 export const createMailTransporter = async (mailConfig = getMailConfig()) => {
   if (!mailConfig.isReady) {
-    throw new Error('Email is not configured. Set BREVO_API_KEY and BREVO_SENDER_EMAIL in backend/.env.');
+    throw new Error(
+      'Email requires BREVO_API_KEY, BREVO_SENDER_EMAIL, and a valid BREVO_OUTBOX_ENCRYPTION_KEY.'
+    );
   }
 
   if (!isEmailAddress(mailConfig.senderEmail)) {
@@ -174,9 +192,19 @@ export const createMailTransporter = async (mailConfig = getMailConfig()) => {
         html: message.html ? String(message.html) : undefined,
       });
 
-      const response = await sendBrevoRequest(mailConfig, payload);
+      const outboxId = await enqueueBrevoEmail(payload);
+      const delivery = await dispatchBrevoEmail(deliverOutboxPayload, outboxId);
+      if (delivery) return delivery;
+
+      const result = await getPostgresPool().query(
+        'SELECT status, message_id FROM public.brevo_email_outbox WHERE id = $1',
+        [outboxId]
+      );
+      if (!result.rowCount) throw new Error('Queued email disappeared before delivery.');
       return {
-        messageId: response.messageId,
+        messageId: result.rows[0].message_id || '',
+        queued: result.rows[0].status !== 'sent',
+        outboxId,
       };
     },
     close: () => {},
@@ -190,11 +218,22 @@ export const buildMailErrorPayload = (error) => {
 
   const detail = error?.message || 'Unknown Brevo API error.';
 
+  if (error?.outboxQueued) {
+    return {
+      status: 202,
+      body: {
+        message: 'Email is queued in PostgreSQL and will be retried automatically.',
+        outboxId: error.outboxId,
+      },
+    };
+  }
+
   if (/not configured/i.test(detail)) {
     return {
       status: 503,
       body: {
-        message: 'Email is not configured. Set BREVO_API_KEY and BREVO_SENDER_EMAIL in backend/.env.',
+        message:
+          'Email requires BREVO_API_KEY, BREVO_SENDER_EMAIL, and BREVO_OUTBOX_ENCRYPTION_KEY in the backend environment.',
         detail,
       },
     };

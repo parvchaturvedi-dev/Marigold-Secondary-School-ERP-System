@@ -52,6 +52,21 @@ const buildPageRoutes = (pages) =>
 function ProtectedPortal({ allowedRole, session, onLogout, onStudentChange, onPasswordChanged }) {
   if (!session) return <Navigate to="/login" replace />;
   if (session.role !== allowedRole) return <Navigate to={getDashboardPath(session.role)} replace />;
+  if (window.mgpsDesktop?.isDesktop && session.role !== 'clerk') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-100 p-6">
+        <div className="max-w-md rounded-3xl bg-white p-8 text-center shadow-xl">
+          <h1 className="text-xl font-black text-slate-900">Clerk desktop app</h1>
+          <p className="mt-3 text-sm font-semibold text-slate-600">
+            This Windows application is restricted to Clerk accounts. Use the web app for other roles.
+          </p>
+          <button onClick={onLogout} className="mt-6 rounded-xl bg-slate-900 px-5 py-3 text-sm font-bold text-white">
+            Sign out
+          </button>
+        </div>
+      </div>
+    );
+  }
   if (session.mustChangePassword) {
     return <PasswordChangeGate session={session} onPasswordChanged={onPasswordChanged} onLogout={onLogout} />;
   }
@@ -182,6 +197,7 @@ function LoginRoute({ session, onLoginSuccess }) {
 function PortalShell({ role, session, onLogout, onStudentChange }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const [activeDesktopSession, setActiveDesktopSession] = useState(null);
   const { pages, defaultPage } = portalRoutes[role];
   const Layout = portalLayouts[role];
   const pageRoutes = buildPageRoutes(pages);
@@ -189,6 +205,15 @@ function PortalShell({ role, session, onLogout, onStudentChange }) {
   const matchedRoute = pageRoutes.find((page) => page.path === currentPath);
   const activePage = matchedRoute?.name || defaultPage;
   const ActivePage = pages[activePage] || pages[defaultPage];
+
+  useEffect(() => {
+    const desktopArchives = window.mgpsDesktop?.archives;
+    if (!desktopArchives) return undefined;
+    desktopArchives.getActive().then(setActiveDesktopSession).catch((error) => {
+      console.error('Unable to load active desktop session:', error);
+    });
+    return desktopArchives.onActiveChanged(setActiveDesktopSession);
+  }, []);
 
   const handlePageChange = (pageName) => {
     const nextRoute = pageRoutes.find((page) => page.name === pageName);
@@ -202,22 +227,32 @@ function PortalShell({ role, session, onLogout, onStudentChange }) {
   }, [defaultPage, matchedRoute, navigate, role]);
 
   return (
-    <Layout
-      session={session}
-      onLogout={onLogout}
-      onPageChange={handlePageChange}
-      onStudentChange={onStudentChange}
-      currentActive={activePage}
-    >
-      <Suspense fallback={<div className="p-6 text-xs font-semibold text-[#555555]">Loading...</div>}>
-        <ActivePage
-          setActivePage={handlePageChange}
-          session={session}
-          role={role}
-          activePage={activePage}
-        />
-      </Suspense>
-    </Layout>
+    <>
+      {activeDesktopSession && (
+        <div className="border-b border-amber-300 bg-amber-50 px-4 py-2 text-center text-xs font-bold text-amber-950">
+          {activeDesktopSession.kind === 'snapshot' ? 'Read-only archived session' : 'Local archive mode'}: {activeDesktopSession.name}.
+          {activeDesktopSession.kind === 'snapshot'
+            ? ' Data is loaded from this computer; edits are disabled.'
+            : ' Module data is stored on this computer; cloud API features are blocked to protect the current session.'}
+        </div>
+      )}
+      <Layout
+        session={session}
+        onLogout={onLogout}
+        onPageChange={handlePageChange}
+        onStudentChange={onStudentChange}
+        currentActive={activePage}
+      >
+        <Suspense fallback={<div className="p-6 text-xs font-semibold text-[#555555]">Loading...</div>}>
+          <ActivePage
+            setActivePage={handlePageChange}
+            session={session}
+            role={role}
+            activePage={activePage}
+          />
+        </Suspense>
+      </Layout>
+    </>
   );
 }
 

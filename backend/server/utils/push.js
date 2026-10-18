@@ -54,8 +54,8 @@ export async function sendExpoPush(tokens = [], { title, body, data, image, cate
       });
 
       if (!response.ok) {
-        const detail = await response.text();
-        errors.push(`Expo push failed with status ${response.status}${detail ? `: ${detail}` : ''}`);
+        await response.text();
+        errors.push({ type: 'request', status: response.status });
         continue;
       }
 
@@ -73,12 +73,11 @@ export async function sendExpoPush(tokens = [], { title, body, data, image, cate
 
         const token = group[index];
         const code = ticket?.details?.error || '';
-        const detail = code || ticket?.message || 'Unknown Expo ticket error.';
-        errors.push(`Expo push ticket failed: ${detail}`);
+        errors.push({ type: 'ticket', code: /^[a-z\d_-]+$/i.test(code) ? code : 'unknown' });
         if (code === 'DeviceNotRegistered' && token) invalidTokens.push(token);
       });
     } catch (error) {
-      errors.push(error?.message || String(error));
+      errors.push({ type: 'network', name: error?.name || 'Error' });
     }
   }
 

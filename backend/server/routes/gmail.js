@@ -57,10 +57,11 @@ router.get('/status', (_request, response) => {
     configured: mailConfig.isReady,
     hasApiKey: Boolean(mailConfig.apiKey),
     hasSenderEmail: Boolean(mailConfig.senderEmail),
+    hasOutboxEncryptionKey: mailConfig.hasOutboxEncryptionKey,
     senderName: mailConfig.senderName,
     senderEmail: mailConfig.senderEmail,
     maxConnections: mailConfig.maxConnections,
-    requiredEnv: ['BREVO_API_KEY', 'BREVO_SENDER_EMAIL'],
+    requiredEnv: ['BREVO_API_KEY', 'BREVO_SENDER_EMAIL', 'BREVO_OUTBOX_ENCRYPTION_KEY'],
   });
 });
 
@@ -69,7 +70,8 @@ router.post('/send', requireRole('admin', 'clerk'), async (request, response) =>
 
   if (!mailConfig.isReady) {
     response.status(503).json({
-      message: 'Email is not configured. Set BREVO_API_KEY and BREVO_SENDER_EMAIL in backend/.env.',
+      message:
+        'Email requires BREVO_API_KEY, BREVO_SENDER_EMAIL, and BREVO_OUTBOX_ENCRYPTION_KEY in the backend environment.',
     });
     return;
   }
@@ -104,11 +106,14 @@ router.post('/send', requireRole('admin', 'clerk'), async (request, response) =>
           to: message.to,
           subject: message.subject,
           messageId: info.messageId,
+          status: info.queued ? 'queued' : 'sent',
+          ...(info.queued ? { outboxId: info.outboxId } : {}),
         };
       });
 
       response.json({
-        sent: results.length,
+        sent: results.filter((result) => result.status === 'sent').length,
+        queued: results.filter((result) => result.status === 'queued').length,
         results,
       });
     } finally {

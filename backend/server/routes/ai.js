@@ -2063,9 +2063,11 @@ const sendReceipt = async ({ receiptNo, channels = ['gmail', 'whatsapp'] }, auth
       } finally {
         closeMailTransporter(transporter);
       }
-      receipt.sent.gmail = true;
-      receipt.sent.gmailMessageId = info.messageId || '';
-      result.gmail = { status: 'sent', messageId: info.messageId };
+      receipt.sent.gmail = !info.queued;
+      receipt.sent.gmailMessageId = info.queued ? '' : info.messageId || '';
+      result.gmail = info.queued
+        ? { status: 'queued', outboxId: info.outboxId }
+        : { status: 'sent', messageId: info.messageId };
     }
   }
 

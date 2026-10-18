@@ -1,6 +1,7 @@
 import session from 'express-session';
-import MongoStore from 'connect-mongo';
+import connectPgSimple from 'connect-pg-simple';
 import { randomBytes } from 'node:crypto';
+import { getPostgresPool } from '../db.js';
 
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 
@@ -43,14 +44,14 @@ export const createSessionMiddleware = () => {
     cookie,
   };
 
-  if (process.env.MONGODB_URI) {
-    baseOptions.store = MongoStore.create({
-      mongoUrl: process.env.MONGODB_URI,
-      dbName: process.env.MONGODB_DB_NAME || undefined,
-      ttl: SESSION_TTL_MS / 1000,
-      autoRemove: 'native',
-    });
-  }
+  const PostgreSQLStore = connectPgSimple(session);
+  baseOptions.store = new PostgreSQLStore({
+    pool: getPostgresPool(),
+    tableName: 'user_sessions',
+    createTableIfMissing: true,
+    ttl: SESSION_TTL_MS / 1000,
+    pruneSessionInterval: 60 * 15,
+  });
 
   return session(baseOptions);
 };

@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "main": "desktop/main.cjs",
   "engines": {
     "node": "22.x"
   },
@@ -15,9 +16,48 @@
     "dev": "npm --prefix frontend run dev",
     "dev:frontend": "npm --prefix frontend run dev",
     "build:frontend": "npm --prefix frontend run build",
+    "dev:desktop": "concurrently -k \"npm --prefix frontend run dev -- --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && electron .\"",
+    "start:desktop": "electron .",
+    "build:desktop": "npm run build && electron-builder --win nsis",
     "lint:frontend": "npm --prefix frontend run lint",
     "dev:backend": "npm --prefix backend run dev",
     "start": "npm --prefix backend run start",
     "start:backend": "npm --prefix backend run start"
+  },
+  "dependencies": {
+    "@neon/config": "^1.9.2",
+    "@neon/env": "^1.6.3"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "electron": "^44.9.0",
+    "electron-builder": "^26.15.3",
+    "wait-on": "^8.0.3"
+  },
+  "build": {
+    "appId": "com.marigoldschool.mgps-erp-clerk",
+    "productName": "MGPS ERP Clerk",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "desktop/main.cjs",
+      "desktop/preload.cjs",
+      "desktop/sessionStore.cjs",
+      "desktop/assets/school-logo.ico",
+      "frontend/dist/**/*",
+      "package.json"
+    ],
+    "win": {
+      "icon": "desktop/assets/school-logo.ico",
+      "target": "nsis"
+    },
+    "nsis": {
+      "installerIcon": "desktop/assets/school-logo.ico",
+      "uninstallerIcon": "desktop/assets/school-logo.ico",
+      "installerHeaderIcon": "desktop/assets/school-logo.ico",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
   }
 }

@@ -14,6 +14,7 @@ import assignmentRoutes from './routes/assignments.js';
 import attendanceRoutes from './routes/attendance.js';
 import authRoutes from './routes/auth.js';
 import dashboardRoutes from './routes/dashboard.js';
+import desktopSessionRoutes from './routes/desktopSessions.js';
 import examinationRoutes from './routes/examinations.js';
 import eventRoutes from './routes/events.js';
 import feesRoutes from './routes/fees.js';
@@ -30,12 +31,13 @@ import studentDocumentRoutes from './routes/studentDocuments.js';
 import teacherDocumentRoutes from './routes/teacherDocuments.js';
 import timetableRoutes from './routes/timetable.js';
 import vaultRoutes from './routes/vault.js';
-import { connectMongo, getDbStatus } from './db.js';
+import { connectPostgres, getDbStatus } from './db.js';
 import { scheduleEventCleanup } from './utils/eventCleanup.js';
 import { requireAuth } from './middleware/auth.js';
 import { verifyAuthToken } from './utils/authToken.js';
 import { setRealtimeServer, trackRealtimeSocket } from './realtime.js';
 import { createSessionMiddleware } from './utils/session.js';
+import { startBrevoOutboxWorker } from './utils/mailer.js';
 
 const app = express();
 const server = createServer(app);
@@ -91,7 +93,14 @@ const corsMiddleware = cors({
   origin: corsOrigin,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Device-Id', 'x-device-id'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Device-Id',
+    'x-device-id',
+    'X-MGPS-Desktop',
+    'x-mgps-desktop',
+  ],
   optionsSuccessStatus: 204,
 });
 
@@ -203,6 +212,7 @@ app.use('/api/applications', applicationRoutes);
 app.use('/api/assignments', assignmentRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/desktop-sessions', desktopSessionRoutes);
 app.use('/api/examinations', examinationRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/fees', feesRoutes);
@@ -231,11 +241,10 @@ app.use((error, request, response, next) => {
 
   console.error('[api:error]', {
     method: request.method,
-    path: request.originalUrl,
-    origin: request.get('origin') || '',
+    route: request.route?.path || 'unmatched',
     statusCode,
-    message: error.message,
-    stack: process.env.NODE_ENV === 'production' ? undefined : error.stack,
+    errorName: error.name,
+    errorCode: error.code,
   });
 
   response.status(statusCode).json({
@@ -243,7 +252,8 @@ app.use((error, request, response, next) => {
   });
 });
 
-await connectMongo();
+await connectPostgres();
+startBrevoOutboxWorker();
 
 // Events are transient: five days after an event finishes it (and its poster
 // image) is removed automatically. Runs at boot, then once a day.

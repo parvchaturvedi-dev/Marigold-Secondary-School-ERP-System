@@ -1,0 +1,2 @@
+admissionNumber,studentName,gender,dob,category,religion,mobileNo,altMobileNo,email,dateOfAdmission,targetClass,section,rollNo,lastSchoolName,studentAadhar,penNumber,fatherName,motherName,fatherAadhar,motherAadhar,guardianName,guardianMobile,tempAddress,permAddress
+DEMO-REMOVE-001,Demo Student,Female,2014-04-18,General,Hindu,9000000001,,demo.parent@example.com,2026-04-01,Class 6,A,1,Demo School,,PEN-DEMO-001,Demo Father,Demo Mother,,,,,Demo Address,Demo Address

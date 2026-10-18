@@ -1,14 +1,17 @@
-import React, { useState } from 'react';
-import { UserCheck, MoreVertical, Edit2, UserX, Mail, Phone, BookOpen, GraduationCap, Search, X, Plus, Trash2, FileText, CheckCircle2 } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { read, utils } from '@e965/xlsx';
+import { UserCheck, MoreVertical, Edit2, UserX, Mail, Phone, BookOpen, GraduationCap, Search, X, Plus, Trash2, FileText, CheckCircle2, Download, Upload } from 'lucide-react';
 import { useMongoState } from '../../components/common/mongoState';
 import { useMasterData } from '../../components/common/masterData';
+import { buildTeacherImportRecord } from '../../utils/teacherBulkImport';
 
 const TeacherManagement = ({ role = 'admin' }) => {
   const canRemoveTeacher = role !== 'clerk';
   const { classNames, subjectsByClass } = useMasterData();
   // Master State for Teachers Database Directory
   const [teachersList, setTeachersList] = useMongoState('admin-teacher-management-list', []);
-  const [, setClassesDb] = useMongoState('admin-class-management-classes', []);
+  const [classesDb, setClassesDb] = useMongoState('admin-class-management-classes', []);
+  const bulkFileInputRef = useRef(null);
 
   // UI Interactive States
   const [searchTerm, setSearchTerm] = useState('');
@@ -55,7 +58,135 @@ const TeacherManagement = ({ role = 'admin' }) => {
   const handleOpenEditModal = (teacher) => {
     setActiveDropdownId(null);
     // Deep clone to safely isolate edit workspace state
-    setEditingTeacher(JSON.parse(JSON.stringify(teacher)));
+    const copy = JSON.parse(JSON.stringify(teacher));
+    setEditingTeacher({
+      ...copy,
+      experience: Array.isArray(copy.experience) ? copy.experience : [],
+      classAssignments: Array.isArray(copy.classAssignments) ? copy.classAssignments : [],
+      documentsAttached: Array.isArray(copy.documentsAttached) ? copy.documentsAttached : [],
+    });
+  };
+
+  const downloadTeacherTemplate = (format = 'xlsx') => {
+    const extension = format === 'csv' ? 'csv' : 'xlsx';
+    const link = document.createElement('a');
+    link.href = `/templates/mgps-teacher-bulk-import-template.${extension}`;
+    link.download = `mgps-teacher-bulk-import-template.${extension}`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  };
+
+  const handleBulkTeacherImport = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    try {
+      const workbook = read(await file.arrayBuffer(), { type: 'array', cellDates: false });
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = utils.sheet_to_json(worksheet, { defval: '' });
+      if (rows.length === 0) {
+        alert('The selected sheet is empty. Download the sample template and fill in teacher details.');
+        return;
+      }
+
+      const existingIds = new Set(
+        (Array.isArray(teachersList) ? teachersList : [])
+          .map((teacher) => String(teacher.id || teacher.empId || '').trim().toUpperCase())
+          .filter(Boolean)
+      );
+      const seenIds = new Set();
+      const additions = [];
+      const skippedRows = [];
+      const duplicateRows = [];
+      const occupiedClassTeacherNames = new Set(
+        (Array.isArray(classesDb) ? classesDb : [])
+          .filter((classRecord) =>
+            classRecord.classTeacherId ||
+            classRecord.teacherId ||
+            classRecord.classTeacherName ||
+            classRecord.teacher
+          )
+          .map((classRecord) => classRecord.name)
+          .filter(Boolean)
+      );
+
+      rows.forEach((row, index) => {
+        const rowNumber = index + 2;
+        const result = buildTeacherImportRecord(row);
+        if (result.error) {
+          skippedRows.push(`${rowNumber} (${result.error})`);
+          return;
+        }
+        const id = result.record.id;
+        if (existingIds.has(id) || seenIds.has(id)) {
+          duplicateRows.push(rowNumber);
+          return;
+        }
+        if (
+          result.record.isClassTeacher === 'Yes' &&
+          occupiedClassTeacherNames.has(result.record.assignedClassTeacherFor)
+        ) {
+          skippedRows.push(`${rowNumber} (class already has a class teacher)`);
+          return;
+        }
+        if (result.record.isClassTeacher === 'Yes') {
+          occupiedClassTeacherNames.add(result.record.assignedClassTeacherFor);
+        }
+        seenIds.add(id);
+        additions.push(result.record);
+      });
+
+      if (additions.length === 0) {
+        alert(
+          `No teachers were added.${skippedRows.length ? `\nInvalid rows: ${skippedRows.join('; ')}` : ''}${
+            duplicateRows.length ? `\nDuplicate teacher IDs (row numbers): ${duplicateRows.join(', ')}` : ''
+          }`
+        );
+        return;
+      }
+
+      setTeachersList((teachers) => [...additions, ...(Array.isArray(teachers) ? teachers : [])]);
+      setClassesDb((currentClasses) => {
+        const updatedClasses = Array.isArray(currentClasses) ? [...currentClasses] : [];
+        additions.forEach((teacher) => {
+          if (teacher.isClassTeacher !== 'Yes' || !teacher.assignedClassTeacherFor) return;
+          const classIndex = updatedClasses.findIndex(
+            (classRecord) => classRecord.name === teacher.assignedClassTeacherFor
+          );
+          const classTeacherFields = {
+            classTeacherId: teacher.id,
+            classTeacherName: teacher.name,
+            teacher: teacher.name,
+          };
+          if (classIndex >= 0) {
+            updatedClasses[classIndex] = { ...updatedClasses[classIndex], ...classTeacherFields };
+          } else {
+            updatedClasses.push({
+              id: teacher.assignedClassTeacherFor,
+              name: teacher.assignedClassTeacherFor,
+              studentCount: 0,
+              ...classTeacherFields,
+            });
+          }
+        });
+        return updatedClasses;
+      });
+      alert(
+        `Teacher bulk import complete.\nAdded: ${additions.length}\n${
+          duplicateRows.length
+            ? `Skipped duplicate IDs (row numbers): ${duplicateRows.join(', ')}\n`
+            : ''
+        }${
+          skippedRows.length
+            ? `Skipped invalid rows: ${skippedRows.join('; ')}`
+            : ''
+        }`
+      );
+    } catch (error) {
+      alert(`Could not read this file. Please use .xlsx, .xls, or .csv format.\n\n${error.message}`);
+    }
   };
 
   // EDIT STATE MUTATORS
@@ -211,19 +342,58 @@ const TeacherManagement = ({ role = 'admin' }) => {
             <UserCheck className="w-5 h-5 text-indigo-500" /> Teacher Management Directory
           </h3>
           <p className="text-xs text-slate-500 mt-1">
-            Review active deployments. Use the tracking nodes drop-menu to invoke comprehensive dynamic data modifications.
+            Manage faculty records or add multiple teachers from a filled Excel/CSV template.
           </p>
         </div>
 
-        <div className="flex items-center gap-2 bg-white/60 px-4 py-2.5 rounded-xl border border-white/80 focus-within:border-indigo-400 focus-within:ring-4 focus-within:ring-indigo-100 transition-all w-full md:w-72">
-          <Search className="w-4 h-4 text-slate-500" />
-          <input
-            type="text"
-            placeholder="Search Name or Teacher ID..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="bg-transparent border-none outline-none w-full text-xs font-bold text-slate-900"
-          />
+        <div className="flex flex-col gap-2 w-full md:w-auto">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => downloadTeacherTemplate('xlsx')}
+              className="flex items-center gap-1.5 bg-white/60 hover:bg-white/70 transition-all px-3 py-2 rounded-xl border border-slate-200/70 text-xs font-bold"
+              title="Download sample Excel template"
+            >
+              <Download className="w-3.5 h-3.5" /> Sample Excel
+            </button>
+            <button
+              type="button"
+              onClick={() => downloadTeacherTemplate('csv')}
+              className="flex items-center gap-1.5 bg-white/60 hover:bg-white/70 transition-all px-3 py-2 rounded-xl border border-slate-200/70 text-xs font-bold"
+              title="Download sample CSV template"
+            >
+              <Download className="w-3.5 h-3.5" /> Sample CSV
+            </button>
+            <button
+              type="button"
+              onClick={() => bulkFileInputRef.current?.click()}
+              className="btn-primary flex items-center gap-1.5 transition-all px-3 py-2 rounded-xl text-xs font-bold"
+              title="Add multiple teachers from Excel or CSV"
+            >
+              <Upload className="w-3.5 h-3.5" /> Add Teachers in Bulk
+            </button>
+            <input
+              ref={bulkFileInputRef}
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              onChange={handleBulkTeacherImport}
+              className="hidden"
+            />
+          </div>
+          <div className="flex items-center gap-2 bg-white/60 px-4 py-2.5 rounded-xl border border-white/80 focus-within:border-indigo-400 focus-within:ring-4 focus-within:ring-indigo-100 transition-all">
+            <Search className="w-4 h-4 text-slate-500" />
+            <input
+              type="text"
+              placeholder="Search Name or Teacher ID..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="bg-transparent border-none outline-none w-full text-xs font-bold text-slate-900"
+            />
+          </div>
+          <p className="text-[10px] text-slate-500">
+            Replace the sample row before importing. Assignments: <b>Class:Subject</b> separated by ;.
+            Experience: <b>School|Role|Years</b> separated by ;.
+          </p>
         </div>
       </div>
 
@@ -272,7 +442,7 @@ const TeacherManagement = ({ role = 'admin' }) => {
               <div className="space-y-1.5 text-[11px] font-bold text-slate-500">
                 <p className="text-slate-900 truncate"><Mail className="w-3.5 h-3.5 inline mr-1 text-slate-500" /> {teacher.email}</p>
                 <p className="text-slate-900 font-mono"><Phone className="w-3.5 h-3.5 inline mr-1 text-slate-500" /> {teacher.mobile}</p>
-                <p><BookOpen className="w-3.5 h-3.5 inline mr-1 text-slate-500" /> Allotted: <span className="text-slate-900">{teacher.classAssignments.map(c => c.className).join(', ')}</span></p>
+                <p><BookOpen className="w-3.5 h-3.5 inline mr-1 text-slate-500" /> Allotted: <span className="text-slate-900">{(teacher.classAssignments || []).map(c => c.className).join(', ') || 'None'}</span></p>
               </div>
             </div>
 
@@ -344,7 +514,7 @@ const TeacherManagement = ({ role = 'admin' }) => {
                   </div>
                   <div className="flex flex-col gap-1">
                     <label className="text-slate-500">Aadhaar Identification Code</label>
-                    <input type="text" name="aadharNumber" required placeholder="12 Digits" value={editingTeacher.aadharNumber} onChange={handleEditInputChange} className="p-2.5 bg-white/60 border border-white/80 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none transition-all rounded-xl font-mono" maxLength={12} />
+                    <input type="text" name="aadharNumber" placeholder="12 Digits (optional)" value={editingTeacher.aadharNumber || ''} onChange={handleEditInputChange} className="p-2.5 bg-white/60 border border-white/80 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none transition-all rounded-xl font-mono" maxLength={12} />
                   </div>
                 </div>
 

@@ -7,7 +7,8 @@ import { requireRole } from '../middleware/auth.js';
 import { resolveDisplayName } from '../utils/nameLookup.js';
 import { notifyMany } from '../utils/notify.js';
 import {
-  isCloudinaryConfigured,
+  isFileStorageConfigured,
+  isFileStoredExternally,
   uploadBuffer,
   deleteAsset,
 } from '../utils/cloudinary.js';
@@ -54,7 +55,7 @@ const applyAttachment = async (assignment, file) => {
   if (!file) return true;
 
   let storageFields;
-  if (isCloudinaryConfigured()) {
+  if (isFileStorageConfigured()) {
     try {
       const uploaded = await uploadBuffer(file.buffer, {
         folder: ASSIGNMENT_FOLDER,
@@ -62,7 +63,7 @@ const applyAttachment = async (assignment, file) => {
         mimeType: file.mimetype,
       });
       storageFields = {
-        storage: 'cloudinary',
+        storage: 'postgres',
         publicId: uploaded.publicId,
         resourceType: uploaded.resourceType,
         data: undefined,
@@ -86,7 +87,7 @@ const applyAttachment = async (assignment, file) => {
 // Best-effort delete of an attachment's backing Cloudinary asset (no-op for
 // legacy Mongo-stored attachments). Never let a cleanup failure break a request.
 const deleteAttachmentAsset = async (attachment) => {
-  if (attachment && attachment.storage === 'cloudinary' && attachment.publicId) {
+  if (isFileStoredExternally(attachment) && attachment.publicId) {
     await deleteAsset(attachment.publicId, attachment.resourceType || 'raw');
   }
 };
@@ -98,7 +99,7 @@ const deleteAttachmentAsset = async (attachment) => {
 const resolveAttachmentPayload = (assignmentId, attachment) => {
   if (!attachment) return null;
 
-  const hasBytes = Boolean((attachment.storage === 'cloudinary' && attachment.publicId) || attachment.data);
+  const hasBytes = Boolean((isFileStoredExternally(attachment) && attachment.publicId) || attachment.data);
   if (!hasBytes) return null;
 
   return {
@@ -212,7 +213,7 @@ router.post('/', ensureMongo, requireRole('admin', 'clerk', 'teacher'), upload.s
       }))
     );
   } catch (error) {
-    console.error('[assignments] notify failed:', error?.message || error);
+    console.error('[assignments] notify failed:', { name: error?.name, code: error?.code });
   }
 
   response.status(201).json(await toAssignmentPayload(assignment));
@@ -268,7 +269,7 @@ router.patch('/:id', ensureMongo, requireRole('admin', 'clerk', 'teacher'), uplo
   await assignment.save();
 
   // Drop the old Cloudinary asset if it was replaced (different publicId) or removed.
-  if (previousAttachment?.storage === 'cloudinary' && previousAttachment.publicId) {
+  if (isFileStoredExternally(previousAttachment) && previousAttachment.publicId) {
     const currentPublicId = assignment.attachment?.publicId || '';
     if (previousAttachment.publicId !== currentPublicId) {
       await deleteAsset(previousAttachment.publicId, previousAttachment.resourceType || 'raw');

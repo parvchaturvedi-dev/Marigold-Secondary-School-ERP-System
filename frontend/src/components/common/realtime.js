@@ -21,18 +21,39 @@ export const getRealtimeSocket = () => {
 
 export const useRealtimeBridge = () => {
   useEffect(() => {
-    const socket = getRealtimeSocket();
-    if (!socket) return undefined;
-
     const handleRealtimeEvent = ({ eventName, detail }) => {
       if (!eventName) return;
       window.dispatchEvent(new CustomEvent(eventName, { detail }));
     };
 
-    socket.on('realtime:event', handleRealtimeEvent);
-
-    return () => {
-      socket.off('realtime:event', handleRealtimeEvent);
+    let socket = null;
+    const setArchiveMode = (activeSession) => {
+      if (activeSession) {
+        if (socket) {
+          socket.off('realtime:event', handleRealtimeEvent);
+          socket.disconnect();
+          if (realtimeSocket === socket) realtimeSocket = null;
+          socket = null;
+        }
+        return;
+      }
+      if (!socket) {
+        socket = getRealtimeSocket();
+        socket?.on('realtime:event', handleRealtimeEvent);
+      }
     };
+
+    if (window.mgpsDesktop?.archives) {
+      const unsubscribe = window.mgpsDesktop.archives.onActiveChanged(setArchiveMode);
+      window.mgpsDesktop.archives.getActive().then(setArchiveMode).catch((error) => {
+        console.error('Unable to load desktop session for realtime mode:', error);
+      });
+      return () => {
+        unsubscribe();
+        socket?.off('realtime:event', handleRealtimeEvent);
+      };
+    }
+    setArchiveMode(null);
+    return () => socket?.off('realtime:event', handleRealtimeEvent);
   }, []);
 };

@@ -7,7 +7,8 @@ import { requireRole } from '../middleware/auth.js';
 import { resolveDisplayName } from '../utils/nameLookup.js';
 import { createNotification } from '../utils/notify.js';
 import {
-  isCloudinaryConfigured,
+  isFileStorageConfigured,
+  isFileStoredExternally,
   uploadBuffer,
   deleteAsset,
 } from '../utils/cloudinary.js';
@@ -43,7 +44,7 @@ const toBoolean = (value) => value === true || value === 'true';
 // Does this event actually carry a poster? (Cloudinary reference or legacy bytes.)
 const hasImage = (event) =>
   Boolean(event.imageType) &&
-  Boolean((event.storage === 'cloudinary' && event.publicId) || event.imageData);
+  Boolean((isFileStoredExternally(event) && event.publicId) || event.imageData);
 
 const toEventPayload = async (event) => {
   const createdByName = await resolveDisplayName(event.createdByUsername);
@@ -125,13 +126,13 @@ const applyImageFields = async (event, file) => {
   event.imageType = file.mimetype;
   event.imageSize = file.size;
 
-  if (isCloudinaryConfigured()) {
+  if (isFileStorageConfigured()) {
     const uploaded = await uploadBuffer(file.buffer, {
       folder: EVENT_FOLDER,
       publicId: cloudPublicId(event._id),
       mimeType: file.mimetype,
     });
-    event.storage = 'cloudinary';
+    event.storage = 'postgres';
     event.publicId = uploaded.publicId;
     event.resourceType = uploaded.resourceType;
     event.imageData = undefined;
@@ -180,7 +181,7 @@ router.post('/', ensureMongo, requireRole('admin', 'clerk'), upload.single('imag
       recipientClassName: '',
     });
   } catch (error) {
-    console.error('[events] notify failed:', error?.message || error);
+    console.error('[events] notify failed:', { name: error?.name, code: error?.code });
   }
 
   response.status(201).json(await toEventPayload(event));
@@ -202,7 +203,7 @@ router.patch('/:id', ensureMongo, requireRole('admin', 'clerk'), upload.single('
   Object.assign(event, buildEventFields(request.body));
 
   if (toBoolean(request.body.removeImage)) {
-    if (event.storage === 'cloudinary' && event.publicId) {
+    if (isFileStoredExternally(event) && event.publicId) {
       await deleteAsset(event.publicId, event.resourceType || 'raw');
     }
     event.imageName = '';
@@ -229,7 +230,7 @@ router.patch('/:id', ensureMongo, requireRole('admin', 'clerk'), upload.single('
 router.delete('/:id', ensureMongo, requireRole('admin', 'clerk'), async (request, response) => {
   const existing = await Event.findById(request.params.id).select('storage publicId resourceType');
   await Event.findByIdAndDelete(request.params.id);
-  if (existing?.storage === 'cloudinary' && existing.publicId) {
+  if (isFileStoredExternally(existing) && existing.publicId) {
     await deleteAsset(existing.publicId, existing.resourceType || 'raw');
   }
   emitRealtimeEvent('mgps-erp-events-updated');

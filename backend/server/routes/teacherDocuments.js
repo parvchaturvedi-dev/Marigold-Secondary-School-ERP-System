@@ -5,7 +5,8 @@ import { isMongoConnected } from '../db.js';
 import { requireRole } from '../middleware/auth.js';
 import { createNotification } from '../utils/notify.js';
 import {
-  isCloudinaryConfigured,
+  isFileStorageConfigured,
+  isFileStoredExternally,
   resourceTypeForMime,
   uploadBuffer,
   streamAssetToResponse,
@@ -97,7 +98,7 @@ const performUpload = async ({ request, response, teacherId, docName, byTeacher 
   // Offload the bytes to Cloudinary when configured; otherwise keep the legacy
   // inline Buffer so the app still works before keys are set.
   let storageFields;
-  if (isCloudinaryConfigured()) {
+  if (isFileStorageConfigured()) {
     try {
       const uploaded = await uploadBuffer(file.buffer, {
         folder: TEACHER_DOC_FOLDER,
@@ -105,7 +106,7 @@ const performUpload = async ({ request, response, teacherId, docName, byTeacher 
         mimeType: file.mimetype,
       });
       storageFields = {
-        storage: 'cloudinary',
+        storage: 'postgres',
         publicId: uploaded.publicId,
         resourceType: uploaded.resourceType,
         data: undefined,
@@ -215,7 +216,7 @@ router.get('/me/:docName', ensureMongo, requireRole('teacher'), async (request, 
     return;
   }
 
-  if (file.storage === 'cloudinary' && file.publicId) {
+  if (isFileStoredExternally(file) && file.publicId) {
     try {
       await streamAssetToResponse(response, {
         publicId: file.publicId,
@@ -262,7 +263,7 @@ router.get('/:teacherId/:docName', ensureMongo, async (request, response) => {
     return;
   }
 
-  if (file.storage === 'cloudinary' && file.publicId) {
+  if (isFileStoredExternally(file) && file.publicId) {
     try {
       await streamAssetToResponse(response, {
         publicId: file.publicId,
@@ -352,7 +353,7 @@ router.delete(
       return;
     }
 
-    if (existing?.storage === 'cloudinary' && existing.publicId) {
+    if (isFileStoredExternally(existing) && existing.publicId) {
       await deleteAsset(existing.publicId, existing.resourceType || 'raw');
     }
 

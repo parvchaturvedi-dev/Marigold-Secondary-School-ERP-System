@@ -5,7 +5,11 @@ import Assignment from '../models/Assignment.js';
 import AcademicCalendar from '../models/AcademicCalendar.js';
 import { isMongoConnected } from '../db.js';
 import { verifyMediaToken } from '../utils/mediaToken.js';
-import { fetchAssetBuffer, resourceTypeForMime } from '../utils/cloudinary.js';
+import {
+  fetchAssetBuffer,
+  isFileStoredExternally,
+  resourceTypeForMime,
+} from '../utils/cloudinary.js';
 
 // ---------------------------------------------------------------------------
 // Media delivery.
@@ -56,7 +60,7 @@ const sendFile = (request, response, { buffer, mimeType, fileName, disposition =
 // Resolve the bytes of a record whose file is either offloaded to Cloudinary
 // (fetched once, then memoised) or still inline in Mongo (legacy).
 const resolveBytes = async (record, { bufferField }) => {
-  if (record.storage === 'cloudinary' && record.publicId) {
+  if (isFileStoredExternally(record) && record.publicId) {
     return fetchAssetBuffer(record.publicId, record.resourceType || resourceTypeForMime(record.mimeType));
   }
   const inline = record[bufferField];

@@ -23,9 +23,15 @@ const normalizeApiBaseUrl = (value) => {
   return rawValue.endsWith('/api') ? rawValue : `${rawValue}/api`;
 };
 
+const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL;
+const useProductionApiBaseUrl =
+  import.meta.env.PROD &&
+  (!configuredApiBaseUrl || configuredApiBaseUrl.trim().startsWith('/'));
+
 export const API_BASE_URL = normalizeApiBaseUrl(
-  import.meta.env.VITE_API_BASE_URL ||
-    (import.meta.env.PROD ? PRODUCTION_API_BASE_URL : '/api')
+  useProductionApiBaseUrl
+    ? PRODUCTION_API_BASE_URL
+    : configuredApiBaseUrl || '/api'
 );
 
 export const API_ORIGIN = (() => {
@@ -67,8 +73,78 @@ export const api = axios.create({
   withCredentials: true,
 });
 
-api.interceptors.request.use((config) => {
+api.interceptors.request.use(async (config) => {
   const token = getAuthToken();
+  const desktopArchives = typeof window !== 'undefined' ? window.mgpsDesktop?.archives : null;
+  const activeArchive = desktopArchives ? await desktopArchives.getActive() : null;
+
+  if (activeArchive) {
+    const requestUrl = new URL(config.url || '/', config.baseURL || API_ORIGIN || window.location.origin);
+    const pathname = requestUrl.pathname;
+    const moduleStateMatch = pathname.match(/\/api\/module-state\/([^/]+)\/?$/);
+    const isExamState = pathname === '/api/examinations/state';
+
+    if (pathname.startsWith('/api/auth/')) {
+      if (token) {
+        config.headers = config.headers || {};
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+      return config;
+    }
+
+    if (
+      String(config.method || 'get').toLowerCase() === 'get' &&
+      ['/api/desktop-sessions/current-session', '/api/desktop-sessions/rollover-preview'].includes(pathname)
+    ) {
+      return config;
+    }
+
+    if (
+      (!moduleStateMatch && !isExamState) ||
+      !['get', 'put'].includes(String(config.method || 'get').toLowerCase())
+    ) {
+      throw new Error(
+        `This feature is not available in the local ${activeArchive.name} session. Online data was not changed.`
+      );
+    }
+
+    const method = String(config.method || 'get').toLowerCase();
+    if (method === 'put' && (activeArchive.kind !== 'past' || activeArchive.status !== 'draft')) {
+      throw new Error('Archived snapshots are read-only.');
+    }
+    const namespace = isExamState ? 'desktop-examination-state' : decodeURIComponent(moduleStateMatch[1]);
+
+    config.adapter = async (requestConfig) => {
+      if (method === 'get') {
+        const value = await desktopArchives.readCollection(activeArchive.id, namespace);
+        return {
+          data: isExamState ? value : { value },
+          status: 200,
+          statusText: 'OK',
+          headers: {},
+          config: requestConfig,
+          request: null,
+        };
+      }
+
+      const body = typeof requestConfig.data === 'string'
+        ? JSON.parse(requestConfig.data)
+        : requestConfig.data;
+      const value = body?.value ?? null;
+      const collectionValue = isExamState ? body?.state ?? null : value;
+      await desktopArchives.saveCollection(activeArchive.id, namespace, collectionValue);
+      return {
+        data: isExamState ? collectionValue : { value },
+        status: 200,
+        statusText: 'OK',
+        headers: {},
+        config: requestConfig,
+        request: null,
+      };
+    };
+    return config;
+  }
+
   if (token) {
     config.headers = config.headers || {};
     config.headers.Authorization = `Bearer ${token}`;

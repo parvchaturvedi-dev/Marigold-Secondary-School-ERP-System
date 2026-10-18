@@ -10,12 +10,13 @@ import { emitRealtimeEvent } from '../realtime.js';
 import { requireRole } from '../middleware/auth.js';
 import { createNotification } from '../utils/notify.js';
 import {
-  isCloudinaryConfigured,
+  isFileStorageConfigured,
+  isFileStoredExternally,
   resourceTypeForMime,
   uploadBuffer,
   streamAssetToResponse,
   deleteAsset,
-  signedUrlFor,
+  fetchAssetBuffer,
 } from '../utils/cloudinary.js';
 
 const router = express.Router();
@@ -207,7 +208,7 @@ router.put('/state', ensureMongo, requireRole('admin', 'clerk', 'teacher'), asyn
   try {
     await notifyExamStateChanges(prevState, nextState);
   } catch (error) {
-    console.error('[examinations] state-change notify failed:', error?.message || error);
+    console.error('[examinations] state-change notify failed:', { name: error?.name, code: error?.code });
   }
 
   emitRealtimeEvent('mgps-erp-examination-updated');
@@ -301,7 +302,7 @@ router.patch(
         recipientRole: 'admin',
       });
     } catch (error) {
-      console.error('[examinations] admin notify failed:', error?.message || error);
+      console.error('[examinations] admin notify failed:', { name: error?.name, code: error?.code });
     }
 
     response.json({ paper: nextPaper, state: normalizeState(record.state) });
@@ -378,7 +379,7 @@ router.patch(
           recipientUsername: teacherUsername,
         });
       } catch (error) {
-        console.error('[examinations] teacher notify failed:', error?.message || error);
+        console.error('[examinations] teacher notify failed:', { name: error?.name, code: error?.code });
       }
     }
 
@@ -457,7 +458,7 @@ router.post(
     // Offload the bytes to Cloudinary when configured; otherwise keep the legacy
     // inline Buffer so the app still works before keys are set.
     let storageFields;
-    if (isCloudinaryConfigured()) {
+    if (isFileStorageConfigured()) {
       try {
         const uploaded = await uploadBuffer(file.buffer, {
           folder: BOARD_RESULT_FOLDER,
@@ -465,7 +466,7 @@ router.post(
           mimeType: metadata.pdfType,
         });
         storageFields = {
-          storage: 'cloudinary',
+          storage: 'postgres',
           publicId: uploaded.publicId,
           resourceType: uploaded.resourceType,
           fileData: undefined,
@@ -507,10 +508,10 @@ router.post(
         recipientClassName: className,
       });
     } catch (error) {
-      console.error(
-        '[examinations:board-results] notification failed:',
-        error?.message || error
-      );
+      console.error('[examinations:board-results] notification failed:', {
+        name: error?.name,
+        code: error?.code,
+      });
     }
 
     response.status(201).json(metadata);
@@ -530,13 +531,13 @@ router.get('/board-results/:id/pdf', ensureMongo, async (request, response) => {
   // so for a Cloudinary-stored file we fetch the bytes back and base64-encode
   // them here instead of streaming.
   let base64;
-  if (file.storage === 'cloudinary' && file.publicId) {
+  if (isFileStoredExternally(file) && file.publicId) {
     try {
-      const url = signedUrlFor(file.publicId, file.resourceType || resourceTypeForMime(file.type));
-      const upstream = await fetch(url);
-      if (!upstream.ok) throw new Error(`Cloudinary fetch failed (${upstream.status}).`);
-      const arrayBuffer = await upstream.arrayBuffer();
-      base64 = Buffer.from(arrayBuffer).toString('base64');
+      const buffer = await fetchAssetBuffer(
+        file.publicId,
+        file.resourceType || resourceTypeForMime(file.type)
+      );
+      base64 = buffer.toString('base64');
     } catch (error) {
       response.status(502).json({ message: 'Failed to load file from storage.' });
       return;
@@ -581,7 +582,7 @@ router.delete(
         'storage publicId resourceType'
       );
       await BoardResultFile.deleteOne({ resultId: request.params.id });
-      if (orphan?.storage === 'cloudinary' && orphan.publicId) {
+      if (isFileStoredExternally(orphan) && orphan.publicId) {
         await deleteAsset(orphan.publicId, orphan.resourceType || 'raw');
       }
       response.status(404).json({ message: 'Board result not found.' });
@@ -597,7 +598,7 @@ router.delete(
       'storage publicId resourceType'
     );
     await BoardResultFile.deleteOne({ resultId: request.params.id });
-    if (existingFile?.storage === 'cloudinary' && existingFile.publicId) {
+    if (isFileStoredExternally(existingFile) && existingFile.publicId) {
       await deleteAsset(existingFile.publicId, existingFile.resourceType || 'raw');
     }
 
@@ -782,7 +783,7 @@ router.post(
     // Offload the bytes to Cloudinary when configured; otherwise keep the legacy
     // inline Buffer so the app still works before keys are set.
     let storageFields;
-    if (isCloudinaryConfigured()) {
+    if (isFileStorageConfigured()) {
       try {
         const uploaded = await uploadBuffer(file.buffer, {
           folder: BOARD_TIMETABLE_FOLDER,
@@ -790,7 +791,7 @@ router.post(
           mimeType,
         });
         storageFields = {
-          storage: 'cloudinary',
+          storage: 'postgres',
           publicId: uploaded.publicId,
           resourceType: uploaded.resourceType,
           data: undefined,
@@ -865,7 +866,7 @@ router.get('/board-timetable/:className/:examId', ensureMongo, async (request, r
     return;
   }
 
-  if (file.storage === 'cloudinary' && file.publicId) {
+  if (isFileStoredExternally(file) && file.publicId) {
     try {
       await streamAssetToResponse(response, {
         publicId: file.publicId,
@@ -907,7 +908,7 @@ router.delete(
       return;
     }
 
-    if (existing?.storage === 'cloudinary' && existing.publicId) {
+    if (isFileStoredExternally(existing) && existing.publicId) {
       await deleteAsset(existing.publicId, existing.resourceType || 'raw');
     }
 
@@ -962,7 +963,7 @@ router.post(
     // Offload the bytes to Cloudinary when configured; otherwise keep the legacy
     // inline Buffer so the app still works before keys are set.
     let storageFields;
-    if (isCloudinaryConfigured()) {
+    if (isFileStorageConfigured()) {
       try {
         const uploaded = await uploadBuffer(file.buffer, {
           folder: BOARD_STUDENT_RESULT_FOLDER,
@@ -970,7 +971,7 @@ router.post(
           mimeType: file.mimetype,
         });
         storageFields = {
-          storage: 'cloudinary',
+          storage: 'postgres',
           publicId: uploaded.publicId,
           resourceType: uploaded.resourceType,
           data: undefined,
@@ -1088,7 +1089,7 @@ router.get('/board-student-result/me/:examId', ensureMongo, async (request, resp
     return;
   }
 
-  if (file.storage === 'cloudinary' && file.publicId) {
+  if (isFileStoredExternally(file) && file.publicId) {
     try {
       await streamAssetToResponse(response, {
         publicId: file.publicId,
@@ -1130,7 +1131,7 @@ router.get(
       return;
     }
 
-    if (file.storage === 'cloudinary' && file.publicId) {
+    if (isFileStoredExternally(file) && file.publicId) {
       try {
         await streamAssetToResponse(response, {
           publicId: file.publicId,
@@ -1173,7 +1174,7 @@ router.delete(
       return;
     }
 
-    if (existing?.storage === 'cloudinary' && existing.publicId) {
+    if (isFileStoredExternally(existing) && existing.publicId) {
       await deleteAsset(existing.publicId, existing.resourceType || 'raw');
     }
 

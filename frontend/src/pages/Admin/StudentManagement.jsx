@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { read, utils, writeFile } from '@e965/xlsx';
+import { read, utils } from '@e965/xlsx';
 import {
   AlertCircle,
   ArrowLeft,
@@ -15,63 +15,16 @@ import {
 import { useMongoState } from '../../components/common/mongoState';
 import { useMasterData, sortClassNames } from '../../components/common/masterData';
 
-const templateColumns = [
-  'admissionNumber',
-  'studentName',
-  'gender',
-  'dob',
-  'category',
-  'religion',
-  'mobileNo',
-  'altMobileNo',
-  'email',
-  'dateOfAdmission',
-  'targetClass',
-  'section',
-  'rollNo',
-  'lastSchoolName',
-  'studentAadhar',
-  'penNumber',
-  'fatherName',
-  'motherName',
-  'fatherAadhar',
-  'motherAadhar',
-  'guardianName',
-  'guardianMobile',
-  'tempAddress',
-  'permAddress',
-];
-
-const sampleRows = [
-  {
-    admissionNumber: 'MGPS-2026-001',
-    studentName: 'Aarav Sharma',
-    gender: 'Male',
-    dob: '2014-04-18',
-    category: 'General',
-    religion: 'Hindu',
-    mobileNo: '9876543210',
-    altMobileNo: '9876500000',
-    email: 'aarav.parent@example.com',
-    dateOfAdmission: '2026-04-01',
-    targetClass: 'Class 6',
-    section: 'A',
-    rollNo: '12',
-    lastSchoolName: 'Sunrise Public School',
-    studentAadhar: '1234 5678 9012',
-    penNumber: 'PEN123456',
-    fatherName: 'Raj Sharma',
-    motherName: 'Nisha Sharma',
-    fatherAadhar: '2222 3333 4444',
-    motherAadhar: '5555 6666 7777',
-    guardianName: '',
-    guardianMobile: '',
-    tempAddress: 'Civil Lines, Jhansi',
-    permAddress: 'Civil Lines, Jhansi',
-  },
-];
-
 const normalizeCell = (value) => String(value || '').trim();
+const normalizeDateCell = (value) => {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString().slice(0, 10);
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return new Date(Date.UTC(1899, 11, 30) + value * 86400000).toISOString().slice(0, 10);
+  }
+  return normalizeCell(value);
+};
 const normalizeAmount = (value) => {
   const amount = Number(String(value || '').replace(/[^0-9.-]/g, ''));
   return Number.isFinite(amount) ? amount : 0;
@@ -88,7 +41,7 @@ const buildStudentRecord = (row, selectedClassView) => {
     altMobileNo: normalizeCell(row.altMobileNo || row['Alternative Mobile Number']),
     email: normalizeCell(row.email),
     gender: normalizeCell(row.gender),
-    dob: normalizeCell(row.dob),
+    dob: normalizeDateCell(row.dob),
     category: normalizeCell(row.category),
     religion: normalizeCell(row.religion),
     tempAddress: normalizeCell(row.tempAddress || row['Temporary Address']),
@@ -100,7 +53,7 @@ const buildStudentRecord = (row, selectedClassView) => {
     fatherAadhar: normalizeCell(row.fatherAadhar || row['Father Aadhaar']),
     motherAadhar: normalizeCell(row.motherAadhar || row['Mother Aadhaar']),
     penNumber: normalizeCell(row.penNumber || row['PEN Number']),
-    dateOfAdmission: normalizeCell(row.dateOfAdmission || row['Date Of Admission']),
+    dateOfAdmission: normalizeDateCell(row.dateOfAdmission || row['Date Of Admission']),
     targetClass,
     lastSchoolName: normalizeCell(row.lastSchoolName || row['Last School Name']),
     fatherName: normalizeCell(row.fatherName || row['Father Name']),
@@ -157,12 +110,12 @@ const UPDATE_FIELD_MAP = [
   { cols: ['altMobileNo', 'Alternative Mobile Number'], profile: 'altMobileNo' },
   { cols: ['email'], profile: 'email', top: ['email', 'guardianEmail'] },
   { cols: ['gender'], profile: 'gender', top: ['gender'] },
-  { cols: ['dob'], profile: 'dob' },
+  { cols: ['dob'], profile: 'dob', date: true },
   { cols: ['category'], profile: 'category', top: ['category'] },
   { cols: ['religion'], profile: 'religion' },
   { cols: ['tempAddress', 'Temporary Address'], profile: 'tempAddress' },
   { cols: ['permAddress', 'Permanent Address'], profile: 'permAddress', top: ['address'] },
-  { cols: ['dateOfAdmission', 'Date Of Admission'], profile: 'dateOfAdmission' },
+  { cols: ['dateOfAdmission', 'Date Of Admission'], profile: 'dateOfAdmission', date: true },
   { cols: ['lastSchoolName', 'Last School Name'], profile: 'lastSchoolName', top: ['lastSchoolName'] },
   { cols: ['fatherName', 'Father Name'], profile: 'fatherName', top: ['fatherName'] },
   { cols: ['motherName', 'Mother Name'], profile: 'motherName', top: ['motherName'] },
@@ -174,9 +127,9 @@ const UPDATE_FIELD_MAP = [
   { cols: ['rollNo'], top: ['rollNo'] },
 ];
 
-const firstNonEmptyCell = (row, cols) => {
+const firstNonEmptyCell = (row, cols, normalize = normalizeCell) => {
   for (const col of cols) {
-    const value = normalizeCell(row[col]);
+    const value = normalize(row[col]);
     if (value) return value;
   }
   return '';
@@ -189,7 +142,11 @@ const mergeRowIntoStudent = (existing, row) => {
   const record = { ...existing, rawProfile: { ...(existing.rawProfile || {}) } };
   let changed = false;
   for (const mapping of UPDATE_FIELD_MAP) {
-    const value = firstNonEmptyCell(row, mapping.cols);
+    const value = firstNonEmptyCell(
+      row,
+      mapping.cols,
+      mapping.date ? normalizeDateCell : normalizeCell
+    );
     if (!value) continue;
     changed = true;
     if (mapping.profile) record.rawProfile[mapping.profile] = value;
@@ -323,11 +280,14 @@ const StudentManagement = ({ setActivePage }) => {
     }));
   }, [classCards, classNames, derivedClasses, managedClasses, studentsDb]);
 
-  const downloadSampleWorkbook = () => {
-    const sheet = utils.json_to_sheet(sampleRows, { header: templateColumns });
-    const workbook = utils.book_new();
-    utils.book_append_sheet(workbook, sheet, 'Students');
-    writeFile(workbook, 'mgps-student-bulk-import-template.xlsx');
+  const downloadSampleWorkbook = (format = 'xlsx') => {
+    const extension = format === 'csv' ? 'csv' : 'xlsx';
+    const link = document.createElement('a');
+    link.href = `/templates/mgps-student-bulk-import-template.${extension}`;
+    link.download = `mgps-student-bulk-import-template.${extension}`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
   };
 
   const handleAutoRollAllClasses = () => {
@@ -371,7 +331,7 @@ const StudentManagement = ({ setActivePage }) => {
       const rows = utils.sheet_to_json(firstSheet, { defval: '' });
 
       if (rows.length === 0) {
-        alert('Selected Excel sheet is empty. Please use the sample template columns.');
+        alert('Selected sheet is empty. Please use the sample template columns.');
         return;
       }
 
@@ -457,7 +417,7 @@ const StudentManagement = ({ setActivePage }) => {
         }\n\nTIP: to fill a field (e.g. Aadhaar) for students already added, upload a sheet with just the Admission Number column + the column(s) you want to set — everything else stays untouched.`
       );
     } catch (error) {
-      alert(`Could not read this Excel file. Please use .xlsx/.xls format.\n\n${error.message}`);
+      alert(`Could not read this file. Please use .xlsx, .xls, or .csv format.\n\n${error.message}`);
     }
   };
 
@@ -486,19 +446,53 @@ const StudentManagement = ({ setActivePage }) => {
           </p>
         </div>
 
-        {selectedClassView && (
+        <div className="flex flex-wrap items-center gap-2">
           <button
-            onClick={() => {
-              setSelectedClassView(null);
-              setSearchTerm('');
-              setGenderFilter('');
-              setCategoryFilter('');
-            }}
-            className="flex items-center justify-center gap-1.5 text-xs font-bold text-slate-500 hover:text-black transition-colors px-4 py-2.5 bg-white/50 border border-slate-200/70 rounded-full"
+            type="button"
+            onClick={() => downloadSampleWorkbook('xlsx')}
+            className="flex items-center gap-1.5 bg-white/60 hover:bg-white/70 transition-all px-3 py-2 rounded-xl border border-slate-200/70 text-xs font-bold"
+            title="Download sample Excel template"
           >
-            <ArrowLeft className="w-4 h-4" /> Switch Class Matrix
+            <Download className="w-3.5 h-3.5" /> Sample Excel
           </button>
-        )}
+          <button
+            type="button"
+            onClick={() => downloadSampleWorkbook('csv')}
+            className="flex items-center gap-1.5 bg-white/60 hover:bg-white/70 transition-all px-3 py-2 rounded-xl border border-slate-200/70 text-xs font-bold"
+            title="Download sample CSV template"
+          >
+            <Download className="w-3.5 h-3.5" /> Sample CSV
+          </button>
+          <button
+            type="button"
+            onClick={() => bulkFileInputRef.current?.click()}
+            className="btn-primary flex items-center gap-1.5 transition-all px-3 py-2 rounded-xl text-xs font-bold"
+            title="Add students in bulk from Excel or CSV"
+          >
+            <Upload className="w-3.5 h-3.5" /> Add Students in Bulk
+          </button>
+          <input
+            ref={bulkFileInputRef}
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            onChange={handleBulkImport}
+            className="hidden"
+          />
+          <span className="text-[10px] text-slate-500">Replace the demo row with real student details before importing.</span>
+          {selectedClassView && (
+            <button
+              onClick={() => {
+                setSelectedClassView(null);
+                setSearchTerm('');
+                setGenderFilter('');
+                setCategoryFilter('');
+              }}
+              className="flex items-center justify-center gap-1.5 text-xs font-bold text-slate-500 hover:text-black transition-colors px-4 py-2.5 bg-white/50 border border-slate-200/70 rounded-full"
+            >
+              <ArrowLeft className="w-4 h-4" /> Switch Class Matrix
+            </button>
+          )}
+        </div>
       </div>
 
       {/* VIEW PANEL 1: CLASS SELECTION BRACKETS */}
@@ -549,33 +543,6 @@ const StudentManagement = ({ setActivePage }) => {
             </div>
 
             <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-              <button
-                type="button"
-                onClick={downloadSampleWorkbook}
-                className="flex items-center gap-1.5 bg-white/60 hover:bg-white/70 transition-all px-3 py-1.5 rounded-xl border border-slate-200/70"
-                title="Download sample Excel template"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>Sample Excel</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => bulkFileInputRef.current?.click()}
-                className="btn-primary flex items-center gap-1.5 transition-all px-3 py-1.5 rounded-xl"
-                title="Add students in bulk from Excel"
-              >
-                <Upload className="w-3.5 h-3.5" />
-                <span>Add Students in Bulk</span>
-              </button>
-              <input
-                ref={bulkFileInputRef}
-                type="file"
-                accept=".xlsx,.xls"
-                onChange={handleBulkImport}
-                className="hidden"
-              />
-
               <button
                 type="button"
                 onClick={handleAutoRollForClass}

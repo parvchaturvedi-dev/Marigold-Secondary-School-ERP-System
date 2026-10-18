@@ -162,7 +162,7 @@ router.post('/', ensureMongo, async (request, response) => {
       });
     }
   } catch (error) {
-    console.error('[leaveRequests] create notify failed:', error?.message || error);
+    console.error('[leaveRequests] create notify failed:', { name: error?.name, code: error?.code });
   }
 
   response.status(201).json(toLeavePayload(leaveRequest));
@@ -190,7 +190,7 @@ router.patch('/:id/admin-action', ensureMongo, requireRole('admin', 'clerk'), as
   try {
     await notifyLeaveRequester(leaveRequest);
   } catch (error) {
-    console.error('[leaveRequests] admin-action notify failed:', error?.message || error);
+    console.error('[leaveRequests] admin-action notify failed:', { name: error?.name, code: error?.code });
   }
 
   response.json(toLeavePayload(leaveRequest));
@@ -238,14 +238,14 @@ router.patch('/:id/teacher-action', ensureMongo, requireRole('teacher', 'admin',
         recipientRole: 'admin',
       });
     } catch (error) {
-      console.error('[leaveRequests] forward notify failed:', error?.message || error);
+      console.error('[leaveRequests] forward notify failed:', { name: error?.name, code: error?.code });
     }
   } else {
     // Approve/reject — notify the applicant that their request status changed (best-effort).
     try {
       await notifyLeaveRequester(leaveRequest);
     } catch (error) {
-      console.error('[leaveRequests] teacher-action notify failed:', error?.message || error);
+      console.error('[leaveRequests] teacher-action notify failed:', { name: error?.name, code: error?.code });
     }
   }
 
