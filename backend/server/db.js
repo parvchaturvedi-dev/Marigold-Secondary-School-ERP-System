@@ -133,6 +133,7 @@ export const connectPostgres = async () => {
     console.error('PostgreSQL connection failed:', {
       name: error.name,
       code: error.code,
+      message: error.message,
     });
     throw error;
   }
