@@ -99,7 +99,8 @@ const createSessionStore = ({ databasePath, keyPath, safeStorage }) => {
     list() {
       return db.prepare(`
         SELECT id, name, kind, status, created_at AS createdAt,
-          updated_at AS updatedAt, record_count AS recordCount
+          updated_at AS updatedAt, record_count AS recordCount,
+          length(payload) AS storageBytes
         FROM session_archives
         ORDER BY CASE kind WHEN 'snapshot' THEN 0 ELSE 1 END, created_at DESC
       `).all();

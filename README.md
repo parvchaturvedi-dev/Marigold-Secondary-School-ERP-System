@@ -469,17 +469,19 @@ inactivity, so it cannot guarantee the backend will always stay awake.
 
 The Windows Clerk app uses an isolated Electron renderer and stores local session archives in an
 AES-256-GCM encrypted SQLite database. Windows `safeStorage` protects the encryption key. Clerk
-Settings exposes session selection, editable local past-session drafts, read-only completed snapshots,
-and current-session backup/rollover actions only inside Electron. Completed rollover snapshots include
-the PostgreSQL-backed model data and stored asset bytes; the server verifies the snapshot hash before
-changing the online session. Rollover promotion, attendance/assignment/examination resets, and
-fee-ledger preservation run transactionally on the backend.
+Settings exposes session selection with an approximate compressed archive-payload size, editable local
+past-session drafts, read-only completed snapshots, and current-session backup/rollover actions only
+inside Electron. Completed rollover snapshots include PostgreSQL-backed model data (except User
+login/account records) and stored asset bytes; the server verifies the snapshot hash before changing
+the online session. Rollover promotion, attendance/assignment/examination resets, and fee-ledger
+preservation run transactionally on the backend.
 
 While a local archive is selected, module-state and examination data are read from the local archive;
 snapshot edits are rejected, and other cloud API operations are blocked rather than sent to the live
-session. The ordinary web portal continues to use the online database and does not expose local
-archives. Deploy the updated backend before distributing a desktop installer that uses the session
-backup or rollover endpoints.
+session. Snapshot payloads include the database records, but dedicated file/document APIs are not
+served from local archives by the regular portal screens. The ordinary web portal continues to use
+the online database and does not expose local archives. Deploy the updated backend before distributing
+a desktop installer that uses the session backup or rollover endpoints.
 
 Student and teacher management screens support bulk imports from `.xlsx`, `.xls`, and `.csv` in the
 web portal and Clerk desktop app. Downloadable demo templates are in `frontend/public/templates/`;

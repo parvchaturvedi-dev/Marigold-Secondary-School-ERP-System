@@ -19,6 +19,14 @@ import {
 import { getClerkProfile } from './clerkPortalData';
 import { apiFetch } from '../../components/common/api';
 
+const formatStorageSize = (bytes = 0) => {
+  const size = Number(bytes);
+  if (!Number.isFinite(size) || size < 0) return 'size unavailable';
+  if (size < 1024) return `~${size} B`;
+  if (size < 1024 * 1024) return `~${(size / 1024).toFixed(1)} KB`;
+  return `~${(size / (1024 * 1024)).toFixed(2)} MB`;
+};
+
 const Settings = ({ session }) => {
   const profile = getClerkProfile(session);
   const [passwordForm, setPasswordForm] = useState({
@@ -558,7 +566,7 @@ const DesktopSessionManager = () => {
             <option value="">{currentSession} — Current session (online)</option>
             {archives.map((archive) => (
               <option key={archive.id} value={archive.id}>
-                {archive.name}{archive.kind === 'snapshot' ? ' — Archived snapshot' : ' — Local past session'}
+                {archive.name} ({formatStorageSize(archive.storageBytes)}){archive.kind === 'snapshot' ? ' — Archived snapshot' : ' — Local past session'}
               </option>
             ))}
           </select>

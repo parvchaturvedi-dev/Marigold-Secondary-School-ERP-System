@@ -12,6 +12,11 @@ const resolvePageLoader = (path) => {
 };
 
 const lazyPage = (path) => lazy(resolvePageLoader(path));
+const StudentCertificatePage = lazyPage('../pages/common/StudentCertificate');
+const TransferCertificatePage = () =>
+  createElement(StudentCertificatePage, { type: 'transfer' });
+const StudyCertificatePage = () =>
+  createElement(StudentCertificatePage, { type: 'study' });
 const ComingSoon = lazyPage('../pages/common/ComingSoon');
 const ApplicationsComingSoon = () =>
   createElement(ComingSoon, {
@@ -52,6 +57,8 @@ export const portalRoutes = {
       Finance: lazyPage('../pages/Admin/Finance'),
       Payroll: lazyPage('../pages/Admin/Payroll'),
       'Id Card': lazyPage('../pages/Admin/IdCard'),
+      'Transfer Certificate': TransferCertificatePage,
+      'Study Certificate': StudyCertificatePage,
       'Leave Requests': lazyPage('../pages/Admin/LeaveRequests'),
       Meetings: lazyPage('../pages/Admin/Meetings'),
       Notices: lazyPage('../pages/Admin/Notices'),
@@ -99,6 +106,8 @@ export const portalRoutes = {
       'Paper Selected': lazyPage('../pages/Clerk/Examinations'),
       'Marks Management': lazyPage('../pages/Clerk/Examinations'),
       'Id Card': lazyPage('../pages/Clerk/IdCard'),
+      'Transfer Certificate': TransferCertificatePage,
+      'Study Certificate': StudyCertificatePage,
       'Leave Requests': lazyPage('../pages/Clerk/LeaveRequests'),
       Meetings: lazyPage('../pages/Clerk/Meetings'),
       Notices: lazyPage('../pages/Clerk/Notices'),

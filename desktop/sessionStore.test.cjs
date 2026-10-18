@@ -27,6 +27,9 @@ test('encrypted session archive CRUD and snapshot immutability', async (t) => {
   store.setActiveSession(draft.id);
   const students = [{ admissionNumber: 'MG-001', name: 'Sample Student' }];
   store.saveCollection(draft.id, 'admin-student-management-students', students);
+  const listedDraft = store.list().find((archive) => archive.id === draft.id);
+  assert.ok(Number.isSafeInteger(listedDraft.storageBytes));
+  assert.ok(listedDraft.storageBytes > 0);
   assert.deepEqual(
     store.readCollection(draft.id, 'admin-student-management-students'),
     students

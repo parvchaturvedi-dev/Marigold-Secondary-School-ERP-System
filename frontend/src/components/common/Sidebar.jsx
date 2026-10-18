@@ -35,7 +35,8 @@ import {
   UserPlus,
   Award,
   Info,
-  BriefcaseBusiness
+  BriefcaseBusiness,
+  FileCheck2,
 } from 'lucide-react';
 import Logo from '../../assets/logo.png';
 
@@ -201,6 +202,8 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
       ]
     },
     { name: 'Id Card', icon: IdCard },
+    { name: 'Transfer Certificate', icon: FileCheck2 },
+    { name: 'Study Certificate', icon: GraduationCap },
     { name: 'Leave Requests', icon: LogOut },
     { name: 'Meetings', icon: Video },
     { name: 'Notices', icon: Bell },
@@ -281,6 +284,8 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
       ],
     },
     { name: 'Id Card', icon: IdCard },
+    { name: 'Transfer Certificate', icon: FileCheck2 },
+    { name: 'Study Certificate', icon: GraduationCap },
     { name: 'Leave Requests', icon: LogOut },
     { name: 'Meetings', icon: Video },
     { name: 'Timetable', icon: CalendarClock },
