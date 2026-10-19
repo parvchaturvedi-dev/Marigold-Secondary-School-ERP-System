@@ -3,6 +3,7 @@ import { CalendarDays, FileCheck2, GraduationCap, Printer, Search } from 'lucide
 import { useMongoState } from '../../components/common/mongoState';
 import { MASTER_NAMESPACES, normalizeStudentForDirectory } from '../../components/common/masterData';
 import schoolLogo from '../../assets/logo.png';
+import './StudentCertificatePrint.css';
 
 const today = () => {
   const date = new Date();
@@ -98,9 +99,11 @@ const CertificatePaper = ({ type, details, form }) => {
               Near Nagarpalika Board, Hamindpur Road, Behror
             </p>
             <p className="text-[10px] font-semibold sm:text-xs">Ph: 8107464600</p>
-            <p className="text-[10px] font-semibold sm:text-xs">Email Id: Website:</p>
+            <p className="text-[10px] font-semibold sm:text-xs">
+              Email: marigoldvijay@gmail.com | Website: www.marigoldschoolbehror.com
+            </p>
           </div>
-          <p className="absolute right-2 top-1 text-[8px] font-bold">
+          <p className="self-start justify-self-end pt-1 text-right text-[8px] font-bold">
             Certificate No.: {escapePrintText(form.certificateNumber || '________')}
           </p>
         </header>
