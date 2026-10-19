@@ -1665,8 +1665,8 @@ const ReportCardManagementSection = ({ state, role, onRefresh }) => {
   };
 
   return (
-    <section className="grid grid-cols-1 xl:grid-cols-[300px_1fr] gap-6">
-      <div className="glass-card rounded-3xl p-5 shadow-sm h-fit">
+    <section className="grid min-w-0 grid-cols-1 xl:grid-cols-[minmax(220px,280px)_minmax(0,1fr)] gap-4 xl:gap-6">
+      <div className="glass-card min-w-0 rounded-3xl p-5 shadow-sm h-fit">
         <h3 className="text-sm font-black flex items-center gap-2">
           <Layers className="w-4 h-4 text-[#8b5cf6]" /> Classes
         </h3>
@@ -1687,10 +1687,10 @@ const ReportCardManagementSection = ({ state, role, onRefresh }) => {
         </div>
       </div>
 
-      <div className="space-y-6">
+      <div className="min-w-0 space-y-6">
         <div className="glass-card rounded-3xl p-5 shadow-sm">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
+          <div className="flex min-w-0 flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="min-w-0">
               <h3 className="text-sm font-black flex items-center gap-2">
                 <Award className="w-4 h-4 text-amber-500" /> Report Card Grade Rules
               </h3>
@@ -1701,12 +1701,12 @@ const ReportCardManagementSection = ({ state, role, onRefresh }) => {
             <button
               type="button"
               onClick={saveGrades}
-              className="rounded-full btn-primary px-4 py-2 text-xs font-black flex items-center gap-2"
+              className="shrink-0 rounded-full btn-primary px-4 py-2 text-xs font-black flex items-center gap-2"
             >
               <Save className="w-4 h-4" /> Save Grade Rules
             </button>
           </div>
-          <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="mt-4 grid min-w-0 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             {gradeScale.map((item, index) => (
               <Field key={item.grade} label={`${item.grade} minimum %`}>
                 <input
@@ -1742,7 +1742,7 @@ const ReportCardManagementSection = ({ state, role, onRefresh }) => {
             <select
               value={examId}
               onChange={(event) => setExamId(event.target.value)}
-              className="rounded-2xl border border-white/70 bg-white/60 px-3 py-2 text-xs font-black outline-none"
+              className="w-full max-w-full rounded-2xl border border-white/70 bg-white/60 px-3 py-2 text-xs font-black outline-none sm:w-auto sm:max-w-[min(100%,320px)]"
             >
               {state.exams.map((exam) => (
                 <option key={exam.id} value={exam.id}>
