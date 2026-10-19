@@ -6,6 +6,14 @@ export const EXAMINATION_STORAGE_KEY = 'mgps_erp_examination_module';
 export const EXAMINATION_UPDATED_EVENT = 'mgps-erp-examination-updated';
 
 export const PAPER_TYPES = ['Written', 'Oral', 'Practical', 'Worksheet'];
+export const DEFAULT_GRADE_SCALE = [
+  { grade: 'A', minPercentage: 90 },
+  { grade: 'B', minPercentage: 80 },
+  { grade: 'C', minPercentage: 70 },
+  { grade: 'D', minPercentage: 60 },
+  { grade: 'E', minPercentage: 50 },
+  { grade: 'F', minPercentage: 0 },
+];
 
 const nowIso = () => new Date().toISOString();
 export const MARKS_EDIT_LOCK_HOURS = 24;
@@ -145,6 +153,7 @@ const EMPTY_EXAMINATION_STATE = {
   deliveries: [],
   boardClasses: [],
   boardResults: [],
+  gradeScale: DEFAULT_GRADE_SCALE,
 };
 
 let examinationStateCache = EMPTY_EXAMINATION_STATE;
@@ -157,6 +166,9 @@ const normalizeExaminationState = (state = {}) => ({
   deliveries: Array.isArray(state.deliveries) ? state.deliveries : [],
   boardClasses: Array.isArray(state.boardClasses) ? state.boardClasses : [],
   boardResults: Array.isArray(state.boardResults) ? state.boardResults : [],
+  gradeScale: Array.isArray(state.gradeScale) && state.gradeScale.length === DEFAULT_GRADE_SCALE.length
+    ? state.gradeScale
+    : DEFAULT_GRADE_SCALE,
 });
 
 const persistExaminationState = async (state) => {
@@ -210,6 +222,9 @@ export const updateExaminationState = (updater) => {
   writeExaminationState(nextState);
   return nextState;
 };
+
+export const updateGradeScale = (gradeScale) =>
+  updateExaminationState((state) => ({ ...state, gradeScale }));
 
 export const createExamRecord = ({ name, academicYear, actor }) =>
   updateExaminationState((state) => ({
@@ -593,15 +608,12 @@ export const isTeacherMarksEditUnlocked = (record, now = Date.now()) => {
   return Number.isFinite(unlockedUntil) && now < unlockedUntil;
 };
 
-export const calculateGrade = (marks, maxMarks = 100) => {
+export const calculateGrade = (marks, maxMarks = 100, gradeScale = DEFAULT_GRADE_SCALE) => {
   const percentage = maxMarks ? (Number(marks) / Number(maxMarks)) * 100 : 0;
-
-  if (percentage >= 90) return 'A+';
-  if (percentage >= 80) return 'A';
-  if (percentage >= 70) return 'B+';
-  if (percentage >= 60) return 'B';
-  if (percentage >= 50) return 'C';
-  return 'Needs Support';
+  const scale = Array.isArray(gradeScale) && gradeScale.length
+    ? [...gradeScale].sort((a, b) => Number(b.minPercentage) - Number(a.minPercentage))
+    : DEFAULT_GRADE_SCALE;
+  return scale.find((item) => percentage >= Number(item.minPercentage))?.grade || 'F';
 };
 
 export const getFocusRemark = (marks, maxMarks = 100) => {
@@ -613,7 +625,7 @@ export const getFocusRemark = (marks, maxMarks = 100) => {
   return 'Needs urgent attention';
 };
 
-export const getReportRowsForStudent = (state, student, examId) => {
+export const getReportRowsForStudent = (state, student, examId, gradeScale = state.gradeScale) => {
   const className = student?.reportClassName || student?.className || '';
   const records = state.marks.filter(
     (record) => record.examId === examId && record.className === className
@@ -632,7 +644,7 @@ export const getReportRowsForStudent = (state, student, examId) => {
       subject: record.subject,
       marks: Number(row.marks || 0),
       maxMarks: Number(record.maxMarks || 100),
-      grade: calculateGrade(row.marks || 0, record.maxMarks || 100),
+      grade: calculateGrade(row.marks || 0, record.maxMarks || 100, gradeScale),
       remark: row.remark || getFocusRemark(row.marks || 0, record.maxMarks || 100),
     };
   });

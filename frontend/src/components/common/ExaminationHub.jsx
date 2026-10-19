@@ -47,6 +47,7 @@ import {
   calculateGrade,
   configureExaminationMasterData,
   createExamRecord,
+  DEFAULT_GRADE_SCALE,
   decideAdminOnPaper,
   enableTeacherMarksEdit,
   ensureStudentInRoster,
@@ -78,6 +79,7 @@ import {
   savePaperRecord,
   setBoardClassEnabled,
   submitPaperForApproval,
+  updateGradeScale,
   upsertMarksRecord,
   upsertScheduleRows,
 } from './examinationStore';
@@ -1577,6 +1579,7 @@ const ReportCardManagementSection = ({ state, role, onRefresh }) => {
   const [examId, setExamId] = useState(state.exams[0]?.id || '');
   const [className, setClassName] = useState('Class 9');
   const [scheduleRows, setScheduleRows] = useState([]);
+  const [gradeScale, setGradeScale] = useState(state.gradeScale || DEFAULT_GRADE_SCALE);
   const [showAdmitPreview, setShowAdmitPreview] = useState(false);
   const selectedExam = state.exams.find((exam) => exam.id === examId) || state.exams[0];
   const students = getStudentsForClass(className);
@@ -1603,6 +1606,10 @@ const ReportCardManagementSection = ({ state, role, onRefresh }) => {
     setScheduleRows(nextRows);
   }, [className, examId, state.schedules]);
 
+  useEffect(() => {
+    setGradeScale(state.gradeScale || DEFAULT_GRADE_SCALE);
+  }, [state.gradeScale]);
+
   if (!roleCanManageReportCards(role)) {
     return (
       <EmptyAccess
@@ -1623,6 +1630,29 @@ const ReportCardManagementSection = ({ state, role, onRefresh }) => {
     const nextState = upsertScheduleRows(examId, className, scheduleRows);
     onRefresh(nextState);
     alert('Exam schedule saved for admit card generation.');
+  };
+
+  const saveGrades = () => {
+    const hasValidInputs = gradeScale.every(
+      (item) => String(item.minPercentage).trim() !== '' && Number.isFinite(Number(item.minPercentage))
+    );
+    const normalizedScale = gradeScale.map((item) => ({
+      ...item,
+      minPercentage: Number(item.minPercentage),
+    }));
+    const validValues = normalizedScale.every(
+      (item) => Number.isFinite(item.minPercentage) && item.minPercentage >= 0 && item.minPercentage <= 100
+    );
+    const descending = normalizedScale.every(
+      (item, index) => index === 0 || normalizedScale[index - 1].minPercentage >= item.minPercentage
+    );
+    if (!hasValidInputs || !validValues || !descending || normalizedScale[normalizedScale.length - 1].minPercentage !== 0) {
+      alert('Set grade thresholds from highest to lowest, between 0 and 100. F must start at 0%.');
+      return;
+    }
+    const nextState = updateGradeScale(normalizedScale);
+    onRefresh(nextState);
+    alert('Grade thresholds saved.');
   };
 
   const printAdmitCards = () => {
@@ -1658,6 +1688,47 @@ const ReportCardManagementSection = ({ state, role, onRefresh }) => {
       </div>
 
       <div className="space-y-6">
+        <div className="glass-card rounded-3xl p-5 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-black flex items-center gap-2">
+                <Award className="w-4 h-4 text-amber-500" /> Report Card Grade Rules
+              </h3>
+              <p className="text-xs font-bold text-slate-400 mt-1">
+                Set minimum percentages for A–E. Marks below E receive F. Rules apply to subject and overall grades.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={saveGrades}
+              className="rounded-full btn-primary px-4 py-2 text-xs font-black flex items-center gap-2"
+            >
+              <Save className="w-4 h-4" /> Save Grade Rules
+            </button>
+          </div>
+          <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            {gradeScale.map((item, index) => (
+              <Field key={item.grade} label={`${item.grade} minimum %`}>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={item.minPercentage}
+                  disabled={item.grade === 'F'}
+                  onChange={(event) =>
+                    setGradeScale((current) =>
+                      current.map((grade, gradeIndex) =>
+                        gradeIndex === index ? { ...grade, minPercentage: event.target.value } : grade
+                      )
+                    )
+                  }
+                  className="input-shell disabled:opacity-60"
+                />
+              </Field>
+            ))}
+          </div>
+        </div>
+
         <div className="glass-card rounded-3xl p-5 shadow-sm">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             <div>
@@ -1883,13 +1954,27 @@ const MarksManagementSection = ({ state, actor, role, session, onRefresh }) => {
       alert('24 hours have passed. This marks list is locked for teacher editing.');
       return;
     }
+    const parsedMaxMarks = Number(maxMarks);
+    if (!Number.isFinite(parsedMaxMarks) || parsedMaxMarks <= 0) {
+      alert('Maximum marks must be a number greater than zero.');
+      return;
+    }
+    const invalidMarks = rows.find((row) => {
+      if (row.marks === '' || row.marks === null || row.marks === undefined) return false;
+      const marksValue = Number(row.marks);
+      return !Number.isFinite(marksValue) || marksValue < 0 || marksValue > parsedMaxMarks;
+    });
+    if (invalidMarks) {
+      alert(`Marks for ${invalidMarks.studentName} must be between 0 and ${parsedMaxMarks}.`);
+      return;
+    }
 
     const nextState = upsertMarksRecord(
       {
         examId,
         className,
         subject,
-        maxMarks,
+        maxMarks: parsedMaxMarks,
         rows,
       },
       actor
@@ -1906,12 +1991,17 @@ const MarksManagementSection = ({ state, actor, role, session, onRefresh }) => {
   };
 
   const printReports = () => {
-    // Full-year Annual Progress Report for the whole class (all exams as columns).
+    if (!selectedExam) {
+      alert('Select an examination before printing report cards.');
+      return;
+    }
     printReportCardsForClass({
       students: getStudentsForClass(className),
-      exams: state.exams,
+      exams: [selectedExam],
+      examId: selectedExam.id,
       marks: state.marks,
       className,
+      gradeScale: state.gradeScale || DEFAULT_GRADE_SCALE,
       schoolInfo: { academicYear: selectedExam?.academicYear },
     });
   };
@@ -1922,7 +2012,7 @@ const MarksManagementSection = ({ state, actor, role, session, onRefresh }) => {
     `${getExamLabel(selectedExam)} report card update for ${className}.`,
     '',
     ...students.flatMap((student) => {
-      const reportRows = getReportRowsForStudent(state, student, examId);
+      const reportRows = getReportRowsForStudent(state, student, examId, state.gradeScale);
       const total = reportRows.reduce((sum, row) => sum + Number(row.marks || 0), 0);
       const maxTotal = reportRows.reduce((sum, row) => sum + Number(row.maxMarks || 0), 0);
       const percentage = maxTotal ? Math.round((total / maxTotal) * 100) : 0;
@@ -2090,13 +2180,6 @@ const MarksManagementSection = ({ state, actor, role, session, onRefresh }) => {
               )}
               <button
                 type="button"
-                onClick={printReports}
-                className="rounded-full border border-white/70 bg-white px-4 py-2 text-xs font-black flex items-center gap-2"
-              >
-                <Printer className="w-4 h-4" /> Print Report Cards
-              </button>
-              <button
-                type="button"
                 onClick={() => sendReports('WhatsApp')}
                 className="rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-4 py-2 text-xs font-black flex items-center gap-2"
               >
@@ -2111,6 +2194,15 @@ const MarksManagementSection = ({ state, actor, role, session, onRefresh }) => {
                 <Mail className="w-4 h-4" /> {isSendingReports ? 'Sending...' : 'Gmail'}
               </button>
             </div>
+          )}
+          {roleCanManageReportCards(role) && (
+            <button
+              type="button"
+              onClick={printReports}
+              className="rounded-full border border-white/70 bg-white px-4 py-2 text-xs font-black flex items-center gap-2"
+            >
+              <Printer className="w-4 h-4" /> Print Report Cards
+            </button>
           )}
         </div>
 
@@ -2145,7 +2237,7 @@ const MarksManagementSection = ({ state, actor, role, session, onRefresh }) => {
                   </td>
                   <td className="px-3 py-2">
                     <span className="rounded-full bg-indigo-100 text-indigo-700 border border-indigo-200 px-2 py-1 text-[10px] font-black">
-                      {row.marks === '' ? '-' : calculateGrade(row.marks, maxMarks)}
+                      {row.marks === '' ? '-' : calculateGrade(row.marks, maxMarks, state.gradeScale)}
                     </span>
                   </td>
                   <td className="px-3 py-2">
@@ -2402,20 +2494,29 @@ const StudentExamView = ({ state, session }) => {
   const selectedExam = state.exams.find((exam) => exam.id === selectedOption.examId) || state.exams[0];
   const selectedBoardResult = getBoardResultForStudent(state, student, selectedExam?.id, selectedOption.className);
   const isBoardReport = Boolean(selectedBoardResult?.dataUrl);
-  const rows = getReportRowsForStudent(state, reportStudent, selectedExam?.id);
+  const rows = getReportRowsForStudent(state, reportStudent, selectedExam?.id, state.gradeScale);
   const total = rows.reduce((sum, row) => sum + Number(row.marks || 0), 0);
   const maxTotal = rows.reduce((sum, row) => sum + Number(row.maxMarks || 0), 0);
   const percentage = maxTotal ? Math.round((total / maxTotal) * 100) : 0;
   const focusRows = [...rows].sort((a, b) => a.marks / a.maxMarks - b.marks / b.maxMarks).slice(0, 2);
 
   const printReport = () => {
-    // Full-year progress report (all exams as columns), matching the school's
-    // official Annual Progress Report layout.
+    const reportRoster = getStudentsForClass(selectedOption.className);
+    const rosterContainsStudent = reportRoster.some(
+      (item) =>
+        (item.id && item.id === student.id) ||
+        (item.admissionNumber && item.admissionNumber === student.admissionNumber)
+    );
     printReportCard({
-      student,
-      exams: state.exams,
+      student: reportStudent,
+      exams: selectedExam ? [selectedExam] : [],
+      examId: selectedExam?.id,
       marks: state.marks,
       className: selectedOption.className,
+      gradeScale: state.gradeScale || DEFAULT_GRADE_SCALE,
+      students: rosterContainsStudent
+        ? reportRoster
+        : [...reportRoster, { ...student, className: selectedOption.className }],
       schoolInfo: { academicYear: selectedExam?.academicYear },
     });
   };

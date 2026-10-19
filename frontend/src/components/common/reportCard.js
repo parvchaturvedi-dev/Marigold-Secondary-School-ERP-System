@@ -15,13 +15,14 @@
  *       { studentId, admissionNumber, studentName, marks, remark }
  *     => the OBTAINED marks live on `row.marks`; the MAX lives on the
  *        record as `record.maxMarks`.
- *   - Grade thresholds mirror `calculateGrade` in examinationStore.js:
- *       >=90 A+, >=80 A, >=70 B+, >=60 B, >=50 C, else 'Needs Support'.
+ *   - Grade thresholds use the saved A–F scale, with A–E minimum percentages
+ *     configured by the school and F as the remaining range.
  *
  * Exports:
  *   - computeReportRows({ student, exams, marks, className })  -> structured rows
  *   - printReportCard({ student, exams, marks, className, schoolInfo, ... }) -> void
  */
+import schoolLogo from '../../assets/logo.png';
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -43,14 +44,21 @@ const studentRoll = (student = {}) => student.rollNo || student.roll || '';
  * Grade thresholds — identical to `calculateGrade` in examinationStore.js.
  * Kept local so this file stays self-contained (no cross-imports).
  */
-const gradeFromPercentage = (percentage) => {
+const DEFAULT_GRADE_SCALE = [
+  { grade: 'A', minPercentage: 90 },
+  { grade: 'B', minPercentage: 80 },
+  { grade: 'C', minPercentage: 70 },
+  { grade: 'D', minPercentage: 60 },
+  { grade: 'E', minPercentage: 50 },
+  { grade: 'F', minPercentage: 0 },
+];
+
+const gradeFromPercentage = (percentage, gradeScale = DEFAULT_GRADE_SCALE) => {
   if (!Number.isFinite(percentage)) return '—';
-  if (percentage >= 90) return 'A+';
-  if (percentage >= 80) return 'A';
-  if (percentage >= 70) return 'B+';
-  if (percentage >= 60) return 'B';
-  if (percentage >= 50) return 'C';
-  return 'Needs Support';
+  const scale = Array.isArray(gradeScale) && gradeScale.length
+    ? [...gradeScale].sort((a, b) => Number(b.minPercentage) - Number(a.minPercentage))
+    : DEFAULT_GRADE_SCALE;
+  return scale.find((item) => percentage >= Number(item.minPercentage))?.grade || 'F';
 };
 
 /**
@@ -102,42 +110,40 @@ const toNumberOrNull = (value) => {
  *   overallGrade: string
  * }}
  */
-export function computeReportRows({ student, exams, marks, className }) {
+export function computeReportRows({ student, exams, marks, className, examId, gradeScale }) {
   const safeExams = Array.isArray(exams) ? exams : [];
   const safeMarks = Array.isArray(marks) ? marks : [];
   const cls = className || student?.className || student?.reportClassName || '';
+  const selectedExams = examId
+    ? safeExams.filter((exam) => String(exam?.id) === String(examId))
+    : safeExams;
 
   // Only the marks records for THIS class (defensive against undefined class).
-  const classMarks = safeMarks.filter((record) => !cls || record?.className === cls);
+  const classMarks = safeMarks.filter(
+    (record) =>
+      (!cls || record?.className === cls) &&
+      (!examId || String(record?.examId) === String(examId))
+  );
 
   // Discover every subject taught to this student in this class. We derive the
-  // subject set from marks records that contain a row for this student — but
-  // fall back to every subject in the class if none match by student (so an
-  // empty-but-valid report still lists the subjects).
+  // subject set from all records for the selected exam so every student in the
+  // class is scored against the same subject maximums.
   const subjectSet = new Set();
-  const subjectHasStudent = new Set();
   classMarks.forEach((record) => {
     if (!record?.subject) return;
     subjectSet.add(record.subject);
-    if ((record.rows || []).some((row) => rowBelongsToStudent(row, student))) {
-      subjectHasStudent.add(record.subject);
-    }
   });
 
-  // Prefer subjects that actually have a row for this student; otherwise show
-  // all subjects found for the class.
-  const subjects = (subjectHasStudent.size ? [...subjectHasStudent] : [...subjectSet]).sort(
-    (a, b) => a.localeCompare(b)
-  );
+  const subjects = [...subjectSet].sort((a, b) => a.localeCompare(b));
 
   // Running per-exam totals (across all subjects).
-  const perExamTotals = safeExams.map((exam) => ({ examId: exam?.id, max: 0, obt: 0 }));
+  const perExamTotals = selectedExams.map((exam) => ({ examId: exam?.id, max: 0, obt: 0 }));
 
   const subjectRows = subjects.map((subject) => {
     let total = 0;
     let totalMax = 0;
 
-    const perExam = safeExams.map((exam, examIndex) => {
+    const perExam = selectedExams.map((exam, examIndex) => {
       // The marks record for this exam + subject (+ class).
       const record = classMarks.find(
         (item) => item?.examId === exam?.id && item?.subject === subject
@@ -149,15 +155,12 @@ export function computeReportRows({ student, exams, marks, className }) {
       if (record) {
         const studentRow = (record.rows || []).find((row) => rowBelongsToStudent(row, student));
         max = toNumberOrNull(record.maxMarks);
-        // Obtained marks live on `row.marks` (per the store's row shape).
         obt = studentRow ? toNumberOrNull(studentRow.marks) : null;
       }
 
-      // Accumulate subject totals (only count real numbers).
+      if (max !== null) totalMax += max;
       if (obt !== null) total += obt;
-      if (max !== null && obt !== null) totalMax += max;
 
-      // Accumulate per-exam column grand totals.
       if (max !== null) perExamTotals[examIndex].max += max;
       if (obt !== null) perExamTotals[examIndex].obt += obt;
 
@@ -165,7 +168,7 @@ export function computeReportRows({ student, exams, marks, className }) {
     });
 
     const subjectPct = totalMax > 0 ? (total / totalMax) * 100 : NaN;
-    const grade = gradeFromPercentage(subjectPct);
+    const grade = gradeFromPercentage(subjectPct, gradeScale);
 
     return { subject, perExam, total, totalMax, grade };
   });
@@ -173,7 +176,7 @@ export function computeReportRows({ student, exams, marks, className }) {
   const grandMax = perExamTotals.reduce((sum, column) => sum + column.max, 0);
   const grandObtained = perExamTotals.reduce((sum, column) => sum + column.obt, 0);
   const percentage = grandMax > 0 ? (grandObtained / grandMax) * 100 : 0;
-  const overallGrade = grandMax > 0 ? gradeFromPercentage(percentage) : '—';
+  const overallGrade = grandMax > 0 ? gradeFromPercentage(percentage, gradeScale) : '—';
 
   return {
     subjects: subjectRows,
@@ -195,7 +198,9 @@ const DEFAULT_SCHOOL_INFO = {
   line1: '(Recognized by Govt. of Rajasthan / Affiliated to RBSE Board)',
   line2: 'NEAR NAGARPALIKA BOARD, HAMINDPUR ROAD BEHROR',
   semisCode: '',
-  regNo: '',
+  regNo: '52/ALW/2000',
+  email: 'marigoldvijay@gmail.com',
+  website: 'www.marigoldschoolbehror.com',
   academicYear: '2025-2026',
 };
 
@@ -222,11 +227,14 @@ const REPORT_CARD_STYLES = `
     .logo-box {
       width: 58px; height: 58px; border: 1px solid #000; display: flex;
       align-items: center; justify-content: center; font-size: 9px; text-align: center;
+      overflow: hidden;
     }
+    .logo-box img { width: 100%; height: 100%; object-fit: contain; }
     .semis, .regno { font-size: 11px; font-weight: bold; white-space: nowrap; }
     /* --- Centered school identity --- */
     .school { text-align: center; flex: 1; padding: 0 8px; }
     .school .line-sm { font-size: 11px; }
+    .school .contact { font-size: 9px; }
     .school .name { font-size: 19px; font-weight: bold; margin: 2px 0; letter-spacing: .5px; }
     .report-title {
       text-align: center; font-weight: bold; font-size: 14px; margin: 8px 0 6px;
@@ -299,6 +307,9 @@ function buildReportCardSheet({
   marks = [],
   className,
   info,
+  examId,
+  gradeScale,
+  students = [],
   result = '—',
   rank = '—',
   attendancePresent,
@@ -306,11 +317,18 @@ function buildReportCardSheet({
   studentCount,
 }) {
   // Each student's className for lookups falls back to the passed-in className.
-  const cls = student?.className || className || '';
+  const cls = className || student?.reportClassName || student?.className || '';
   const safeExams = Array.isArray(exams) ? exams : [];
 
   // Compute the structured data once (shared with computeReportRows).
-  const report = computeReportRows({ student, exams: safeExams, marks, className: cls });
+  const report = computeReportRows({
+    student,
+    exams: safeExams,
+    marks,
+    className: cls,
+    examId,
+    gradeScale,
+  });
 
   // ----- Header rows for the marks table -------------------------------------
   // Row 1: SUBJECT | <ExamName colSpan=2> ... | GRADE | TOTAL
@@ -335,7 +353,7 @@ function buildReportCardSheet({
               <td class="subj">${esc(subjectRow.subject)}</td>
               ${examCells}
               <td class="num grade">${esc(subjectRow.grade)}</td>
-              <td class="num total">${esc(subjectRow.total)}</td>
+              <td class="num total">${esc(subjectRow.total)} / ${esc(subjectRow.totalMax)}</td>
             </tr>`;
         })
         .join('')
@@ -366,6 +384,34 @@ function buildReportCardSheet({
   const photoHtml = photoDataUrl
     ? `<img src="${esc(photoDataUrl)}" alt="Student photo" />`
     : 'PHOTO';
+  const activeExam = safeExams.find((exam) => String(exam?.id) === String(examId)) || safeExams[0];
+  const examTitle = activeExam?.name || 'ANNUAL PROGRESS REPORT';
+  const rankEntries = students.map((entry) => ({
+    student: entry,
+    percentage: computeReportRows({
+      student: entry,
+      exams: safeExams,
+      marks,
+      className: entry?.className || cls,
+      examId,
+      gradeScale,
+    }).percentage,
+  })).sort((a, b) => b.percentage - a.percentage);
+  let previousPercentage = null;
+  let previousRank = 0;
+  rankEntries.forEach((entry, index) => {
+    if (previousPercentage === null || Math.abs(entry.percentage - previousPercentage) > 0.000001) {
+      previousRank = index + 1;
+      previousPercentage = entry.percentage;
+    }
+    entry.rank = previousRank;
+  });
+  const rankEntry = rankEntries.find(({ student: entry }) =>
+    (entry?.id && student?.id && entry.id === student.id) ||
+    (entry?.admissionNumber && student?.admissionNumber && entry.admissionNumber === student.admissionNumber) ||
+    (entry?.displayName && entry.displayName === studentName(student))
+  );
+  const resolvedRank = rankEntry?.rank ?? rank;
 
   // ----- Single card markup (no document / <style> wrapper) ------------------
   return `
@@ -373,18 +419,19 @@ function buildReportCardSheet({
       <!-- Top bar -->
       <div class="topbar">
         <div style="display:flex;align-items:center;gap:8px;">
-          <div class="logo-box">LOGO</div>
+          <div class="logo-box"><img src="${esc(schoolLogo)}" alt="Marigold school logo" /></div>
           <div class="semis">SEMIS CODE:<br/>${esc(info.semisCode || '—')}</div>
         </div>
         <div class="school">
           <div class="line-sm">${esc(info.line1)}</div>
           <div class="name">${esc(info.name)}</div>
           <div class="line-sm">${esc(info.line2)}</div>
+          <div class="contact">${esc(info.email)} · ${esc(info.website)}</div>
         </div>
         <div class="regno">Reg No:<br/>${esc(info.regNo || '—')}</div>
       </div>
 
-      <div class="report-title">ANNUAL PROGRESS REPORT : ${esc(info.academicYear)}</div>
+      <div class="report-title">${esc(examTitle)} REPORT CARD : ${esc(info.academicYear)}</div>
 
       <!-- Student info -->
       <div class="info">
@@ -430,7 +477,7 @@ function buildReportCardSheet({
         <div class="cell"><b>Attendance :</b> ${attendanceText}</div>
         <div class="cell"><b>No. of Students :</b> ${studentCountText}</div>
         <div class="cell"><b>Percentage :</b> ${esc(percentageText)}</div>
-        <div class="cell"><b>Rank in Class :</b> ${esc(rank || '—')}</div>
+        <div class="cell"><b>Rank in Class :</b> ${esc(resolvedRank || '—')}</div>
         <div class="cell"><b>Over All Grade :</b> ${esc(report.overallGrade)}</div>
       </div>
 
@@ -487,6 +534,9 @@ export function printReportCard({
   exams = [],
   marks = [],
   className,
+  examId,
+  gradeScale,
+  students = [],
   schoolInfo = {},
   result = '—',
   rank = '—',
@@ -502,6 +552,9 @@ export function printReportCard({
     marks,
     className,
     info,
+    examId,
+    gradeScale,
+    students,
     result,
     rank,
     attendancePresent,
@@ -530,6 +583,8 @@ export function printReportCardsForClass({
   exams = [],
   marks = [],
   className,
+  examId,
+  gradeScale,
   schoolInfo = {},
 }) {
   const info = { ...DEFAULT_SCHOOL_INFO, ...(schoolInfo || {}) };
@@ -553,6 +608,9 @@ export function printReportCardsForClass({
         marks,
         className, // each student's className falls back to this inside the helper
         info,
+        examId,
+        gradeScale,
+        students: roster,
         studentCount,
       })
     )

@@ -80,6 +80,14 @@ const EMPTY_EXAMINATION_STATE = {
   deliveries: [],
   boardClasses: [],
   boardResults: [],
+  gradeScale: [
+    { grade: 'A', minPercentage: 90 },
+    { grade: 'B', minPercentage: 80 },
+    { grade: 'C', minPercentage: 70 },
+    { grade: 'D', minPercentage: 60 },
+    { grade: 'E', minPercentage: 50 },
+    { grade: 'F', minPercentage: 0 },
+  ],
 };
 
 const ensureMongo = (_request, response, next) => {
@@ -101,6 +109,9 @@ const normalizeState = (state = {}) => ({
   deliveries: Array.isArray(state.deliveries) ? state.deliveries : [],
   boardClasses: Array.isArray(state.boardClasses) ? state.boardClasses : [],
   boardResults: Array.isArray(state.boardResults) ? state.boardResults : [],
+  gradeScale: Array.isArray(state.gradeScale) && state.gradeScale.length === 6
+    ? state.gradeScale
+    : EMPTY_EXAMINATION_STATE.gradeScale,
 });
 
 router.get('/state', ensureMongo, async (_request, response) => {

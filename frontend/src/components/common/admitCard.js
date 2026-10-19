@@ -17,13 +17,16 @@
 //   schedule  : [{ subject, date, startTime, endTime, examId?, className? }]
 //   schoolInfo: { name, line1, line2, regNo }
 // ---------------------------------------------------------------------------
+import schoolLogo from '../../assets/logo.png';
 
 // Marigold defaults used whenever the caller omits schoolInfo fields.
 const DEFAULT_SCHOOL_INFO = {
   name: 'MARIGOLD PUBLIC SECONDARY SCHOOL, BEHROR',
   line1: '(Recognized by Govt. of Rajasthan / Affiliated to RBSE Board)',
-  line2: '',
-  regNo: '',
+  line2: 'NEAR NAGARPALIKA BOARD, HAMINDPUR ROAD BEHROR',
+  regNo: '52/ALW/2000',
+  email: 'marigoldvijay@gmail.com',
+  website: 'www.marigoldschoolbehror.com',
 };
 
 // -- helpers ----------------------------------------------------------------
@@ -141,11 +144,14 @@ const cardStyles = `
     text-align: center;
     flex: 0 0 auto;
     line-height: 1.1;
+    overflow: hidden;
   }
+  .ac-logo img { width: 100%; height: 100%; object-fit: contain; }
   .ac-head-text { flex: 1; text-align: center; }
   .ac-school-name { font-size: 21px; font-weight: bold; letter-spacing: 0.5px; margin: 0; }
   .ac-school-line { font-size: 11px; margin: 2px 0 0; }
   .ac-reg { font-size: 10px; margin: 2px 0 0; }
+  .ac-contact { font-size: 9px; margin: 2px 0 0; }
 
   .ac-title {
     text-align: center;
@@ -294,12 +300,13 @@ const buildCardHtml = ({ student, exam, schedule, schoolInfo }) => {
   return `
     <div class="admit-card">
       <div class="ac-header">
-        <div class="ac-logo">LOGO</div>
+        <div class="ac-logo"><img src="${escapeHtml(schoolLogo)}" alt="Marigold school logo" /></div>
         <div class="ac-head-text">
           <p class="ac-school-name">${escapeHtml(info.name)}</p>
           <p class="ac-school-line">${escapeHtml(info.line1)}</p>
           ${line2}
           ${regLine}
+          <p class="ac-contact">${escapeHtml(info.email)} · ${escapeHtml(info.website)}</p>
         </div>
       </div>
 
