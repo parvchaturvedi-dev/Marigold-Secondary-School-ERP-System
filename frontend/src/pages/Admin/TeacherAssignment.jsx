@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { UserSquare2, Plus, Trash2, GraduationCap, Briefcase, FileText, CheckCircle2, BookOpen } from 'lucide-react';
+import { UserSquare2, Plus, Trash2, GraduationCap, Briefcase, FileText, Upload, BookOpen } from 'lucide-react';
 import { useMongoState } from '../../components/common/mongoState';
 import { useMasterData } from '../../components/common/masterData';
 
@@ -31,6 +31,8 @@ const TeacherAssignment = () => {
 
   const [, setTeachersDb] = useMongoState('admin-teacher-management-list', []);
   const [, setClassesDb] = useMongoState('admin-class-management-classes', []);
+  const [roleDocuments, , documentState] = useMongoState('admin-document-requirements', { Teacher: [] });
+  const teacherDocuments = Array.isArray(roleDocuments?.Teacher) ? roleDocuments.Teacher : [];
 
   // Native Standard Inputs Mutator
   const handleInputChange = (e) => {
@@ -90,13 +92,12 @@ const TeacherAssignment = () => {
     setTeacherForm(prev => ({ ...prev, classAssignments: updatedAssign }));
   };
 
-  // Mock document file target scanner
-  const [attachedFiles, setAttachedFiles] = useState([]);
-  const handleFileChange = (e) => {
-    if (e.target.files.length > 0) {
-      const filesArray = Array.from(e.target.files).map(f => f.name);
-      setAttachedFiles(filesArray);
-    }
+  const [uploadedFiles, setUploadedFiles] = useState({});
+  const handleDocumentChange = (documentName, file) => {
+    setUploadedFiles((current) => ({
+      ...current,
+      [documentName]: file?.name || '',
+    }));
   };
 
   // CORE FORM EXECUTION ENGINE SUBMIT ACTION
@@ -114,7 +115,15 @@ const TeacherAssignment = () => {
     const finalRecord = {
       ...teacherForm,
       id: `TCH-2026-${Math.floor(100 + Math.random() * 900)}`,
-      documentsAttached: attachedFiles
+      documentsAttached: Object.values(uploadedFiles).filter(Boolean),
+      documents: Object.entries(uploadedFiles)
+        .filter(([, file]) => file)
+        .map(([name, file]) => ({
+          name,
+          file,
+          status: 'Pending',
+          uploadedAt: new Date().toISOString(),
+        })),
     };
 
     setTeachersDb(prev => [finalRecord, ...prev]);
@@ -154,7 +163,7 @@ const TeacherAssignment = () => {
       classAssignments: [{ className: '', subject: '' }],
       isClassTeacher: 'No', assignedClassTeacherFor: ''
     });
-    setAttachedFiles([]);
+    setUploadedFiles({});
   };
 
   // SMART LOGIC FLAGS FOR PARENT IDENTITY INPUT BLOCKS
@@ -431,26 +440,46 @@ const TeacherAssignment = () => {
           </div>
         </div>
 
-        {/* BLOCK PART 5: STANDARD DOCUMENT ASSETS VAULT TRACK */}
-        <div className="glass-card p-6 rounded-3xl space-y-3">
+        {/* BLOCK PART 5: CONFIGURED DOCUMENT CHECKLIST */}
+        <div className="glass-card p-6 rounded-3xl space-y-4">
           <h4 className="text-[11px] uppercase tracking-wider text-slate-500 flex items-center gap-1.5 border-b border-slate-100/80 pb-2">
-            <FileText className="w-3.5 h-3.5 text-indigo-500" /> 4. Document Verification Pack Attachments
+            <FileText className="w-3.5 h-3.5 text-indigo-500" /> 4. Required Documents Vault
           </h4>
-          <div className="relative">
-            <input type="file" multiple onChange={handleFileChange} className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10" />
-            <div className="w-full py-6 bg-white/50 border border-dashed border-white/80 rounded-2xl text-center font-medium text-slate-500 hover:border-indigo-400 transition-all">
-              <span>Click to map scanned assets packet copies (.PDF degree credentials, experience cards, verification slips)</span>
-              {attachedFiles.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-2 justify-center font-mono text-[10px]">
-                  {attachedFiles.map((f, i) => (
-                    <span key={i} className="bg-white/70 border border-white/80 text-slate-900 px-2 py-0.5 rounded-md flex items-center gap-1">
-                      <CheckCircle2 className="w-3 h-3 text-emerald-600" /> {f}
+          {documentState.error && (
+            <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-bold text-red-700">
+              Could not load document requirements: {documentState.error}
+            </p>
+          )}
+          {teacherDocuments.length ? (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {teacherDocuments.map((documentName, index) => (
+                <div key={`${documentName}-${index}`} className="glass-soft flex flex-col justify-between gap-3 rounded-2xl p-4 text-xs font-semibold">
+                  <div>
+                    <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Field Check #{index + 1}</span>
+                    <label className="mt-0.5 block font-black text-slate-900">
+                      {documentName} <span className="text-red-500">*</span>
+                    </label>
+                  </div>
+                  <label className="relative flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-slate-200 bg-white/60 p-3 transition-all hover:border-indigo-400">
+                    <input
+                      type="file"
+                      accept=".jpg,.jpeg,.png,.webp,.pdf"
+                      onChange={(event) => handleDocumentChange(documentName, event.target.files?.[0])}
+                      className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                    />
+                    <Upload className="h-4 w-4 shrink-0 text-slate-500" />
+                    <span className="max-w-full truncate text-[11px] font-medium text-slate-500">
+                      {uploadedFiles[documentName] || 'Upload File (.PDF, .JPG)'}
                     </span>
-                  ))}
+                  </label>
                 </div>
-              )}
+              ))}
             </div>
-          </div>
+          ) : (
+            <p className="rounded-xl border border-dashed border-slate-300 p-5 text-center text-xs font-semibold text-slate-500">
+              No teacher documents configured. Add requirements from Documents Management.
+            </p>
+          )}
         </div>
 
         {/* SUBMIT BUTTON FOOTER CONTROL ACTION BAR */}

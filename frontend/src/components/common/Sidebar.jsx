@@ -37,6 +37,7 @@ import {
   Info,
   BriefcaseBusiness,
   FileCheck2,
+  History,
 } from 'lucide-react';
 import Logo from '../../assets/logo.png';
 
@@ -221,7 +222,7 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
     { name: 'Users Management', icon: Lock },
     { name: 'Vault', icon: Lock },
     { name: 'Subject Management', icon: BookOpen },
-    { name: 'Certification', icon: Award, badge: 'Soon' },
+    { name: 'Certification', icon: Award },
     { name: 'About Us', icon: Info },
     { name: 'Settings', icon: Settings }
   ];
@@ -269,6 +270,7 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
         { name: 'Sibling Assigning', icon: GitCommit },
       ],
     },
+    { name: 'Paathshala History', icon: History },
     { name: 'Documents Management', icon: FileText },
     { name: 'Events', icon: PartyPopper },
     {
@@ -294,7 +296,7 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
     { name: 'My Salary', icon: Wallet },
     { name: 'Vault', icon: Lock },
     { name: 'Subject Management', icon: BookOpen },
-    { name: 'Certification', icon: Award, badge: 'Soon' },
+    { name: 'Certification', icon: Award },
     { name: 'About Us', icon: Info },
     { name: 'Settings', icon: Settings },
   ];
@@ -316,7 +318,7 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
     { name: 'Notices', icon: Bell },
     { name: 'Profile', icon: User },
     { name: 'Vault', icon: Lock },
-    { name: 'Certification', icon: Award, badge: 'Soon' },
+    { name: 'Certification', icon: Award },
     { name: 'About Us', icon: Info },
     { name: 'Settings', icon: Settings },
   ];
@@ -346,7 +348,7 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
     { name: 'Profile', icon: User },
     { name: 'My Salary', icon: Wallet },
     { name: 'Vault', icon: Lock },
-    { name: 'Certification', icon: Award, badge: 'Soon' },
+    { name: 'Certification', icon: Award },
     { name: 'About Us', icon: Info },
     { name: 'Settings', icon: Settings },
   ];
@@ -367,7 +369,9 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
     employee: employeeMenuItems,
   };
 
-  const menuItems = roleMenuItems[role] || adminMenuItems;
+  const menuItems = (roleMenuItems[role] || adminMenuItems).filter(
+    (item) => item.name !== 'Paathshala History' || window.mgpsDesktop?.isDesktop
+  );
 
   const isGroupActive = (item) => {
     if (!item.hasSub) return currentActive === item.name;

@@ -1,4 +1,5 @@
 const { app, BrowserWindow, ipcMain, safeStorage, shell } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const { createServer } = require('node:http');
 const { readFile } = require('node:fs/promises');
 const path = require('node:path');
@@ -6,6 +7,9 @@ const { createSessionStore } = require('./sessionStore.cjs');
 
 let sessionStore;
 let packagedUiServer;
+let mainWindow;
+let manualUpdateCheck = false;
+let updateCheckTimer;
 const contentTypes = {
   '.css': 'text/css; charset=utf-8',
   '.gif': 'image/gif',
@@ -61,6 +65,67 @@ const registerArchiveIpc = () => {
   register('mgps:archives:set-active', (id) => sessionStore.setActiveSession(id));
   register('mgps:archives:rename', (id, name) => sessionStore.rename(id, name));
   register('mgps:archives:delete-draft', (id) => sessionStore.deleteDraft(id));
+
+  register('mgps:updates:check', async () => {
+    if (!app.isPackaged) return { status: 'development-build' };
+    manualUpdateCheck = true;
+    try {
+      await autoUpdater.checkForUpdates();
+      return { status: 'checking' };
+    } catch (error) {
+      manualUpdateCheck = false;
+      throw error;
+    }
+  });
+  register('mgps:updates:download', () => autoUpdater.downloadUpdate());
+  register('mgps:updates:install', () => autoUpdater.quitAndInstall(false, true));
+};
+
+const sendUpdateStatus = (status) => {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send('mgps:updates:status', status);
+};
+
+const registerAutoUpdater = () => {
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = false;
+  autoUpdater.on('checking-for-update', () => {
+    if (manualUpdateCheck) sendUpdateStatus({ status: 'checking' });
+  });
+  autoUpdater.on('update-available', (info) => {
+    manualUpdateCheck = false;
+    sendUpdateStatus({ status: 'available', version: info.version });
+  });
+  autoUpdater.on('update-not-available', (info) => {
+    if (!manualUpdateCheck) return;
+    manualUpdateCheck = false;
+    sendUpdateStatus({ status: 'up-to-date', version: info.version });
+  });
+  autoUpdater.on('download-progress', (progress) => {
+    sendUpdateStatus({ status: 'downloading', percent: Math.round(progress.percent) });
+  });
+  autoUpdater.on('update-downloaded', (info) => {
+    sendUpdateStatus({ status: 'downloaded', version: info.version });
+  });
+  autoUpdater.on('error', (error) => {
+    if (manualUpdateCheck) {
+      manualUpdateCheck = false;
+      sendUpdateStatus({ status: 'error', message: error.message });
+    } else {
+      console.error('Automatic desktop update check failed:', error);
+    }
+  });
+
+  if (app.isPackaged) {
+    const checkForUpdates = () => {
+      autoUpdater.checkForUpdates().catch((error) => {
+        console.error('Automatic desktop update check failed:', error);
+      });
+    };
+    setTimeout(checkForUpdates, 8000);
+    updateCheckTimer = setInterval(checkForUpdates, 4 * 60 * 60 * 1000);
+    updateCheckTimer.unref();
+  }
 };
 
 const servePackagedUi = async () => {
@@ -129,7 +194,7 @@ const createWindow = async () => {
     safeStorage,
   });
 
-  const window = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 1440,
     height: 960,
     minWidth: 1080,
@@ -144,24 +209,28 @@ const createWindow = async () => {
     },
   });
 
-  window.webContents.setWindowOpenHandler(({ url }) => {
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('https://')) shell.openExternal(url);
     return { action: 'deny' };
   });
-  window.webContents.on('will-navigate', (event, url) => {
+  mainWindow.webContents.on('will-navigate', (event, url) => {
     if (!isTrustedFrame(url)) event.preventDefault();
   });
 
   if (app.isPackaged) {
     const port = await servePackagedUi();
-    await window.loadURL(`http://127.0.0.1:${port}`);
+    await mainWindow.loadURL(`http://127.0.0.1:${port}`);
   } else {
-    await window.loadURL(process.env.MGPS_DESKTOP_DEV_URL || 'http://127.0.0.1:5173');
+    await mainWindow.loadURL(process.env.MGPS_DESKTOP_DEV_URL || 'http://127.0.0.1:5173');
   }
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
 };
 
 app.whenReady().then(() => {
   registerArchiveIpc();
+  registerAutoUpdater();
   return createWindow();
 }).catch((error) => {
   console.error('MGPS Clerk desktop startup failed:', error);
@@ -173,6 +242,8 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+  clearInterval(updateCheckTimer);
+  autoUpdater.removeAllListeners();
   sessionStore?.close();
   packagedUiServer?.close();
 });

@@ -28,24 +28,16 @@ try {
   
   const users = await User.find({}).lean();
   console.log(`Total users in DB: ${users.length}`);
-  
+  let usersWithDeviceRestrictions = 0;
   for (const u of users) {
     const profile = u.profile || {};
     const hardwareId = profile.assignedHardwareId || profile.hardwareDeviceId || profile.deviceId || '';
     const pending = profile.pendingDeviceApproval;
-    
-    if (hardwareId || pending) {
-      console.log(`User: ${u.username} (${u.role})`);
-      console.log(` - Active: ${u.isActive}`);
-      console.log(` - Assigned Hardware ID: "${hardwareId}"`);
-      if (pending) {
-        console.log(` - Pending Approval Device ID: "${pending.deviceId}" (Requested at: ${pending.requestedAt})`);
-      }
-      console.log("-----------------------------------------");
-    }
+    if (hardwareId || pending) usersWithDeviceRestrictions += 1;
   }
-  
+  console.log(`Users with device restrictions or pending approvals: ${usersWithDeviceRestrictions}`);
+
   await mongoose.disconnect();
 } catch (err) {
-  console.error("Error:", err);
+  console.error("Database inspection failed:", err?.name || "Unknown error");
 }

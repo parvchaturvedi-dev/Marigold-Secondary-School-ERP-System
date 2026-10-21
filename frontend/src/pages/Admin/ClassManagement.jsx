@@ -1,52 +1,10 @@
 import React, { useState } from 'react';
-import { Layers, ArrowRightLeft, Users, UserCheck } from 'lucide-react';
+import { Layers, Users, UserCheck } from 'lucide-react';
 import ClassDetail from './ClassDetail';
 import { useMongoState } from '../../components/common/mongoState';
 import { getClassName, sortClassNames, useMasterData } from '../../components/common/masterData';
-import { apiFetch } from '../../components/common/api';
-import {
-  getClassOrder,
-  getStudentClassName,
-  ensureClassRow,
-  isLastClass,
-  nextClassName as getNextClassName,
-  studentHasPending,
-} from '../../components/common/financeData';
 
 const getTeacherId = (teacher = {}) => teacher.id || teacher.teacherId || teacher.empId || teacher.employeeId || '';
-
-const normalizeClassKey = (className = '') => String(className).trim().toLowerCase();
-
-// Promote a student into the next class, keeping the ledger intact and
-// pre-creating an empty fee row for the new class so admins can assign it.
-const promoteStudentToClass = (student, nextClass, currentClassName) => {
-  const withNewRow = ensureClassRow(student, nextClass);
-  return {
-    ...withNewRow,
-    previousClass: currentClassName,
-    class: nextClass,
-    className: nextClass,
-    targetClass: nextClass,
-    promotedOut: false,
-    status: withNewRow.status || 'Active',
-    rawProfile: {
-      ...(withNewRow.rawProfile || {}),
-      targetClass: nextClass,
-    },
-  };
-};
-
-// Mark a student as graduated/passed-out, moving them out of the active roster.
-const markStudentPassedOut = (student, currentClassName) => ({
-  ...student,
-  previousClass: currentClassName,
-  promotedOut: true,
-  status: 'Passed Out',
-  rawProfile: {
-    ...(student.rawProfile || {}),
-    targetClass: '',
-  },
-});
 
 const resolveClassTeacher = (classRecord = {}, teachers = []) => {
   const storedTeacherId = classRecord.classTeacherId || classRecord.teacherId || '';
@@ -72,10 +30,9 @@ const ClassManagement = () => {
   const [selectedClassContext, setSelectedClassContext] = useState(null);
 
   // Main Dashboard Workspace State
-  const [classes, setClasses] = useMongoState('admin-class-management-classes', []);
+  const [classes] = useMongoState('admin-class-management-classes', []);
   const [orderedClasses] = useMongoState('admin-class-preferences', []);
-  const [, setAlumniPending] = useMongoState('admin-finance-alumni-pending', []);
-  const { classes: derivedClasses, teachers, raw, actions } = useMasterData();
+  const { classes: derivedClasses, teachers } = useMasterData();
   const hierarchySequence = orderedClasses.length
     ? orderedClasses.map(getClassName).filter(Boolean)
     : sortClassNames([...(derivedClasses.length ? derivedClasses : classes).map(getClassName)]);
@@ -95,110 +52,6 @@ const ClassManagement = () => {
       };
     })
     .sort((a, b) => rankClass(a.name) - rankClass(b.name) || String(a.name).localeCompare(String(b.name)));
-
-  // MOVE TO NEXT JOURNEY (Session Promotion Core Business Logic)
-  const handleNextJourneyPromotion = async () => {
-    const confirmation = window.confirm(
-      "CRITICAL ACTION:\nAre you sure you want to trigger the 'Next Journey' promotion?\nAll students will be shifted to their immediate next hierarchal class level."
-    );
-    if (!confirmation) return;
-
-    const classOrder = getClassOrder(orderedClasses);
-
-    if (classOrder.length === 0) {
-      alert('Please configure class hierarchy in Class Preferences before promotion.');
-      return;
-    }
-
-    let promotedCount = 0;
-    let retainedCount = 0;
-    let graduatedCount = 0;
-    let movedToPendingCount = 0;
-    const newAlumni = [];
-
-    const remainingStudents = [];
-
-    raw.students.forEach((student) => {
-      const currentClassName = getStudentClassName(student);
-
-      // Retained: repeating students stay exactly as-is.
-      if (student.isRepeating) {
-        retainedCount += 1;
-        remainingStudents.push(student);
-        return;
-      }
-
-      // Unknown/unranked class: leave untouched (can't determine next step).
-      if (!currentClassName || classOrder.every((name) => normalizeClassKey(name) !== normalizeClassKey(currentClassName))) {
-        remainingStudents.push(student);
-        return;
-      }
-
-      if (isLastClass(currentClassName, classOrder)) {
-        if (studentHasPending(student)) {
-          // Fees still due at the last class -> move to alumni pending bucket.
-          movedToPendingCount += 1;
-          newAlumni.push(markStudentPassedOut(student, currentClassName));
-        } else {
-          // Fully paid -> graduated, drop from active roster entirely.
-          graduatedCount += 1;
-        }
-        return;
-      }
-
-      const nextClass = getNextClassName(currentClassName, classOrder);
-      promotedCount += 1;
-      remainingStudents.push(promoteStudentToClass(student, nextClass, currentClassName));
-    });
-
-    if (promotedCount === 0 && graduatedCount === 0 && movedToPendingCount === 0) {
-      alert('No eligible students found for promotion. Please check class hierarchy and roster allocation.');
-      return;
-    }
-
-    const studentCountByClass = remainingStudents.reduce((acc, student) => {
-      const className = getStudentClassName(student);
-      if (className) acc[className] = (acc[className] || 0) + 1;
-      return acc;
-    }, {});
-
-    actions.setStudents(remainingStudents);
-    if (newAlumni.length) {
-      setAlumniPending((currentAlumni) => [...(currentAlumni || []), ...newAlumni]);
-    }
-    setClasses((currentClasses) => {
-      const classMap = new Map(currentClasses.map((classRecord) => [getClassName(classRecord), classRecord]));
-      classOrder.forEach((className) => {
-        if (!classMap.has(className)) {
-          classMap.set(className, { id: className, name: className });
-        }
-      });
-
-      return [...classMap.values()].map((classRecord) => ({
-        ...classRecord,
-        studentCount: studentCountByClass[getClassName(classRecord)] || 0,
-      }));
-    });
-
-    // A new session starts with a clean assignment board and notice board.
-    // (Events are not cleared here — they expire on their own five days after
-    // the event date.)
-    let resetNote = '';
-    try {
-      await apiFetch('/assignments/reset', { method: 'POST' });
-    } catch (resetError) {
-      resetNote = `\n\nNote: Assignment reset for the new session failed (${resetError.message}). Please retry from Assignments.`;
-    }
-    try {
-      await apiFetch('/notices/reset', { method: 'POST' });
-    } catch (resetError) {
-      resetNote += `\n\nNote: Notice reset for the new session failed (${resetError.message}). Please retry from Notices.`;
-    }
-
-    alert(
-      `Academic journey shifted successfully!\nPromoted: ${promotedCount}\nRetained/repeating: ${retainedCount}\nGraduated (fully paid): ${graduatedCount}\nMoved to pending (alumni dues): ${movedToPendingCount}${resetNote}`
-    );
-  };
 
   // If a card was triggered, swap engine to detail component view dynamically
   if (selectedClassContext) {
@@ -224,13 +77,6 @@ const ClassManagement = () => {
           </p>
         </div>
 
-        {/* PROMOTION JOURNEY TRIGGER BUTTON */}
-        <button 
-          onClick={handleNextJourneyPromotion}
-          className="flex items-center justify-center gap-2 px-6 py-2.5 btn-primary rounded-full text-sm font-semibold shadow-xs "
-        >
-          <ArrowRightLeft className="w-4 h-4" /> Move to Next Journey
-        </button>
       </div>
 
       {/* CLASSCARDS DYNAMIC WORKSPACE GRID */}

@@ -69,6 +69,37 @@ test('encrypted session archive CRUD and snapshot immutability', async (t) => {
   const snapshot = store.createSnapshot('2023-24 Backup', {
     tables: { students: [{ name: 'Archived Student' }] },
   }, 1);
+  const imported = store.createSnapshotsBatch([
+    {
+      name: 'Paathshala 2014-15',
+      payload: { collections: { 'paathshala-history': { sessionId: 1, tables: {} } } },
+      recordCount: 12,
+    },
+    {
+      name: 'Paathshala 2015-16',
+      payload: { collections: { 'paathshala-history': { sessionId: 14, tables: {} } } },
+      recordCount: 18,
+    },
+  ]);
+  assert.deepEqual(imported.map(({ name, status, recordCount }) => ({ name, status, recordCount })), [
+    { name: 'Paathshala 2014-15', status: 'complete', recordCount: 12 },
+    { name: 'Paathshala 2015-16', status: 'complete', recordCount: 18 },
+  ]);
+  assert.throws(
+    () => store.createSnapshotsBatch([
+      { name: 'Must Roll Back', payload: { tables: {} }, recordCount: 1 },
+      { name: snapshot.name, payload: { tables: {} }, recordCount: 1 },
+    ]),
+    /already exists/
+  );
+  assert.equal(store.list().some(({ name }) => name === 'Must Roll Back'), false);
+  assert.throws(
+    () => store.createSnapshotsBatch([
+      { name: 'Duplicate Batch', payload: { tables: {} }, recordCount: 1 },
+      { name: ' duplicate batch ', payload: { tables: {} }, recordCount: 1 },
+    ]),
+    /Duplicate session snapshot name/
+  );
   store.setActiveSession(snapshot.id);
   assert.throws(
     () => store.saveCollection(snapshot.id, 'admin-student-management-students', []),

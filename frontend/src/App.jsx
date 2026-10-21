@@ -194,6 +194,108 @@ function LoginRoute({ session, onLoginSuccess }) {
   return <Login onLoginSuccess={onLoginSuccess} />;
 }
 
+function DesktopUpdateNotice() {
+  const [update, setUpdate] = useState(null);
+
+  useEffect(() => {
+    const updater = window.mgpsDesktop?.updates;
+    if (!updater) return undefined;
+    return updater.onStatus(setUpdate);
+  }, []);
+
+  useEffect(() => {
+    if (update?.status !== 'downloaded') return undefined;
+    const installTimer = setTimeout(() => {
+      window.mgpsDesktop.updates.install().catch((error) => {
+        setUpdate({ status: 'error', message: error.message });
+      });
+    }, 1000);
+    return () => clearTimeout(installTimer);
+  }, [update]);
+
+  if (!update) return null;
+
+  const downloadUpdate = async () => {
+    setUpdate({ ...update, status: 'downloading', percent: 0 });
+    try {
+      await window.mgpsDesktop.updates.download();
+    } catch (error) {
+      setUpdate({ status: 'error', message: error.message });
+    }
+  };
+
+  const checkForUpdates = async () => {
+    setUpdate({ status: 'checking' });
+    try {
+      await window.mgpsDesktop.updates.check();
+    } catch (error) {
+      setUpdate({ status: 'error', message: error.message });
+    }
+  };
+
+  const isUpdateAvailable = update.status === 'available';
+  const isDownloading = update.status === 'downloading';
+  const isDownloaded = update.status === 'downloaded';
+  const isError = update.status === 'error';
+  const isUpToDate = update.status === 'up-to-date';
+  const isChecking = update.status === 'checking';
+
+  return (
+    <aside
+      aria-live="polite"
+      className="fixed bottom-5 right-5 z-[100] w-[min(24rem,calc(100vw-2.5rem))] rounded-2xl border border-indigo-200 bg-white p-5 shadow-2xl"
+      role={isError ? 'alert' : 'status'}
+    >
+      {!isDownloading && !isDownloaded && (
+        <button
+          aria-label="Dismiss update message"
+          className="absolute right-3 top-3 text-lg font-bold text-slate-400 hover:text-slate-700"
+          onClick={() => setUpdate(null)}
+          type="button"
+        >
+          ×
+        </button>
+      )}
+      <h2 className="pr-6 text-sm font-black text-slate-900">
+        {isUpdateAvailable && `MGPS ERP update ${update.version} is ready`}
+        {isChecking && 'Checking for MGPS ERP updates'}
+        {isDownloading && 'Downloading MGPS ERP update'}
+        {isDownloaded && 'Installing update'}
+        {isError && 'Update could not be completed'}
+        {isUpToDate && 'MGPS ERP is up to date'}
+      </h2>
+      <p className="mt-2 text-xs font-semibold text-slate-600">
+        {isUpdateAvailable && 'Download the latest version now. Your local session archives are kept on this computer.'}
+        {isChecking && 'Looking for a newer version…'}
+        {isDownloading && `${update.percent || 0}% downloaded. You can keep using the app.`}
+        {isDownloaded && `Version ${update.version} is ready. The app will restart to finish installing.`}
+        {isError && update.message}
+        {isUpToDate && `You are using the latest version${update.version ? ` (${update.version})` : ''}.`}
+      </p>
+      {isDownloading && (
+        <div className="mt-3 h-2 overflow-hidden rounded-full bg-indigo-100">
+          <div
+            className="h-full rounded-full bg-indigo-600 transition-all"
+            style={{ width: `${Math.max(0, Math.min(100, update.percent || 0))}%` }}
+          />
+        </div>
+      )}
+      <div className="mt-4 flex justify-end gap-2">
+        {isUpdateAvailable && (
+          <button className="btn-primary rounded-xl px-4 py-2 text-xs font-black" onClick={downloadUpdate} type="button">
+            Update now
+          </button>
+        )}
+        {(isError || isUpToDate) && (
+          <button className="btn-secondary rounded-xl px-4 py-2 text-xs font-black" onClick={checkForUpdates} type="button">
+            Check again
+          </button>
+        )}
+      </div>
+    </aside>
+  );
+}
+
 function PortalShell({ role, session, onLogout, onStudentChange }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -356,6 +458,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <AppRoutes />
+      <DesktopUpdateNotice />
     </BrowserRouter>
   );
 }

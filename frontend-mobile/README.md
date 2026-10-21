@@ -1,50 +1,51 @@
-# Welcome to your Expo app 👋
+# MGPS ERP Mobile releases
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+## Install once
 
-## Get started
+Build and install the production APK once. This APK is configured to receive
+Expo OTA updates from the `production` channel:
 
-1. Install dependencies
-
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```powershell
+npm run build:android:production
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Install the APK from the build link over the existing app. Do not uninstall
+first; Android can keep the app's local data when the package name and signing
+key match. If Android rejects the update because the signing key is different,
+the APK must be signed with the same key as the installed version before it can
+be installed in place.
 
-## Learn more
+## Publish JavaScript and UI updates
 
-To learn more about developing your project with Expo, look at the following resources:
+For changes that do not add or change native Android/iOS code or native
+dependencies, publish an OTA update:
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+```powershell
+npm run update:production -- --message "Describe the update"
+```
 
-## Join the community
+The app checks for production updates on launch, downloads the update in the
+background, and uses it on the next app restart. Users do not need to uninstall
+or manually install an APK. The phone must have internet access to receive the
+update.
 
-Join our community of developers creating universal apps.
+To test an update before releasing it to everyone, build a preview APK and
+publish to the preview channel:
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+```powershell
+npm run build:android:preview
+npm run update:preview -- --message "Describe the preview"
+```
+
+## Changes that need a new APK
+
+Native code, native dependencies, app permissions, or native app configuration
+cannot be delivered by an OTA update. Build a new APK instead:
+
+```powershell
+npm run build:android:production
+```
+
+Install that APK over the existing app; an uninstall should not be needed when
+the package name and signing key are unchanged. Keep the `production` channel
+and the app's `runtimeVersion` policy aligned with each build.

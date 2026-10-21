@@ -37,7 +37,7 @@ async function main() {
     await admin.save();
     console.log('Test admin user created');
   } catch (err) {
-    console.error('Error:', err);
+    console.error('Test admin setup failed:', err?.name || 'Unknown error');
   } finally {
     await mongoose.disconnect();
     console.log('Disconnected');

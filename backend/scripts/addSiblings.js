@@ -257,16 +257,9 @@ async function main() {
   ]);
 
   console.log('\n============== SIBLINGS ADDED ==============');
-  summary.forEach((f) => {
-    console.log(`\n👨‍👩‍👧 Family: ${f.family}`);
-    console.log(`   Login: ${f.login}  (password: ${f.login}@MGPS)`);
-    f.members.forEach((m) => console.log(`     • ${m}`));
-  });
+  console.log(`Sibling groups added or already present: ${summary.length}`);
   console.log(`\nTotal student logins (active): ${studentLogins}`);
   console.log(`Family (sibling) login accounts: ${familyLogins.length}`);
-  familyLogins.forEach((f) => {
-    console.log(`   - ${f.username}: ${(f.profile?.studentProfiles || []).length} children`);
-  });
   console.log('============================================\n');
 
   await mongoose.disconnect();
@@ -275,7 +268,7 @@ async function main() {
 }
 
 main().catch(async (error) => {
-  console.error('❌ Failed:', error);
+  console.error('❌ Failed:', error?.name || 'Unknown error');
   try {
     await mongoose.disconnect();
   } catch {

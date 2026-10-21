@@ -45,4 +45,14 @@ contextBridge.exposeInMainWorld('mgpsDesktop', Object.freeze({
       return () => window.removeEventListener('mgps-desktop-active-session', listener);
     },
   }),
+  updates: Object.freeze({
+    check: () => ipcRenderer.invoke('mgps:updates:check'),
+    download: () => ipcRenderer.invoke('mgps:updates:download'),
+    install: () => ipcRenderer.invoke('mgps:updates:install'),
+    onStatus: (callback) => {
+      const listener = (event, status) => callback(status);
+      ipcRenderer.on('mgps:updates:status', listener);
+      return () => ipcRenderer.removeListener('mgps:updates:status', listener);
+    },
+  }),
 }));

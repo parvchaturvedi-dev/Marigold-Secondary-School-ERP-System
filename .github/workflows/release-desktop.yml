@@ -1,0 +1,36 @@
+name: Release MGPS ERP desktop app
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set package version from release tag
+        shell: bash
+        run: |
+          RELEASE_VERSION="${GITHUB_REF_NAME#v}"
+          node -e 'const fs=require("node:fs"); const version=process.argv[1]; const pkg=JSON.parse(fs.readFileSync("package.json","utf8")); const lock=JSON.parse(fs.readFileSync("package-lock.json","utf8")); pkg.version=version; lock.version=version; lock.packages[""].version=version; fs.writeFileSync("package.json", JSON.stringify(pkg,null,2)+"\n"); fs.writeFileSync("package-lock.json", JSON.stringify(lock,null,2)+"\n");' "$RELEASE_VERSION"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build and publish Windows installer
+        run: npm run publish:desktop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

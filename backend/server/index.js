@@ -83,7 +83,7 @@ const corsOrigin = (origin, callback) => {
     return;
   }
 
-  const error = new Error(`CORS blocked for origin: ${origin}`);
+  const error = new Error(`CORS Blocked for Origin: ${origin}`);
   error.statusCode = 403;
   callback(error);
 };

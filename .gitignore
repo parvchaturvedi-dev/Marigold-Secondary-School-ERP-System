@@ -19,6 +19,9 @@ dist-ssr
 coverage
 .vite
 *.tsbuildinfo
+release/
+/release-print-1.0.3/
+/release-print-1.0.3-final/
 *.local
 .env
 .env.*
@@ -36,3 +39,4 @@ coverage
 *.njsproj
 *.sln
 *.sw?
+.neon

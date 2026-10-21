@@ -26,9 +26,6 @@ try {
   
   const admin = await User.findOne({ username: 'ADM-001' });
   if (admin) {
-    console.log("Found ADM-001 profile:");
-    console.log("Current Profile State:", JSON.stringify(admin.profile, null, 2));
-    
     // Clear device restrictions
     const profile = admin.profile || {};
     delete profile.assignedHardwareId;
@@ -40,13 +37,12 @@ try {
     admin.markModified('profile');
     
     await admin.save();
-    console.log("\nSuccess! ADM-001 device locks and pending requests have been cleared.");
-    console.log("Updated Profile State:", JSON.stringify(admin.profile, null, 2));
+    console.log("Success! Admin device restrictions and pending approvals have been cleared.");
   } else {
-    console.log("ADM-001 user not found.");
+    console.log("Admin account was not found.");
   }
   
   await mongoose.disconnect();
 } catch (err) {
-  console.error("Error:", err);
+  console.error("Device restriction update failed:", err?.name || "Unknown error");
 }

@@ -3,14 +3,14 @@ import { FolderGit, PlusCircle, Trash2, FileText, ArrowLeft } from 'lucide-react
 import { useMongoState } from '../../components/common/mongoState';
 
 const DocumentsManagement = () => {
-  // 4 Core Master Categories
-  const roles = ['Admin', 'Clerk', 'Teacher', 'Student'];
+  // Core master categories
+  const roles = ['Admin', 'Clerk', 'Teacher', 'Employee', 'Student'];
   
   // Selected Context Active State
   const [selectedRole, setSelectedRole] = useState(null);
   
   // Dynamic Master Document Mapping Matrix State
-  const emptyRoleDocuments = { Admin: [], Clerk: [], Teacher: [], Student: [] };
+  const emptyRoleDocuments = { Admin: [], Clerk: [], Teacher: [], Employee: [], Student: [] };
   const [roleDocuments, setRoleDocuments] = useMongoState('admin-document-requirements', emptyRoleDocuments);
 
   const [newDocName, setNewDocName] = useState('');

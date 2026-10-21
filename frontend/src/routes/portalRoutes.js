@@ -97,6 +97,7 @@ export const portalRoutes = {
       Attendance: lazyPage('../pages/Clerk/Attendance'),
       'Class Management': lazyPage('../pages/Clerk/ClassManagement'),
       'Class Preferences': lazyPage('../pages/Clerk/ClassPreferences'),
+      'Paathshala History': lazyPage('../pages/Clerk/PaathshalaHistory'),
       'Documents Management': lazyPage('../pages/Clerk/DocumentsManagement'),
       Events: lazyPage('../pages/Clerk/Events'),
       Examinations: lazyPage('../pages/Clerk/Examinations'),

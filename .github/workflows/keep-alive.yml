@@ -1,13 +1,13 @@
 name: Keep backend awake
 
-# Pings the Render backend every ~10 minutes so the free tier never spins down
-# (which would cause a 30-60s cold start on the next real request).
+# Pings the Render backend every ~5 minutes to reduce free-tier cold starts.
 # Note: GitHub disables scheduled workflows after 60 days with no repo activity,
-# and cron timing can drift a few minutes under load — both fine for this use.
+# and cron timing can drift a few minutes under load, so this cannot guarantee
+# the Render service will always stay awake.
 
 on:
   schedule:
-    - cron: "*/10 * * * *"
+    - cron: "*/5 * * * *"
   workflow_dispatch: {}
 
 jobs:

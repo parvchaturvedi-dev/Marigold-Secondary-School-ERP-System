@@ -458,6 +458,7 @@ npx expo start              # open in Expo Go / dev client
 | **Backend** | `npm start` (Render); auto-deploys on push to `main`. |
 | **Clerk Windows desktop (development)** | `npm run dev:desktop` opens the Clerk app against the local Vite frontend. |
 | **Clerk Windows installer** | `npm run build:desktop` creates an NSIS installer under `release/`. |
+| **Publish Clerk desktop update** | Push a semantic-version tag such as `v1.0.1`; `.github/workflows/release-desktop.yml` builds and publishes the installer and updater metadata to GitHub Releases. |
 | **Mobile (installable APK)** | `cd frontend-mobile && npx eas-cli build --platform android --profile production` (the `production` profile outputs an APK). Use `--profile preview` for internal test APKs. |
 | **Mobile (Play Store AAB)** | switch the `production` profile to the default bundle output, then `eas submit`. |
 
@@ -466,6 +467,12 @@ Push to `main` triggers Render (backend) + Vercel (web) auto-deploys.
 The `.github/workflows/keep-alive.yml` workflow requests `/api/health` every five minutes to reduce
 Render free-tier cold starts. GitHub schedule timing can drift or pause after prolonged repository
 inactivity, so it cannot guarantee the backend will always stay awake.
+
+Packaged desktop builds check GitHub Releases on launch and periodically. When an update is available,
+the app prompts the Clerk to update; choosing **Update now** downloads it and restarts the app to install.
+The first updater-enabled installer must be installed manually. After that, create and push a new
+semantic-version tag (for example, `v1.0.1`) to trigger the Windows release workflow. Keep the version
+tag greater than the previous release so Electron can identify it as an update.
 
 The Windows Clerk app uses an isolated Electron renderer and stores local session archives in an
 AES-256-GCM encrypted SQLite database. Windows `safeStorage` protects the encryption key. Clerk

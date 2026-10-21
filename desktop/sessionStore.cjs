@@ -165,21 +165,53 @@ const createSessionStore = ({ databasePath, keyPath, safeStorage }) => {
       });
     },
     createSnapshot(rawName, payload, recordCount) {
-      const name = normalizeName(rawName);
-      if (!name || name.length > 32) throw new Error('Enter a session name (maximum 32 characters).');
-      if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-        throw new Error('Session snapshot must be a JSON object.');
+      return this.createSnapshotsBatch([{ name: rawName, payload, recordCount }])[0];
+    },
+    createSnapshotsBatch(snapshots) {
+      if (!Array.isArray(snapshots) || snapshots.length === 0) {
+        throw new Error('At least one session snapshot is required.');
       }
-      if (Buffer.byteLength(JSON.stringify(payload), 'utf8') > 200 * 1024 * 1024) {
-        throw new Error('A local session snapshot cannot exceed 200 MB.');
-      }
-      return insertArchive({
-        name,
-        kind: 'snapshot',
-        status: 'complete',
-        payload,
-        recordCount,
+
+      const prepared = snapshots.map(({ name: rawName, payload, recordCount }) => {
+        const name = normalizeName(rawName);
+        if (!name || name.length > 32) {
+          throw new Error('Enter a session name (maximum 32 characters).');
+        }
+        if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+          throw new Error(`Session snapshot "${name}" must be a JSON object.`);
+        }
+        if (Buffer.byteLength(JSON.stringify(payload), 'utf8') > 200 * 1024 * 1024) {
+          throw new Error(`Session snapshot "${name}" cannot exceed 200 MB.`);
+        }
+        return {
+          name,
+          kind: 'snapshot',
+          status: 'complete',
+          payload,
+          recordCount,
+        };
       });
+
+      const names = new Set();
+      for (const { name } of prepared) {
+        const key = name.toLocaleLowerCase('en-US');
+        if (names.has(key)) throw new Error(`Duplicate session snapshot name: ${name}.`);
+        names.add(key);
+      }
+
+      db.exec('BEGIN IMMEDIATE');
+      try {
+        const existing = db.prepare('SELECT 1 FROM session_archives WHERE name = ? COLLATE NOCASE');
+        for (const { name } of prepared) {
+          if (existing.get(name)) throw new Error(`A local session named "${name}" already exists.`);
+        }
+        const created = prepared.map(insertArchive);
+        db.exec('COMMIT');
+        return created;
+      } catch (error) {
+        db.exec('ROLLBACK');
+        throw error;
+      }
     },
     read(id) {
       const row = db.prepare('SELECT * FROM session_archives WHERE id = ?').get(String(id || ''));

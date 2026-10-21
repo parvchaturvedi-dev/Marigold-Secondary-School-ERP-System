@@ -470,12 +470,7 @@ async function main() {
   console.log(`Clerks   (active logins): ${clerkCount}   [master records: ${clerks.length}]`);
   console.log(`Students (active logins): ${studentCount}   [master records: ${students.length}]`);
   console.log(`Classes: ${managedClasses.length}  →  ${CLASS_NAMES.join(', ')}`);
-  console.log('\nSample credentials (password = <username>@MGPS):');
-  console.log(`  Admin   : ${ADMINS[0].username}                / ${ADMINS[0].username}@MGPS`);
-  console.log(`  Admin   : ${ADMINS[1].username}                 / ${ADMINS[1].username}@MGPS`);
-  console.log(`  Clerk   : CLK-2026-101                / CLK-2026-101@MGPS`);
-  console.log(`  Teacher : ${teachers[0].id}                / ${teachers[0].id}@MGPS`);
-  console.log(`  Student : STD-${students[0].admissionNumber}    / STD-${students[0].admissionNumber}@MGPS`);
+  console.log('Sample login credentials are not written to the console.');
   console.log('================================================\n');
 
   await mongoose.disconnect();
@@ -484,7 +479,7 @@ async function main() {
 }
 
 main().catch(async (error) => {
-  console.error('❌ Seed failed:', error);
+  console.error('❌ Seed failed:', error?.name || 'Unknown error');
   try {
     await mongoose.disconnect();
   } catch {

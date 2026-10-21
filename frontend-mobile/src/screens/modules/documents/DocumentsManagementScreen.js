@@ -1,7 +1,7 @@
 // Documents Management — configure required-document checklists per role.
 // Mirrors web Admin/DocumentsManagement.jsx (namespace `admin-document-requirements`).
 // Web shape: an OBJECT mapping role -> array of plain string document labels:
-//   { Admin: [], Clerk: [], Teacher: [], Student: [] }
+//   { Admin: [], Clerk: [], Teacher: [], Employee: [], Student: [] }
 // Documents are plain strings (no `required` flag in the web source), so "edit"
 // here renames a label and delete removes it by exact string, matching the web
 // dedup/delete logic. We read/write the raw object via apiRequest to stay
@@ -28,8 +28,8 @@ import {
 import { useTheme } from "../../../theme/ThemeContext";
 
 const NAMESPACE = "admin-document-requirements";
-const ROLES = ["Admin", "Clerk", "Teacher", "Student"];
-const EMPTY = { Admin: [], Clerk: [], Teacher: [], Student: [] };
+const ROLES = ["Admin", "Clerk", "Teacher", "Employee", "Student"];
+const EMPTY = { Admin: [], Clerk: [], Teacher: [], Employee: [], Student: [] };
 
 // Normalise whatever the API returns into the canonical role->string[] object.
 function normalise(value) {
