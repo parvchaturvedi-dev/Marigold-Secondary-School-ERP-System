@@ -80,6 +80,7 @@ import {
   setBoardClassEnabled,
   submitPaperForApproval,
   updateGradeScale,
+  updateExaminationState,
   upsertMarksRecord,
   upsertScheduleRows,
 } from './examinationStore';
@@ -1575,6 +1576,31 @@ const PaperSelectedSection = ({ state }) => {
   );
 };
 
+const signatureImageToDataUrl = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error || new Error('Could not read the signature image.'));
+    reader.onload = () => {
+      const image = new Image();
+      image.onerror = () => reject(new Error('Could not load the signature image.'));
+      image.onload = () => {
+        const scale = Math.min(1, 900 / image.naturalWidth, 240 / image.naturalHeight);
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+        canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+        const context = canvas.getContext('2d');
+        if (!context) {
+          reject(new Error('Could not process the signature image.'));
+          return;
+        }
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/png'));
+      };
+      image.src = String(reader.result || '');
+    };
+    reader.readAsDataURL(file);
+  });
+
 const ReportCardManagementSection = ({ state, role, onRefresh }) => {
   const [examId, setExamId] = useState(state.exams[0]?.id || '');
   const [className, setClassName] = useState('Class 9');
@@ -1655,6 +1681,34 @@ const ReportCardManagementSection = ({ state, role, onRefresh }) => {
     alert('Grade thresholds saved.');
   };
 
+  const savePrincipalSignature = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      alert('Choose an image file for the principal signature.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Signature image must be 5 MB or smaller.');
+      return;
+    }
+
+    try {
+      const principalSignature = await signatureImageToDataUrl(file);
+      const nextState = updateExaminationState((current) => ({ ...current, principalSignature }));
+      onRefresh(nextState);
+      alert('Principal signature saved for report cards.');
+    } catch (error) {
+      alert(`Signature upload failed: ${error.message}`);
+    }
+  };
+
+  const removePrincipalSignature = () => {
+    const nextState = updateExaminationState((current) => ({ ...current, principalSignature: '' }));
+    onRefresh(nextState);
+  };
+
   const printAdmitCards = () => {
     printAdmitCardsForClass({
       students,
@@ -1726,6 +1780,42 @@ const ReportCardManagementSection = ({ state, role, onRefresh }) => {
                 />
               </Field>
             ))}
+          </div>
+          <div className="mt-5 flex flex-wrap items-center gap-4 border-t border-slate-100 pt-4">
+            <div className="min-w-0 flex-1">
+              <h4 className="text-xs font-black">Principal Signature</h4>
+              <p className="mt-1 text-[11px] font-bold text-slate-400">
+                Upload an image to print above the principal signature line on report cards.
+              </p>
+            </div>
+            {state.principalSignature && (
+              <div className="flex h-14 w-36 items-center justify-center rounded-xl border border-slate-200 bg-white p-2">
+                <img
+                  src={state.principalSignature}
+                  alt="Saved principal signature"
+                  className="max-h-full max-w-full object-contain"
+                />
+              </div>
+            )}
+            <label className="flex cursor-pointer items-center gap-2 rounded-full border border-white/70 bg-white px-4 py-2 text-xs font-black">
+              <ImagePlus className="h-4 w-4" />
+              {state.principalSignature ? 'Replace Signature' : 'Upload Signature'}
+              <input
+                type="file"
+                accept="image/*"
+                onChange={savePrincipalSignature}
+                className="hidden"
+              />
+            </label>
+            {state.principalSignature && (
+              <button
+                type="button"
+                onClick={removePrincipalSignature}
+                className="flex items-center gap-2 rounded-full border border-rose-100 bg-rose-50 px-4 py-2 text-xs font-black text-rose-600"
+              >
+                <X className="h-4 w-4" /> Remove
+              </button>
+            )}
           </div>
         </div>
 
@@ -1995,14 +2085,17 @@ const MarksManagementSection = ({ state, actor, role, session, onRefresh }) => {
       alert('Select an examination before printing report cards.');
       return;
     }
+    const reportExams = state.exams.filter(
+      (exam) => !selectedExam.academicYear || exam.academicYear === selectedExam.academicYear
+    );
     printReportCardsForClass({
       students: getStudentsForClass(className),
-      exams: [selectedExam],
-      examId: selectedExam.id,
+      exams: reportExams,
       marks: state.marks,
       className,
       gradeScale: state.gradeScale || DEFAULT_GRADE_SCALE,
       schoolInfo: { academicYear: selectedExam?.academicYear },
+      principalSignature: state.principalSignature,
     });
   };
 
@@ -2507,10 +2600,12 @@ const StudentExamView = ({ state, session }) => {
         (item.id && item.id === student.id) ||
         (item.admissionNumber && item.admissionNumber === student.admissionNumber)
     );
+    const reportExams = state.exams.filter(
+      (exam) => !selectedExam?.academicYear || exam.academicYear === selectedExam.academicYear
+    );
     printReportCard({
       student: reportStudent,
-      exams: selectedExam ? [selectedExam] : [],
-      examId: selectedExam?.id,
+      exams: reportExams,
       marks: state.marks,
       className: selectedOption.className,
       gradeScale: state.gradeScale || DEFAULT_GRADE_SCALE,
@@ -2518,6 +2613,7 @@ const StudentExamView = ({ state, session }) => {
         ? reportRoster
         : [...reportRoster, { ...student, className: selectedOption.className }],
       schoolInfo: { academicYear: selectedExam?.academicYear },
+      principalSignature: state.principalSignature,
     });
   };
 

@@ -27,10 +27,13 @@ const CERTIFICATE_TYPES = [
 ];
 const DEFAULT_TEMPLATE = {
   academic: {
-    title: 'Certificate Of Excellence',
+    title: 'Certificate',
     statement:
-      'This is to certify that {{studentName}}, S/O {{fatherName}}, a diligent student of Class {{className}} at Marigold Secondary School, Behror, has successfully completed {{examName}} for the academic year {{academicYear}} with remarkable performance of {{percentage}}%. The student has consistently demonstrated exceptional academic commitment, discipline, and perseverance throughout the year. The school takes immense pride in acknowledging this achievement and extends its heartfelt congratulations and best wishes for continued success and excellence in all future endeavours.',
+      'Of {{className}}, in recognition of {{achievement}}, dedication to learning, and a consistent pursuit of excellence during the academic session {{academicYear}}.',
     accentColor: '#174a73',
+    schoolName: 'Marigold Public Secondary School',
+    address: 'Behror, Rajasthan',
+    achievement: 'outstanding academic performance',
     examName: '',
     academicYear: '',
     percentage: '',
@@ -114,7 +117,7 @@ const CertificateField = ({ label, value, onChange, placeholder, type = 'text', 
   </label>
 );
 
-const CertificatePreview = ({ template, form, student, result, exam, type }) => {
+const CertificatePreview = ({ template, form, student, result, exam, type, paperRef }) => {
   const values = {
     studentName: student?.displayName || student?.name,
     fatherName: student?.fatherName,
@@ -135,34 +138,43 @@ const CertificatePreview = ({ template, form, student, result, exam, type }) => 
 
   return (
     <article
+      ref={paperRef}
       className={`certificate-builder-paper ${type.id === 'academic' ? 'certificate-builder-paper--academic' : ''}`}
       style={{ '--certificate-accent': form.accentColor }}
     >
       {type.id === 'academic' ? (
         <>
           <header className="certificate-academic-topband">
-            <strong>26 Years Of Excellence</strong>
-            <strong>Since 2000</strong>
-          </header>
-          <div className="certificate-academic-watermark" aria-hidden="true">
-            {Array.from({ length: 9 }, (_, index) => (
-              <span key={index}>MARIGOLD SECONDARY SCHOOL BEHROR · 26 YEARS OF EXCELLENCE ·</span>
-            ))}
-          </div>
-          <div className="certificate-academic-identity">
-            <div className="certificate-academic-medal" aria-hidden="true">
-              <span className="certificate-academic-medal-disc" />
-              <span className="certificate-academic-medal-ribbon" />
-            </div>
             <img src={schoolLogo} alt="Marigold school logo" />
-            <div className="certificate-academic-photo" aria-label="Student photo space">
+            <div className="certificate-academic-school">
+              <h2>{form.schoolName || 'Marigold Public Secondary School'}</h2>
+              <p>{form.address || 'School Address, City'}</p>
+              <span className="certificate-academic-ornament">— ❖ —</span>
             </div>
-          </div>
+            <div className="certificate-academic-emblem" aria-label="Learn, grow, achieve">
+              <BookOpen aria-hidden="true" />
+              <span>LEARN<br />GROW<br />ACHIEVE</span>
+            </div>
+          </header>
+          <div className="certificate-academic-laurel certificate-academic-laurel--left" aria-hidden="true">❧</div>
+          <div className="certificate-academic-laurel certificate-academic-laurel--right" aria-hidden="true">❧</div>
           <main className="certificate-academic-content">
-            <h1>{title}</h1>
-            <p className="certificate-academic-presented">This Certificate Is Presented To</p>
-            <h2>{student?.displayName || student?.name || 'Student Name'}</h2>
+            <p className="certificate-academic-eyebrow">HONOURING EXCELLENCE</p>
+            <h1>ACADEMIC EXCELLENCE</h1>
+            <div className="certificate-academic-certificate-title">
+              <span />
+              <h2>{title}</h2>
+              <span />
+            </div>
+            <p className="certificate-academic-awarded">THIS CERTIFICATE IS PROUDLY AWARDED TO</p>
+            <h3 className="certificate-academic-student-name">
+              {student?.displayName || student?.name || 'Student Name'}
+            </h3>
+            <div className="certificate-academic-gold-line" />
             <p className="certificate-academic-statement">{statement}</p>
+            <p className="certificate-academic-message">
+              Your hard work, discipline and commitment to success are an inspiration to the school community.
+            </p>
             {(form.percentage || result.percentage !== null) && (
               <p className="certificate-academic-result">
                 Academic result: <strong>{form.percentage || result.percentage.toFixed(2)}%</strong>
@@ -170,24 +182,28 @@ const CertificatePreview = ({ template, form, student, result, exam, type }) => 
                 Grade <strong>{form.grade || result.grade}</strong>
               </p>
             )}
-            <div className="certificate-academic-signatures">
-              <div>
-                <span className="certificate-academic-signature-line" />
-                <strong>{form.issueDate ? formatDate(form.issueDate) : 'Date'}</strong>
-                <span>Date</span>
-              </div>
-              <div className="certificate-academic-certificate-number">
-                <span>Certificate No. {form.certificateNumber || '________________'}</span>
-              </div>
-              <div>
-                <span className="certificate-academic-signature-line" />
-                <strong>{form.signatoryName || 'Authorized Signatory'}</strong>
-                <span>{form.signatoryTitle || 'Principal'}</span>
-              </div>
-            </div>
           </main>
-          <footer className="certificate-academic-bottomband">
-            www.marigoldschoolbehror.com
+          <div className="certificate-academic-seal" aria-label="Excellence award seal">
+            <div className="certificate-academic-seal-inner">
+              <span>★</span>
+              <small>EXCELLENCE</small>
+            </div>
+          </div>
+          <footer className="certificate-academic-signatures">
+            <div className="certificate-academic-signature">
+              <strong>{form.signatoryName || 'Principal'}</strong>
+              <span className="certificate-academic-signature-line" />
+              <span>{form.signatoryTitle || 'PRINCIPAL'}</span>
+            </div>
+            <div className="certificate-academic-certificate-number">
+              <span className="certificate-academic-medal-ribbon" aria-hidden="true" />
+              <span>{form.certificateNumber || 'CERTIFICATE NUMBER'}</span>
+            </div>
+            <div className="certificate-academic-signature">
+              <strong>{formatDate(form.issueDate)}</strong>
+              <span className="certificate-academic-signature-line" />
+              <span>DATE</span>
+            </div>
           </footer>
         </>
       ) : (
@@ -267,6 +283,7 @@ const CertificatePreview = ({ template, form, student, result, exam, type }) => 
 };
 
 const CertificationBuilder = () => {
+  const certificateRef = useRef(null);
   const [students, , studentMeta] = useMongoState(MASTER_NAMESPACES.students, []);
   const [savedSettings, setSavedSettings, settingsMeta] = useMongoState(SETTINGS_NAMESPACE, { templates: {} });
   const [activeType, setActiveType] = useState(CERTIFICATE_TYPES[0].id);
@@ -347,7 +364,58 @@ const CertificationBuilder = () => {
       setSaveNotice('Select a student before printing.');
       return;
     }
-    window.print();
+    const certificate = certificateRef.current;
+    if (!certificate) {
+      setSaveNotice('The certificate preview is not ready to print.');
+      return;
+    }
+
+    const printWindow = window.open('', '_blank', 'width=1200,height=850');
+    if (!printWindow) {
+      setSaveNotice('Please allow pop-ups to print the certificate.');
+      return;
+    }
+    const pageStyles = [...document.head.querySelectorAll('link[rel="stylesheet"], style')]
+      .map((node) => node.outerHTML)
+      .join('');
+    printWindow.document.open();
+    printWindow.document.write(`<!doctype html>
+      <html><head><meta charset="utf-8"><base href="${document.baseURI}">${pageStyles}
+      <style>
+        @page { size: A4 landscape; margin: 5mm; }
+        html, body { width: 287mm; height: 200mm; margin: 0; padding: 0; background: #fff; }
+        body { display: flex; align-items: flex-start; justify-content: flex-start; }
+        .certificate-builder-paper {
+          position: relative !important;
+          top: auto !important;
+          left: auto !important;
+          width: 287mm !important;
+          min-width: 0 !important;
+          max-width: 287mm !important;
+          height: 200mm !important;
+          min-height: 0 !important;
+          aspect-ratio: auto !important;
+          margin: 0 !important;
+          overflow: hidden !important;
+          box-shadow: none !important;
+          break-inside: avoid !important;
+          page-break-inside: avoid !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        @media print {
+          html, body { width: 287mm; height: 200mm; overflow: hidden; }
+        }
+      </style></head>
+      <body>${certificate.outerHTML}
+      <script>
+        window.addEventListener('load', async () => {
+          if (document.fonts) await document.fonts.ready;
+          window.focus();
+          window.print();
+        });
+      </script></body></html>`);
+    printWindow.document.close();
   };
 
   return (
@@ -461,8 +529,11 @@ const CertificationBuilder = () => {
             </div>
             {activeType === 'academic' && (
               <div className="grid grid-cols-2 gap-3 rounded-2xl border border-slate-100 bg-slate-50/70 p-3">
+                <CertificateField label="School name" value={form.schoolName} onChange={updateFormField('schoolName')} />
+                <CertificateField label="School address" value={form.address} onChange={updateFormField('address')} />
                 <CertificateField label="Examination name" value={form.examName} onChange={updateFormField('examName')} placeholder="e.g. Class 10 Board Examination" />
                 <CertificateField label="Academic year" value={form.academicYear} onChange={updateFormField('academicYear')} placeholder="e.g. 2025–2026" />
+                <CertificateField label="Achievement" value={form.achievement} onChange={updateFormField('achievement')} placeholder="e.g. outstanding academic performance" />
                 <CertificateField label="Percentage (optional)" value={form.percentage} onChange={updateFormField('percentage')} placeholder="e.g. 85.67" />
                 <CertificateField label="Grade (optional)" value={form.grade} onChange={updateFormField('grade')} placeholder="e.g. A1" />
               </div>
@@ -519,12 +590,13 @@ const CertificationBuilder = () => {
           </div>
           <div className="overflow-x-auto rounded-3xl border border-slate-200 bg-slate-200/70 p-3 sm:p-5">
             <CertificatePreview
+              paperRef={certificateRef}
               template={activeTemplate}
               form={form}
               student={student}
               result={result}
               exam={selectedExam}
-              type={activeType}
+              type={activeTemplate}
             />
           </div>
         </section>

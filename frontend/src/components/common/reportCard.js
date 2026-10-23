@@ -23,6 +23,10 @@
  *   - printReportCard({ student, exams, marks, className, schoolInfo, ... }) -> void
  */
 import schoolLogo from '../../assets/logo.png';
+import {
+  assignClasswiseAlphabeticalRollNumbers,
+  getAlphabeticalRollNumber,
+} from '../../utils/studentRollNumbers';
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -38,7 +42,8 @@ const esc = (value) =>
 const studentAdmission = (student = {}) =>
   student.admissionNumber || student.admNo || student.id || '';
 const studentName = (student = {}) => student.name || student.displayName || '';
-const studentRoll = (student = {}) => student.rollNo || student.roll || '';
+const studentRoll = (student = {}, students = []) =>
+  getAlphabeticalRollNumber(student, students) || student.rollNo || student.roll || '';
 
 /**
  * Grade thresholds — identical to `calculateGrade` in examinationStore.js.
@@ -213,73 +218,92 @@ const numCell = (value) => (value === null || value === undefined ? '' : esc(val
  * rule carries the per-page break used when printing many students at once.
  */
 const REPORT_CARD_STYLES = `
-    @page { size: A4 landscape; margin: 10mm; }
+    @page { size: A4 portrait; margin: 8mm; }
     * { box-sizing: border-box; }
     body {
       font-family: 'Times New Roman', Georgia, serif;
-      color: #000; background: #fff; margin: 0; padding: 12px;
+      color: #000; background: #fff; margin: 0; padding: 0;
     }
-    .sheet { border: 2px solid #000; padding: 10px 14px; }
-    /* Each student's report starts on a fresh page when printing a whole class. */
-    .sheet + .sheet { margin-top: 24px; }
-    /* --- Top bar: logo + semis (left), reg no (right) --- */
+    .report-page {
+      height: 281mm;
+      display: grid;
+      grid-template-rows: repeat(2, 140.5mm);
+      align-content: start;
+      break-after: page;
+      page-break-after: always;
+    }
+    .report-page:last-child { break-after: auto; page-break-after: auto; }
+    .sheet {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      height: 140.5mm;
+      overflow: hidden;
+      border: 2px solid #000;
+      padding: 5mm;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    /* --- Top bar: logo (left), reg no (right) --- */
     .topbar { display: flex; align-items: center; justify-content: space-between; }
     .logo-box {
-      width: 58px; height: 58px; border: 1px solid #000; display: flex;
+      width: 56px; height: 56px; border: 0; display: flex;
       align-items: center; justify-content: center; font-size: 9px; text-align: center;
       overflow: hidden;
     }
     .logo-box img { width: 100%; height: 100%; object-fit: contain; }
-    .semis, .regno { font-size: 11px; font-weight: bold; white-space: nowrap; }
+    .regno { font-size: 9px; font-weight: bold; white-space: nowrap; }
+    .report-page > .sheet:first-child:not(:only-child) { border-bottom-width: 1px; }
+    .sheet + .sheet { border-top-width: 1px; }
     /* --- Centered school identity --- */
     .school { text-align: center; flex: 1; padding: 0 8px; }
-    .school .line-sm { font-size: 11px; }
-    .school .contact { font-size: 9px; }
-    .school .name { font-size: 19px; font-weight: bold; margin: 2px 0; letter-spacing: .5px; }
+    .school .line-sm { font-size: 9px; }
+    .school .contact { font-size: 8px; }
+    .school .name { font-size: 16px; font-weight: bold; margin: 2px 0; letter-spacing: .3px; }
     .report-title {
-      text-align: center; font-weight: bold; font-size: 14px; margin: 8px 0 6px;
-      border-top: 1px solid #000; border-bottom: 1px solid #000; padding: 4px 0;
+      flex: 0 0 auto;
+      text-align: center; font-weight: bold; font-size: 11px; margin: 5px 0;
+      border: 1px solid #000; padding: 3px 0;
     }
     /* --- Student info block --- */
-    .info { display: flex; gap: 8px; margin-bottom: 8px; }
-    .info-cols { display: flex; flex: 1; gap: 24px; }
+    .info { display: flex; flex: 0 0 auto; gap: 8px; margin-bottom: 4px; }
+    .info-cols { display: flex; flex: 1; gap: 10px; min-width: 0; }
     .info-col { flex: 1; }
-    .info-col div { font-size: 12px; padding: 2px 0; }
-    .info-col b { display: inline-block; min-width: 96px; }
+    .info-col div { font-size: 9px; padding: 1px 0; }
+    .info-col b { display: inline-block; min-width: 72px; }
     .photo {
-      width: 92px; height: 108px; border: 1px solid #000; display: flex;
-      align-items: center; justify-content: center; font-size: 10px; color: #555; overflow: hidden;
+      width: 72px; height: 88px; flex: 0 0 72px; border: 1px solid #000; display: flex;
+      align-items: center; justify-content: center; font-size: 8px; color: #555; overflow: hidden;
     }
     .photo img { width: 100%; height: 100%; object-fit: cover; }
     /* --- Marks table --- */
-    table.marks { width: 100%; border-collapse: collapse; margin-top: 4px; }
-    table.marks th, table.marks td { border: 1px solid #000; padding: 4px 6px; font-size: 12px; }
+    table.marks { width: 100%; table-layout: fixed; border-collapse: collapse; margin-top: 2px; }
+    table.marks th, table.marks td { border: 1px solid #000; padding: 2px 3px; font-size: 8px; overflow-wrap: anywhere; }
     table.marks th { background: #f0f0f0; text-align: center; font-weight: bold; }
-    table.marks th.exam-h { font-size: 12px; }
-    table.marks th.sub-h { font-size: 11px; font-weight: normal; }
-    td.subj { text-align: left; font-weight: bold; }
+    table.marks th.exam-h { font-size: 8px; }
+    table.marks th.sub-h { font-size: 7px; font-weight: normal; }
+    td.subj { text-align: left; font-weight: bold; width: 24%; }
     td.num { text-align: center; }
     td.grade { font-weight: bold; }
-    td.total { font-weight: bold; }
+    td.total { font-weight: bold; width: 10%; }
     tr.grand td { background: #f0f0f0; font-weight: bold; }
     /* --- Footer summary --- */
     .footer {
-      display: flex; flex-wrap: wrap; border: 1px solid #000; border-top: 0;
-      font-size: 12px;
+      display: flex; flex-wrap: wrap; flex: 0 0 auto; border: 1px solid #000; border-top: 0;
+      font-size: 8px;
     }
-    .footer .cell { flex: 1 1 33%; padding: 5px 8px; border-top: 1px solid #000; }
+    .footer .cell { flex: 1 1 33%; padding: 3px 5px; border-top: 1px solid #000; }
     .footer .cell b { font-weight: bold; }
     /* --- Signatures --- */
-    .signs { display: flex; justify-content: space-between; margin-top: 34px; }
-    .sign { flex: 1; text-align: center; font-size: 12px; }
+    .signs { display: flex; flex: 0 0 auto; justify-content: space-between; margin-top: auto; padding-top: 14mm; }
+    .sign { flex: 1; position: relative; text-align: center; font-size: 9px; }
+    .sign img {
+      position: absolute; top: -40px; left: 50%; transform: translateX(-50%);
+      width: 120px; height: 36px; object-fit: contain;
+    }
     .sign .line { border-top: 1px solid #000; margin: 0 18px 4px; padding-top: 4px; }
     @media print {
       body { padding: 0; }
-      .sheet { border: 0; }
-      /* Force a page break BEFORE every report except the first, so bulk
-         printing yields exactly one report card per page. */
-      .sheet { break-inside: avoid; page-break-inside: avoid; }
-      .sheet + .sheet { break-before: page; page-break-before: always; margin-top: 0; }
     }
 `;
 
@@ -315,6 +339,7 @@ function buildReportCardSheet({
   attendancePresent,
   attendanceTotal,
   studentCount,
+  principalSignature,
 }) {
   // Each student's className for lookups falls back to the passed-in className.
   const cls = className || student?.reportClassName || student?.className || '';
@@ -385,43 +410,47 @@ function buildReportCardSheet({
     ? `<img src="${esc(photoDataUrl)}" alt="Student photo" />`
     : 'PHOTO';
   const activeExam = safeExams.find((exam) => String(exam?.id) === String(examId)) || safeExams[0];
-  const examTitle = activeExam?.name || 'ANNUAL PROGRESS REPORT';
-  const rankEntries = students.map((entry) => ({
-    student: entry,
-    percentage: computeReportRows({
-      student: entry,
-      exams: safeExams,
-      marks,
-      className: entry?.className || cls,
-      examId,
-      gradeScale,
-    }).percentage,
-  })).sort((a, b) => b.percentage - a.percentage);
-  let previousPercentage = null;
-  let previousRank = 0;
+  const examTitle = safeExams.length > 1 ? 'ANNUAL PROGRESS' : activeExam?.name || 'ANNUAL PROGRESS REPORT';
+  const rankEntries = students
+    .map((entry) => {
+      const studentReport = computeReportRows({
+        student: entry,
+        exams: safeExams,
+        marks,
+        className: entry?.className || cls,
+        examId,
+        gradeScale,
+      });
+      return {
+        student: entry,
+        percentage: studentReport.percentage,
+        hasMarks: studentReport.grandMax > 0,
+      };
+    })
+    .filter((entry) => entry.hasMarks)
+    .sort((a, b) =>
+      b.percentage - a.percentage ||
+      studentName(a.student).localeCompare(studentName(b.student), undefined, { sensitivity: 'base' }) ||
+      String(studentAdmission(a.student)).localeCompare(String(studentAdmission(b.student)))
+    );
   rankEntries.forEach((entry, index) => {
-    if (previousPercentage === null || Math.abs(entry.percentage - previousPercentage) > 0.000001) {
-      previousRank = index + 1;
-      previousPercentage = entry.percentage;
-    }
-    entry.rank = previousRank;
+    entry.rank = index + 1;
   });
   const rankEntry = rankEntries.find(({ student: entry }) =>
     (entry?.id && student?.id && entry.id === student.id) ||
     (entry?.admissionNumber && student?.admissionNumber && entry.admissionNumber === student.admissionNumber) ||
     (entry?.displayName && entry.displayName === studentName(student))
   );
-  const resolvedRank = rankEntry?.rank ?? rank;
+  const suppliedRank = Number(rank);
+  const candidateRank = rankEntry?.rank ?? (Number.isInteger(suppliedRank) && suppliedRank > 0 ? suppliedRank : null);
+  const resolvedRank = candidateRank && candidateRank <= 3 ? candidateRank : '—';
 
   // ----- Single card markup (no document / <style> wrapper) ------------------
   return `
     <div class="sheet">
       <!-- Top bar -->
       <div class="topbar">
-        <div style="display:flex;align-items:center;gap:8px;">
-          <div class="logo-box"><img src="${esc(schoolLogo)}" alt="Marigold school logo" /></div>
-          <div class="semis">SEMIS CODE:<br/>${esc(info.semisCode || '—')}</div>
-        </div>
+        <div class="logo-box"><img src="${esc(schoolLogo)}" alt="Marigold school logo" /></div>
         <div class="school">
           <div class="line-sm">${esc(info.line1)}</div>
           <div class="name">${esc(info.name)}</div>
@@ -443,7 +472,7 @@ function buildReportCardSheet({
             <div><b>Class :</b> ${esc(student.className || cls || '—')}</div>
           </div>
           <div class="info-col">
-            <div><b>Roll No :</b> ${esc(studentRoll(student) || '—')}</div>
+            <div><b>Roll No :</b> ${esc(studentRoll(student, students) || '—')}</div>
             <div><b>Father's Name :</b> ${esc(student.fatherName || '—')}</div>
             <div><b>Date of Birth :</b> ${esc(student.dob || '—')}</div>
             <div><b>Faculty :</b> COMMON / section ${esc(student.section || '—')}</div>
@@ -485,7 +514,10 @@ function buildReportCardSheet({
       <div class="signs">
         <div class="sign"><div class="line">Class Teacher Signature</div></div>
         <div class="sign"><div class="line">Exam Incharge Signature</div></div>
-        <div class="sign"><div class="line">Principal/Headmaster Signature</div></div>
+        <div class="sign">
+          ${principalSignature ? `<img src="${esc(principalSignature)}" alt="Principal signature" />` : ''}
+          <div class="line">Principal/Headmaster Signature</div>
+        </div>
       </div>
     </div>`;
 }
@@ -494,11 +526,11 @@ function buildReportCardSheet({
  * Wrap one or more `.sheet` blocks in a full printable document (shared <style>,
  * body onload -> print + close). Used by both single and bulk print paths.
  */
-const buildPrintDocument = (title, sheetsHtml) =>
+const buildPrintDocument = (title, sheetsHtml, isBulk = false) =>
   `<!doctype html><html><head><meta charset="utf-8">
   <title>${esc(title)}</title>
   <style>${REPORT_CARD_STYLES}</style></head>
-  <body onload="window.print(); setTimeout(function(){ window.close(); }, 400);">
+  <body class="${isBulk ? 'bulk-print' : ''}" onload="window.print(); setTimeout(function(){ window.close(); }, 400);">
     ${sheetsHtml}
   </body></html>`;
 
@@ -543,6 +575,7 @@ export function printReportCard({
   attendancePresent,
   attendanceTotal,
   studentCount,
+  principalSignature,
 }) {
   const info = { ...DEFAULT_SCHOOL_INFO, ...(schoolInfo || {}) };
 
@@ -560,10 +593,11 @@ export function printReportCard({
     attendancePresent,
     attendanceTotal,
     studentCount,
+    principalSignature,
   });
 
   const title = `Progress Report - ${studentName(student) || 'Student'}`;
-  openPrintWindow(buildPrintDocument(title, sheetHtml));
+  openPrintWindow(buildPrintDocument(title, `<div class="report-page">${sheetHtml}</div>`, true));
 }
 
 /**
@@ -586,6 +620,7 @@ export function printReportCardsForClass({
   examId,
   gradeScale,
   schoolInfo = {},
+  principalSignature = '',
 }) {
   const info = { ...DEFAULT_SCHOOL_INFO, ...(schoolInfo || {}) };
   const roster = Array.isArray(students) ? students : [];
@@ -598,24 +633,33 @@ export function printReportCardsForClass({
   // The class total is known here, so fill "No. of Students" for every card.
   const studentCount = roster.length;
 
-  // Build one `.sheet` per student and join them — the shared @media print
-  // rule (`.sheet + .sheet { break-before: page }`) puts each on its own page.
-  const sheetsHtml = roster
-    .map((student) =>
-      buildReportCardSheet({
-        student: student || {},
-        exams,
-        marks,
-        className, // each student's className falls back to this inside the helper
-        info,
-        examId,
-        gradeScale,
-        students: roster,
-        studentCount,
-      })
-    )
-    .join('\n');
+  const assignedRoster = assignClasswiseAlphabeticalRollNumbers(roster);
+  const orderedRoster = assignedRoster.sort((a, b) => {
+    const classA = String(a.className || className || '');
+    const classB = String(b.className || className || '');
+    return classA.localeCompare(classB) || Number(a.rollNo || 0) - Number(b.rollNo || 0);
+  });
+  const sheetsHtml = Array.from({ length: Math.ceil(orderedRoster.length / 2) }, (_, pageIndex) => {
+    const sheets = orderedRoster
+      .slice(pageIndex * 2, pageIndex * 2 + 2)
+      .map((student) =>
+        buildReportCardSheet({
+          student: student || {},
+          exams,
+          marks,
+          className, // each student's className falls back to this inside the helper
+          info,
+          examId,
+          gradeScale,
+          students: orderedRoster,
+          studentCount,
+          principalSignature,
+        })
+      )
+      .join('\n');
+    return `<div class="report-page">${sheets}</div>`;
+  }).join('\n');
 
   const title = `Progress Reports - ${className || info.academicYear}`;
-  openPrintWindow(buildPrintDocument(title, sheetsHtml));
+  openPrintWindow(buildPrintDocument(title, sheetsHtml, true));
 }

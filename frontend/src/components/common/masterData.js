@@ -1,6 +1,8 @@
 import { useMemo } from 'react';
 import { useMongoState } from './mongoState';
 
+export { assignClasswiseAlphabeticalRollNumbers } from '../../utils/studentRollNumbers';
+
 export const MASTER_NAMESPACES = {
   classPreferences: 'admin-class-preferences',
   classes: 'admin-class-management-classes',

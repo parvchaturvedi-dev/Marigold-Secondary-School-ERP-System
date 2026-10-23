@@ -102,6 +102,7 @@ export const studentDirectory = [];
 const normalizeExamStudent = (student = {}, index = 0, className = '') => ({
   id: student.id || student.admissionNumber || `student-${className}-${index + 1}`,
   displayName: student.displayName || student.name || `Student ${index + 1}`,
+  photoDataUrl: student.photoDataUrl || '',
   className: student.className || className,
   section: student.section || 'A',
   rollNo: student.rollNo || index + 1,
@@ -154,6 +155,7 @@ const EMPTY_EXAMINATION_STATE = {
   boardClasses: [],
   boardResults: [],
   gradeScale: DEFAULT_GRADE_SCALE,
+  principalSignature: '',
 };
 
 let examinationStateCache = EMPTY_EXAMINATION_STATE;
@@ -169,6 +171,7 @@ const normalizeExaminationState = (state = {}) => ({
   gradeScale: Array.isArray(state.gradeScale) && state.gradeScale.length === DEFAULT_GRADE_SCALE.length
     ? state.gradeScale
     : DEFAULT_GRADE_SCALE,
+  principalSignature: typeof state.principalSignature === 'string' ? state.principalSignature : '',
 });
 
 const persistExaminationState = async (state) => {

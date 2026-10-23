@@ -452,6 +452,14 @@ const StudentCertificate = ({ type }) => {
           transform: none !important;
           border: 1px solid #6b2638 !important;
           box-shadow: none !important;
+          break-inside: avoid !important;
+          page-break-inside: avoid !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        .certificate-study-paper {
+          left: auto !important;
+          transform: none !important;
         }
         .certificate-study-paper > header {
           min-height: 34mm !important;

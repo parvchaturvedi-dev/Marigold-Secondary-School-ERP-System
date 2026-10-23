@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { read, utils } from '@e965/xlsx';
 import {
   AlertCircle,
@@ -13,7 +13,11 @@ import {
   Users,
 } from 'lucide-react';
 import { useMongoState } from '../../components/common/mongoState';
-import { useMasterData, sortClassNames } from '../../components/common/masterData';
+import {
+  useMasterData,
+  sortClassNames,
+} from '../../components/common/masterData';
+import { assignClasswiseAlphabeticalRollNumbers } from '../../utils/studentRollNumbers';
 
 const normalizeCell = (value) => String(value || '').trim();
 const normalizeDateCell = (value) => {
@@ -157,58 +161,6 @@ const mergeRowIntoStudent = (existing, row) => {
   return { record, changed };
 };
 
-const studentDisplayName = (student = {}) =>
-  student.name || student.displayName || student.studentName || student.rawProfile?.studentName || '';
-
-const studentClassKey = (student = {}) => student.class || student.className || '';
-
-const withRollNo = (student, rollNo) => ({
-  ...student,
-  rollNo,
-  rawProfile: {
-    ...(student.rawProfile || {}),
-    rollNo,
-  },
-});
-
-// Re-sequence roll numbers CLASS-WISE, alphabetically by student name. Within
-// each class, sort by name (case-insensitive, localeCompare), ties broken by
-// admission number for stability, then assign rollNo = 1..N. Writes to BOTH the
-// top-level field and rawProfile. Re-runnable: running it again after adding
-// students re-sequences each class from scratch. `onlyClass` limits the rewrite
-// to a single class (others untouched). Students with no class share an
-// "Unassigned" bucket that is also sequenced.
-const assignRollNumbersByClass = (students, onlyClass = null) => {
-  const list = Array.isArray(students) ? students : [];
-
-  // Group student indices by class bucket.
-  const buckets = new Map();
-  list.forEach((student, index) => {
-    const key = studentClassKey(student) || 'Unassigned';
-    if (!buckets.has(key)) buckets.set(key, []);
-    buckets.get(key).push(index);
-  });
-
-  const rollByIndex = new Map();
-  buckets.forEach((indices, key) => {
-    if (onlyClass && key !== onlyClass) return;
-    const sorted = [...indices].sort((a, b) => {
-      const nameA = studentDisplayName(list[a]).trim().toLowerCase();
-      const nameB = studentDisplayName(list[b]).trim().toLowerCase();
-      const byName = nameA.localeCompare(nameB);
-      if (byName !== 0) return byName;
-      return String(list[a].admissionNumber || '').localeCompare(String(list[b].admissionNumber || ''));
-    });
-    sorted.forEach((studentIndex, position) => {
-      rollByIndex.set(studentIndex, position + 1);
-    });
-  });
-
-  return list.map((student, index) =>
-    rollByIndex.has(index) ? withRollNo(student, rollByIndex.get(index)) : student
-  );
-};
-
 const StudentManagement = ({ setActivePage }) => {
   // Phase 1 Context: Track selected class card
   const [selectedClassView, setSelectedClassView] = useState(null);
@@ -219,7 +171,7 @@ const StudentManagement = ({ setActivePage }) => {
   const { classes: derivedClasses, classNames } = useMasterData();
 
   // Updated Roster Pool matching Student Assigning parameters exactly
-  const [studentsDb, setStudentsDb] = useMongoState('admin-student-management-students', []);
+  const [studentsDb, setStudentsDb, studentsMeta] = useMongoState('admin-student-management-students', []);
   // Alumni/pending bucket: admission numbers parked here (passed-out / left with
   // dues) are still "in use" and must not be silently re-created by a bulk import.
   const [alumniPending] = useMongoState('admin-finance-alumni-pending', []);
@@ -231,6 +183,18 @@ const StudentManagement = ({ setActivePage }) => {
   const [categoryFilter, setCategoryFilter] = useState('');
   const [sortOrder, setSortOrder] = useState('asc'); // Alphabetical toggler state
 
+  useEffect(() => {
+    if (studentsMeta.isLoading || !Array.isArray(studentsDb) || !studentsDb.length) return;
+
+    const resequenced = assignClasswiseAlphabeticalRollNumbers(studentsDb);
+    const isAlreadySequenced = studentsDb.every(
+      (student, index) =>
+        String(student.rollNo ?? '') === String(resequenced[index].rollNo) &&
+        String(student.rawProfile?.rollNo ?? '') === String(resequenced[index].rollNo)
+    );
+    if (!isAlreadySequenced) setStudentsDb(resequenced);
+  }, [studentsDb, studentsMeta.isLoading, setStudentsDb]);
+
   // ----------------------------------------------------
   // ENGINE AUTOMATION: ALPHABETICAL MULTI-SORT CALCULATOR
   // ----------------------------------------------------
@@ -238,25 +202,37 @@ const StudentManagement = ({ setActivePage }) => {
     if (!selectedClassView) return [];
 
     // Step 1: Filter array subset by class context allocation
-    let filteredList = studentsDb.filter(student => student.class === selectedClassView);
+    let filteredList = studentsDb.filter(
+      (student) => (student.class || student.className || '') === selectedClassView
+    );
 
-    // Step 2: Strictly enforce absolute Alphabetical calculation priority bounds
-    filteredList.sort((a, b) => {
-      const nameA = a.name.trim().toLowerCase();
-      const nameB = b.name.trim().toLowerCase();
-      return sortOrder === 'asc' ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
+    // Roll numbers always follow A–Z order, independent of the display sort.
+    const alphabetical = [...filteredList].sort((a, b) => {
+      const nameA = String(a.name || a.displayName || '').trim();
+      const nameB = String(b.name || b.displayName || '').trim();
+      return nameA.localeCompare(nameB) ||
+        String(a.admissionNumber || '').localeCompare(String(b.admissionNumber || ''));
     });
 
-    // Step 3: Run structural iteration map to overlay fresh index positions as Roll Numbers
-    const autoRollAssignedList = filteredList.map((student, index) => ({
-      ...student,
-      rollNo: index + 1
-    }));
+    const rollNumbersByAdmission = new Map(
+      alphabetical.map((student, index) => [student.admissionNumber || student.id, index + 1])
+    );
+    filteredList = filteredList
+      .map((student) => ({
+        ...student,
+        rollNo: rollNumbersByAdmission.get(student.admissionNumber || student.id) || student.rollNo,
+      }))
+      .sort((a, b) => {
+        const nameA = String(a.name || a.displayName || '').trim();
+        const nameB = String(b.name || b.displayName || '').trim();
+        return sortOrder === 'asc' ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
+      });
 
     // Step 4: Run top search query & configuration modifiers over final output
-    return autoRollAssignedList.filter(student => {
-      const matchesSearch = student.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                            student.admissionNumber.toLowerCase().includes(searchTerm.toLowerCase());
+    return filteredList.filter(student => {
+      const matchesSearch =
+        String(student.name || student.displayName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        String(student.admissionNumber || '').toLowerCase().includes(searchTerm.toLowerCase());
       const matchesGender = genderFilter ? student.gender === genderFilter : true;
       const matchesCategory = categoryFilter ? student.category === categoryFilter : true;
       return matchesSearch && matchesGender && matchesCategory;
@@ -298,7 +274,7 @@ const StudentManagement = ({ setActivePage }) => {
     let count = 0;
     setStudentsDb((students) => {
       count = Array.isArray(students) ? students.length : 0;
-      return assignRollNumbersByClass(students);
+      return assignClasswiseAlphabeticalRollNumbers(students, selectedClassView);
     });
     alert(`Roll numbers regenerated class-wise (A→Z) for ${count} student${count === 1 ? '' : 's'}.`);
   };
@@ -312,9 +288,9 @@ const StudentManagement = ({ setActivePage }) => {
     let count = 0;
     setStudentsDb((students) => {
       count = (Array.isArray(students) ? students : []).filter(
-        (student) => studentClassKey(student) === selectedClassView
+        (student) => (student.class || student.className || '') === selectedClassView
       ).length;
-      return assignRollNumbersByClass(students, selectedClassView);
+      return assignClasswiseAlphabeticalRollNumbers(students);
     });
     alert(`Roll numbers regenerated (A→Z) for ${count} student${count === 1 ? '' : 's'} in ${selectedClassView}.`);
   };
@@ -402,7 +378,7 @@ const StudentManagement = ({ setActivePage }) => {
           const admission = String(student.admissionNumber || student.id || '').trim().toUpperCase();
           return updates.has(admission) ? updates.get(admission) : student;
         });
-        return [...additions.values(), ...merged];
+        return assignClasswiseAlphabeticalRollNumbers([...additions.values(), ...merged]);
       });
 
       alert(

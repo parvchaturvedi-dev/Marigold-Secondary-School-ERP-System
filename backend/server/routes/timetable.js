@@ -44,6 +44,7 @@ const toPayload = (record) => ({
   mode: record.mode,
   fromDate: record.fromDate,
   toDate: record.toDate,
+  days: record.days || [],
   classes: record.classes || [],
   periods: record.periods || [],
   cells: record.cells || {},
@@ -62,8 +63,29 @@ const findEffectiveTimetable = async (date) => {
 
   if (override) return { record: override, requestedDate, source: 'override' };
 
+  const weekly = await Timetable.findOne({ mode: 'weekly' }).sort({ updatedAt: -1 });
+  if (weekly) return { record: weekly, requestedDate, source: 'weekly' };
+
   const fallback = await Timetable.findOne({ mode: 'default' }).sort({ updatedAt: -1 });
   return { record: fallback, requestedDate, source: 'default' };
+};
+
+const getDailyPayload = (payload, requestedDate) => {
+  if (!payload?.days?.length) return payload;
+  const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const weekday = weekdays[new Date(`${requestedDate}T00:00:00.000Z`).getUTCDay()];
+  if (!payload.days.includes(weekday)) {
+    return { ...payload, classes: payload.classes || [], cells: {}, selectedDay: weekday };
+  }
+
+  const cells = {};
+  for (const className of payload.classes || []) {
+    for (const period of payload.periods || []) {
+      const cell = payload.cells?.[`${weekday}__${period.id}__${className}`];
+      if (cell) cells[`${period.id}__${className}`] = cell;
+    }
+  }
+  return { ...payload, cells, selectedDay: weekday };
 };
 
 const filterClass = (payload, className = '') => {
@@ -87,7 +109,7 @@ router.get('/', ensureMongo, async (request, response) => {
   }
 
   response.json({
-    timetable: filterClass(toPayload(record), request.query.className),
+    timetable: filterClass(getDailyPayload(toPayload(record), requestedDate), request.query.className),
     requestedDate,
     source,
   });
@@ -99,7 +121,7 @@ router.get('/templates', ensureMongo, async (_request, response) => {
 });
 
 router.post('/', ensureMongo, requireRole('admin', 'clerk'), async (request, response) => {
-  const mode = request.body.mode === 'override' ? 'override' : 'default';
+  const mode = ['override', 'weekly'].includes(request.body.mode) ? request.body.mode : 'default';
   const fromDate = mode === 'override' ? normalizeDate(request.body.fromDate) : '';
   const toDate = mode === 'override' ? normalizeDate(request.body.toDate || request.body.fromDate) : '';
 
@@ -108,11 +130,13 @@ router.post('/', ensureMongo, requireRole('admin', 'clerk'), async (request, res
     return;
   }
 
+  const days = mode === 'weekly' ? normalizeStringList(request.body.days) : [];
   const payload = {
     name: String(request.body.name || (mode === 'default' ? 'Default Timetable' : 'Special Timetable')).trim(),
     mode,
     fromDate,
     toDate,
+    days,
     classes: normalizeStringList(request.body.classes),
     periods: normalizePeriods(request.body.periods),
     cells: request.body.cells && typeof request.body.cells === 'object' ? request.body.cells : {},
@@ -123,6 +147,10 @@ router.post('/', ensureMongo, requireRole('admin', 'clerk'), async (request, res
     response.status(400).json({ message: 'At least one class column and one period row are required.' });
     return;
   }
+  if (mode === 'weekly' && !payload.days.length) {
+    response.status(400).json({ message: 'Select at least one weekday for a weekly timetable.' });
+    return;
+  }
 
   let record;
   if (request.body.id) {
@@ -131,9 +159,9 @@ router.post('/', ensureMongo, requireRole('admin', 'clerk'), async (request, res
       response.status(404).json({ message: 'Timetable was not found.' });
       return;
     }
-  } else if (mode === 'default') {
+  } else if (mode !== 'override') {
     record = await Timetable.findOneAndUpdate(
-      { mode: 'default' },
+      { mode },
       { ...payload, createdBy: payload.updatedBy },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );

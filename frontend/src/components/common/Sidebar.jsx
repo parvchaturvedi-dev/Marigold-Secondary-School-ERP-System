@@ -115,7 +115,8 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
     'Clerk Desk': false,
     'Faculty Desk': false,
     'Student Desk': false,
-    'Examination Desk': false
+    'Examination Desk': false,
+    'Timetable Desk': false,
   });
 
   // Keep responsive window breaks synchronised
@@ -183,7 +184,15 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
     },
     { name: 'Finance', icon: Wallet },
     { name: 'Payroll', icon: Wallet },
-    { name: 'Timetable', icon: CalendarClock },
+    {
+      name: 'Timetable Desk',
+      icon: CalendarClock,
+      hasSub: true,
+      subItems: [
+        { name: 'Timetable', icon: CalendarClock },
+        { name: 'Timetable Management', icon: Settings },
+      ],
+    },
     {
       name: 'Faculty Desk',
       icon: GraduationCap,
@@ -290,7 +299,15 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
     { name: 'Study Certificate', icon: GraduationCap },
     { name: 'Leave Requests', icon: LogOut },
     { name: 'Meetings', icon: Video },
-    { name: 'Timetable', icon: CalendarClock },
+    {
+      name: 'Timetable Desk',
+      icon: CalendarClock,
+      hasSub: true,
+      subItems: [
+        { name: 'Timetable', icon: CalendarClock },
+        { name: 'Timetable Management', icon: Settings },
+      ],
+    },
     { name: 'Notices', icon: Bell },
     { name: 'Profile', icon: User },
     { name: 'My Salary', icon: Wallet },
@@ -305,7 +322,12 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
     { name: 'Dashboard', icon: LayoutGrid },
     { name: 'Academic Calender', icon: Calendar },
     { name: 'My Class', icon: Layers },
-    { name: 'Timetable', icon: CalendarClock },
+    {
+      name: 'Timetable Desk',
+      icon: CalendarClock,
+      hasSub: true,
+      subItems: [{ name: 'Timetable', icon: CalendarClock }],
+    },
     { name: 'Application', icon: FileText },
     { name: 'Assignment', icon: ClipboardList },
     { name: 'Attendance', icon: CheckSquare },
@@ -327,7 +349,12 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
     { name: 'Dashboard', icon: LayoutGrid },
     { name: 'Academic Calender', icon: Calendar },
     { name: 'My Class', icon: Layers },
-    { name: 'Timetable', icon: CalendarClock },
+    {
+      name: 'Timetable Desk',
+      icon: CalendarClock,
+      hasSub: true,
+      subItems: [{ name: 'Timetable', icon: CalendarClock }],
+    },
     { name: 'Application', icon: FileText },
     { name: 'Assignment', icon: ClipboardList },
     { name: 'Attendance', icon: CheckSquare },

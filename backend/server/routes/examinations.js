@@ -80,6 +80,7 @@ const EMPTY_EXAMINATION_STATE = {
   deliveries: [],
   boardClasses: [],
   boardResults: [],
+  principalSignature: '',
   gradeScale: [
     { grade: 'A', minPercentage: 90 },
     { grade: 'B', minPercentage: 80 },
@@ -112,6 +113,7 @@ const normalizeState = (state = {}) => ({
   gradeScale: Array.isArray(state.gradeScale) && state.gradeScale.length === 6
     ? state.gradeScale
     : EMPTY_EXAMINATION_STATE.gradeScale,
+  principalSignature: typeof state.principalSignature === 'string' ? state.principalSignature : '',
 });
 
 router.get('/state', ensureMongo, async (_request, response) => {

@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
 import { UserPlus, Upload } from 'lucide-react';
 import { useMongoState } from '../../components/common/mongoState';
-import { useMasterData } from '../../components/common/masterData';
+import {
+  assignClasswiseAlphabeticalRollNumbers,
+  useMasterData,
+} from '../../components/common/masterData';
 
 const StudentAssigning = () => {
   const { classNames: activeClasses } = useMasterData();
@@ -114,7 +117,7 @@ const StudentAssigning = () => {
       timestamp: new Date().toISOString()
     };
 
-    setStudentsDb((students) => [
+    setStudentsDb((students) => assignClasswiseAlphabeticalRollNumbers([
       {
         admissionNumber: submissionPayload.id,
         id: submissionPayload.id,
@@ -144,8 +147,8 @@ const StudentAssigning = () => {
         rawProfile: submissionPayload,
       },
       ...students.filter((student) => student.admissionNumber !== submissionPayload.id),
-    ]);
-    alert(`Admission Form Processed Successfully!\nAdmission Number registered as main ID: ${submissionPayload.id}\n\nAuto-Sorting Alphabetical Engine will recalculate roll numbers dynamically inside Student Management.`);
+    ]));
+    alert(`Admission Form Processed Successfully!\nAdmission Number registered as main ID: ${submissionPayload.id}\n\nRoll numbers have been reassigned class-wise in alphabetical order.`);
 
     setStudentForm({
       studentName: '',

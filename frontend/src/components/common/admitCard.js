@@ -18,6 +18,10 @@
 //   schoolInfo: { name, line1, line2, regNo }
 // ---------------------------------------------------------------------------
 import schoolLogo from '../../assets/logo.png';
+import {
+  assignClasswiseAlphabeticalRollNumbers,
+  getAlphabeticalRollNumber,
+} from '../../utils/studentRollNumbers';
 
 // Marigold defaults used whenever the caller omits schoolInfo fields.
 const DEFAULT_SCHOOL_INFO = {
@@ -134,8 +138,8 @@ const cardStyles = `
   .ac-logo {
     width: 70px;
     height: 70px;
-    border: 1.5px solid #000;
-    border-radius: 50%;
+    border: none;
+    border-radius: 0%;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -235,6 +239,67 @@ const cardStyles = `
     body { margin: 0; }
     .admit-card { margin: 0 auto; border: 2px solid #000; }
     @page { size: A4 portrait; margin: 8mm; }
+    .bulk-print .admit-page {
+      height: 281mm;
+      display: grid;
+      grid-template-rows: repeat(2, 140.5mm);
+      align-content: start;
+      break-after: page;
+      page-break-after: always;
+    }
+    .bulk-print .admit-page:last-child {
+      break-after: auto;
+      page-break-after: auto;
+    }
+    .bulk-print .admit-card {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      height: 140.5mm;
+      margin: 0;
+      padding: 5mm;
+      break-after: auto;
+      page-break-after: auto;
+      overflow: hidden;
+    }
+    .bulk-print .ac-header { flex: 0 0 auto; gap: 7px; padding-bottom: 4px; }
+    .bulk-print .ac-logo { width: 64px; height: 64px; }
+    .bulk-print .ac-school-name { font-size: 17px; }
+    .bulk-print .ac-school-line { font-size: 9px; }
+    .bulk-print .ac-reg, .bulk-print .ac-contact { font-size: 8px; }
+    .bulk-print .ac-title { margin: 5px 0; padding: 2px; font-size: 12px; }
+    .bulk-print .ac-student {
+      flex: 0 0 auto;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 96px;
+      align-items: start;
+      gap: 8px;
+      margin-bottom: 5px;
+    }
+    .bulk-print .ac-fields { min-width: 0; }
+    .bulk-print .ac-fields table { width: 100%; table-layout: fixed; }
+    .bulk-print .ac-fields td { padding: 2px 4px; font-size: 10px; }
+    .bulk-print .ac-photo {
+      width: 88px;
+      height: 106px;
+      justify-self: end;
+      margin-right: 2px;
+    }
+    .bulk-print .ac-section-title { flex: 0 0 auto; margin: 5px 0 3px; font-size: 10px; }
+    .bulk-print table.ac-datesheet th,
+    .bulk-print table.ac-datesheet td { padding: 2px 5px; font-size: 10px; }
+    .bulk-print .ac-datesheet th { padding: 3px 5px; font-size: 10px; }
+    .bulk-print .ac-instructions { flex: 0 0 auto; margin-top: 3px; }
+    .bulk-print .ac-instructions .ac-section-title { margin: 2px 0; }
+    .bulk-print .ac-instructions ol { margin-top: 1px; padding-left: 16px; }
+    .bulk-print .ac-instructions li { margin-bottom: 0; font-size: 9px; }
+    .bulk-print .ac-signs {
+      flex: 0 0 auto;
+      margin-top: auto;
+      padding-top: 5mm;
+      gap: 12px;
+    }
+    .bulk-print .ac-sign { font-size: 10px; }
   }
 `;
 
@@ -249,7 +314,7 @@ const INSTRUCTIONS = [
 ];
 
 // Build the inner HTML for a single admit card (one .admit-card block).
-const buildCardHtml = ({ student, exam, schedule, schoolInfo }) => {
+const buildCardHtml = ({ student, exam, schedule, schoolInfo, students }) => {
   const info = { ...DEFAULT_SCHOOL_INFO, ...(schoolInfo || {}) };
 
   // Defensive field lookups across the various possible property names.
@@ -258,7 +323,7 @@ const buildCardHtml = ({ student, exam, schedule, schoolInfo }) => {
   const motherName = pick(student?.motherName);
   const className = pick(student?.className);
   const section = pick(student?.section);
-  const rollNo = pick(student?.rollNo, student?.roll);
+  const rollNo = pick(getAlphabeticalRollNumber(student, students), student?.rollNo, student?.roll);
   const admissionNumber = pick(student?.admissionNumber, student?.admNo, student?.id);
   const photoDataUrl = pick(student?.photoDataUrl);
 
@@ -361,7 +426,7 @@ const buildCardHtml = ({ student, exam, schedule, schoolInfo }) => {
 
 // Wrap one or more card blocks into a full printable HTML document, then open a
 // print window, write it, and trigger printing on load.
-const openPrintWindow = (title, bodyHtml) => {
+const openPrintWindow = (title, bodyHtml, isBulk = false) => {
   const printWindow = window.open('', '_blank', 'width=900,height=1000');
 
   // Pop-up blocked (or otherwise unavailable) — tell the user instead of failing
@@ -378,7 +443,7 @@ const openPrintWindow = (title, bodyHtml) => {
     <title>${escapeHtml(title)}</title>
     <style>${cardStyles}</style>
   </head>
-  <body onload="window.focus(); window.print(); setTimeout(function(){ window.close(); }, 500);">
+  <body class="${isBulk ? 'bulk-print' : ''}" onload="window.focus(); window.print(); setTimeout(function(){ window.close(); }, 500);">
     ${bodyHtml}
   </body>
 </html>`;
@@ -399,13 +464,13 @@ const openPrintWindow = (title, bodyHtml) => {
  * @param {Array}    params.schedule   Date-sheet rows for this class+exam.
  * @param {Object}   [params.schoolInfo] School header overrides.
  */
-export function printAdmitCard({ student, exam, schedule, schoolInfo } = {}) {
+export function printAdmitCard({ student, exam, schedule, schoolInfo, students = [] } = {}) {
   if (!student) {
     alert('No student selected for the admit card.');
     return;
   }
 
-  const bodyHtml = buildCardHtml({ student, exam, schedule, schoolInfo });
+  const bodyHtml = buildCardHtml({ student, exam, schedule, schoolInfo, students });
   const title = `Admit Card - ${pick(student?.name, student?.displayName, 'Student')}`;
   openPrintWindow(title, bodyHtml);
 }
@@ -427,10 +492,18 @@ export function printAdmitCardsForClass({ students, exam, schedule, schoolInfo }
     return;
   }
 
-  const bodyHtml = list
-    .map((student) => buildCardHtml({ student, exam, schedule, schoolInfo }))
-    .join('\n');
+  const assignedStudents = assignClasswiseAlphabeticalRollNumbers(list);
+  const orderedStudents = assignedStudents.sort(
+    (a, b) => Number(a.rollNo || 0) - Number(b.rollNo || 0)
+  );
+  const bodyHtml = Array.from({ length: Math.ceil(orderedStudents.length / 2) }, (_, pageIndex) => {
+    const cards = orderedStudents
+      .slice(pageIndex * 2, pageIndex * 2 + 2)
+      .map((student) => buildCardHtml({ student, exam, schedule, schoolInfo, students: orderedStudents }))
+      .join('\n');
+    return `<div class="admit-page">${cards}</div>`;
+  }).join('\n');
 
-  const title = `Admit Cards - ${pick(exam?.name, 'Examination')} (${list.length})`;
-  openPrintWindow(title, bodyHtml);
+  const title = `Admit Cards - ${pick(exam?.name, 'Examination')} (${orderedStudents.length})`;
+  openPrintWindow(title, bodyHtml, true);
 }

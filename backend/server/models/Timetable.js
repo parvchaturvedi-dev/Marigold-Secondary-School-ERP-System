@@ -10,7 +10,7 @@ const timetableSchema = new mongoose.Schema(
     },
     mode: {
       type: String,
-      enum: ['default', 'override'],
+      enum: ['default', 'weekly', 'override'],
       required: true,
       default: 'default',
       index: true,
@@ -26,6 +26,10 @@ const timetableSchema = new mongoose.Schema(
       trim: true,
       default: '',
       index: true,
+    },
+    days: {
+      type: [String],
+      default: [],
     },
     classes: {
       type: [String],
