@@ -24,6 +24,7 @@ const TYPE_META = {
   meeting: { emoji: '👥', categoryId: 'general' },
   salary: { emoji: '💵', categoryId: 'general' },
   timetable: { emoji: '🕒', categoryId: 'general' },
+  inventory: { emoji: '📦', categoryId: 'general' },
   general: { emoji: '🔔', categoryId: 'general' },
 };
 

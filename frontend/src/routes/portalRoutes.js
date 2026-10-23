@@ -55,6 +55,7 @@ export const portalRoutes = {
       'Report Card Management': lazyPage('../pages/Admin/Examinations'),
       'Marks Management': lazyPage('../pages/Admin/Examinations'),
       Finance: lazyPage('../pages/Admin/Finance'),
+      'Stock & Inventory': lazyPage('../pages/Admin/InventoryManagement'),
       Payroll: lazyPage('../pages/Admin/Payroll'),
       'Id Card': lazyPage('../pages/Admin/IdCard'),
       'Transfer Certificate': TransferCertificatePage,

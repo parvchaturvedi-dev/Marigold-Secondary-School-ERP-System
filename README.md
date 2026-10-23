@@ -9,9 +9,9 @@ codebase that ships **three applications** sharing one backend and one database:
 | **Web Portal** | React 19 + Vite + Tailwind CSS 4 | Admin, Clerk, Teacher, Student (desktop/tablet) |
 | **Mobile App** | Expo SDK 54 (React Native, JS) | Admin, Clerk, Teacher, Student (Android/iOS) |
 
-The web portal and the mobile app expose the **same features with full read + write parity** — a fee
-collected on mobile appears instantly on the web, and vice-versa, because both write the same shapes
-to the same backend.
+Most web and mobile workflows share the same backend and stay in sync. Some admin workspaces are
+web-only; Stock & Inventory is managed from the web portal, while student issue confirmations and
+pending reminders use the existing mobile notification inbox and Expo push channel.
 
 ---
 
@@ -188,6 +188,7 @@ backend/
 | `applications.js` | `/api/applications` | create, class-consensus vote (in-class only), admin action, reply-read. |
 | `meetings.js` | `/api/meetings` | list (role-scoped), create (host-checked), mark attendance (self only for students), end. |
 | `events.js` | `/api/events` | list, create/update/delete (admin/clerk, image MIME-checked), participate (self-identity + window + dedupe). |
+| `inventory.js` | `/api/inventory` | admin-only stock, restocking, class roster issuance, class/school reports, and student issue/reminder notifications. |
 | `notifications.js` | `/api/notifications` | list (own inbox only), mark-read, register/unregister push token, broadcast (admin-only whole-role). |
 | `timetable.js` | `/api/timetable` | effective timetable, templates, create/update/delete (admin/clerk). |
 | `academicCalendar.js` | `/api/academic-calendar` | latest calendar, upload/delete PDF (admin/clerk). |
@@ -346,6 +347,7 @@ Key namespaces:
 |------------|:-----:|:-----:|:-------:|:-------:|
 | Manage students/teachers/clerks/classes/subjects | ✅ | ✅ | — | — |
 | Fees: assign / collect / receipt | ✅ | ✅ | view (own classes) | view own |
+| Stock & Inventory: manage stock / issue items / reports | ✅ | — | — | — |
 | Payroll | ✅ | — | own | — |
 | Attendance: mark students | ✅ | ✅ | own class | — |
 | Attendance: self clock-in/out (geofenced) | ✅ | ✅ | ✅ | — |
@@ -368,6 +370,11 @@ Enforced server-side by `requireRole(...)` + auth-derived identity on every muta
 - **Session promotion:** promotes the whole class to the next grade, carries the fee ledger, pushes
   last-class students with dues into the **alumni bucket**, retains repeaters, and resets assignments.
 - **Payroll:** monthly salary effective from next month, waterfall settlement of arrears, salary slips.
+- **Stock & Inventory (admin web):** track received and available quantities, weighted-average costs,
+  selling prices, and per-issue cost snapshots. Admins issue items against the live class roster;
+  class and school reports separate pending units, purchase expense, issued cost, revenue, and profit.
+  Student confirmations and pending reminders are created in the existing notification inbox and
+  sent through Expo push when the student account has a registered device token.
 - **Attendance + geofence:** staff self clock-in/out is allowed only within the school **geofence**
   (default 50 m); admins set the campus location via "Use my current location". Mock-location is
   blocked. Teachers mark student rosters with bulk Present/Absent shortcuts.
@@ -404,6 +411,8 @@ All under `/api`. `A`=admin, `C`=clerk, `T`=teacher, `S`=student, `*`=any authen
 
 `GET|PUT /module-state/:namespace` (PUT: A,C) · `GET|PUT /attendance/*` · `GET /fees/me` (S) ·
 `GET /fees/student/:adm` (A,C,T) · `GET /payroll/me` (T,C) · `GET /payroll/all` (A) ·
+`GET /inventory` · `GET /inventory/roster?className=&itemId=` · `POST /inventory/items` ·
+`POST /inventory/items/:itemId/restock` · `POST /inventory/issues` · `POST /inventory/reminders` (A) ·
 `GET|POST /assignments` · `GET|PUT /examinations/state` · `PATCH /examinations/papers/:id/submit-for-approval` ·
 `PATCH /examinations/papers/:id/admin-decision` (A) · `POST /examinations/board-results` (A,C) ·
 `GET /examinations/board-results/:id/pdf` · `DELETE /examinations/board-results/:id` (A) ·

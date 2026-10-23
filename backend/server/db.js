@@ -125,6 +125,43 @@ export const connectPostgres = async () => {
         completed_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )
     `);
+    await activePool.query(`
+      CREATE TABLE IF NOT EXISTS public.inventory_items (
+        id UUID PRIMARY KEY,
+        name TEXT NOT NULL CHECK (length(trim(name)) > 0),
+        category TEXT NOT NULL DEFAULT '',
+        description TEXT NOT NULL DEFAULT '',
+        quantity_received INTEGER NOT NULL DEFAULT 0 CHECK (quantity_received >= 0),
+        stock_quantity INTEGER NOT NULL DEFAULT 0 CHECK (stock_quantity >= 0),
+        purchase_price NUMERIC(12, 2) NOT NULL CHECK (purchase_price >= 0),
+        stock_cost_value NUMERIC(14, 2) NOT NULL DEFAULT 0 CHECK (stock_cost_value >= 0),
+        selling_price NUMERIC(12, 2) NOT NULL CHECK (selling_price >= 0),
+        purchase_expense NUMERIC(14, 2) NOT NULL DEFAULT 0 CHECK (purchase_expense >= 0),
+        active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_by_username TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS inventory_items_active_name_idx
+      ON public.inventory_items (active, name);
+
+      CREATE TABLE IF NOT EXISTS public.inventory_issues (
+        id UUID PRIMARY KEY,
+        item_id UUID NOT NULL REFERENCES public.inventory_items(id) ON DELETE RESTRICT,
+        student_id TEXT NOT NULL,
+        student_name TEXT NOT NULL,
+        class_name TEXT NOT NULL,
+        purchase_price NUMERIC(12, 2) NOT NULL CHECK (purchase_price >= 0),
+        selling_price NUMERIC(12, 2) NOT NULL CHECK (selling_price >= 0),
+        issued_by_username TEXT NOT NULL,
+        issued_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        UNIQUE (item_id, student_id)
+      );
+      CREATE INDEX IF NOT EXISTS inventory_issues_class_item_idx
+      ON public.inventory_issues (class_name, item_id);
+      CREATE INDEX IF NOT EXISTS inventory_issues_student_idx
+      ON public.inventory_issues (student_id);
+    `);
     dbStatus = 'connected';
     console.log(`PostgreSQL connected (${requiredTables.length} ERP tables verified)`);
     return activePool;

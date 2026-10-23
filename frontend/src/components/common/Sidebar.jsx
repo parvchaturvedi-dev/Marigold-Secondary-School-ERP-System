@@ -38,6 +38,7 @@ import {
   BriefcaseBusiness,
   FileCheck2,
   History,
+  Package,
 } from 'lucide-react';
 import Logo from '../../assets/logo.png';
 
@@ -183,6 +184,7 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
       ]
     },
     { name: 'Finance', icon: Wallet },
+    { name: 'Stock & Inventory', icon: Package },
     { name: 'Payroll', icon: Wallet },
     {
       name: 'Timetable Desk',
