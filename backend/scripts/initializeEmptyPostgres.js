@@ -100,6 +100,26 @@ const run = async () => {
       );
     }
 
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS public.cloudinary_assets (
+        asset_id TEXT PRIMARY KEY,
+        public_id TEXT NOT NULL,
+        asset_folder TEXT NOT NULL DEFAULT '',
+        resource_type TEXT NOT NULL,
+        delivery_type TEXT NOT NULL,
+        original_filename TEXT,
+        format TEXT,
+        mime_type TEXT NOT NULL,
+        byte_size BIGINT NOT NULL,
+        sha256 TEXT NOT NULL,
+        created_at TIMESTAMPTZ,
+        imported_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        source_metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        data BYTEA NOT NULL,
+        UNIQUE (resource_type, delivery_type, public_id)
+      )
+    `);
+
     await client.query('COMMIT');
     transactionStarted = false;
 
