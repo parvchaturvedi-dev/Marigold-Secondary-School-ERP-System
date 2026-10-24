@@ -10,6 +10,7 @@
     "migrate:mongo-to-postgres": "node scripts/migrateMongoToPostgres.js",
     "sync:mongo-to-postgres": "node scripts/syncMongoToPostgres.js",
     "db:initialize-postgres": "node scripts/initializePostgresErpSchema.js",
+    "db:initialize-empty-postgres": "node scripts/initializeEmptyPostgres.js",
     "migrate:cloudinary-to-postgres": "node scripts/migrateCloudinaryToPostgres.js",
     "migrate:postgres-to-cloudinary": "node scripts/migratePostgresAssetsToCloudinary.js"
   },
