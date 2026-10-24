@@ -1,5 +1,5 @@
 import { v2 as cloudinary } from 'cloudinary';
-import { createHash, randomUUID } from 'node:crypto';
+import { Readable } from 'node:stream';
 import { getPostgresPool, isDatabaseConnected } from '../db.js';
 import { getCachedAsset, setCachedAsset, invalidateCachedAsset } from './assetCache.js';
 
@@ -53,56 +53,48 @@ export const isFileStoredExternally = (record) =>
 // the correct response content type from the stored metadata.
 export const resourceTypeForMime = () => 'raw';
 
-// Store a Buffer in PostgreSQL.
-// Returns { publicId, resourceType, bytes, format } or throws.
-export const uploadBuffer = (buffer, { folder = 'mgps', publicId, mimeType } = {}) =>
-  new Promise((resolve, reject) => {
-    if (!isDatabaseConnected()) {
-      reject(new Error('PostgreSQL file storage is not connected.'));
-      return;
-    }
+// Prefer external storage so uploaded file bytes do not grow the ERP database.
+// Returns { publicId, resourceType, bytes, format, storage } or throws.
+export const uploadBuffer = async (buffer, { folder = 'mgps', publicId, mimeType } = {}) => {
+  if (!configured) {
+    throw new Error('Cloudinary file storage is not configured.');
+  }
 
-    const bytes = Buffer.from(buffer);
-    const assetId = randomUUID();
-    const id = publicId || assetId;
-    const resourceType = 'postgres';
-    getPostgresPool()
-      .query(
-        `INSERT INTO public.cloudinary_assets (
-           asset_id, public_id, asset_folder, resource_type, delivery_type,
-           original_filename, format, mime_type, byte_size, sha256, created_at,
-           source_metadata, data
-         ) VALUES ($1, $2, $3, $4, 'postgres', $5, $6, $7, $8, $9, now(), $10::jsonb, $11)
-         ON CONFLICT (resource_type, delivery_type, public_id) DO UPDATE SET
-           asset_folder = EXCLUDED.asset_folder,
-           original_filename = EXCLUDED.original_filename,
-           format = EXCLUDED.format,
-           mime_type = EXCLUDED.mime_type,
-           byte_size = EXCLUDED.byte_size,
-           sha256 = EXCLUDED.sha256,
-           imported_at = now(),
-           source_metadata = EXCLUDED.source_metadata,
-           data = EXCLUDED.data`,
-        [
-          assetId,
-          id,
-          folder,
-          resourceType,
-          id,
-          mimeType?.split('/')[1] || null,
-          mimeType || 'application/octet-stream',
-          bytes.length,
-          createHash('sha256').update(bytes).digest('hex'),
-          JSON.stringify({ source: 'erp-upload' }),
-          bytes,
-        ]
-      )
-      .then(() => {
-        invalidateCachedAsset(`${resourceType}:${id}`);
-        resolve({ publicId: id, resourceType, bytes: bytes.length, format: mimeType?.split('/')[1] || '' });
-      })
-      .catch(reject);
+  const bytes = Buffer.from(buffer);
+  const result = await new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder,
+        ...(publicId ? { public_id: publicId } : {}),
+        resource_type: 'raw',
+        type: 'authenticated',
+        overwrite: true,
+        invalidate: true,
+      },
+      (error, uploaded) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        if (!uploaded?.public_id) {
+          reject(new Error('Cloudinary did not return an asset identifier.'));
+          return;
+        }
+        resolve(uploaded);
+      }
+    );
+    Readable.from([bytes]).pipe(stream);
   });
+
+  invalidateCachedAsset(`raw:${result.public_id}`);
+  return {
+    publicId: result.public_id,
+    resourceType: 'raw',
+    bytes: result.bytes ?? bytes.length,
+    format: result.format || mimeType?.split('/')[1] || '',
+    storage: 'cloudinary',
+  };
+};
 
 // Return a PostgreSQL key or a signed URL for a legacy Cloudinary asset.
 export const signedUrlFor = (publicId, resourceType = 'raw') => {
@@ -130,7 +122,7 @@ export const streamAssetToResponse = async (
 };
 
 // Read file bytes from PostgreSQL first, then fall back to Cloudinary for
-// legacy references that have not been imported.
+// legacy references whose PostgreSQL copy has been moved.
 export const fetchAssetBuffer = async (publicId, resourceType = 'raw') => {
   const key = `${resourceType}:${publicId}`;
   if (resourceType === 'postgres') {
@@ -140,8 +132,17 @@ export const fetchAssetBuffer = async (publicId, resourceType = 'raw') => {
        ORDER BY imported_at DESC LIMIT 1`,
       [publicId]
     );
-    if (!result.rowCount) throw new Error('File was not found in PostgreSQL storage.');
-    const buffer = result.rows[0].data;
+    if (result.rowCount && result.rows[0].data?.length) {
+      const buffer = result.rows[0].data;
+      setCachedAsset(key, buffer);
+      return buffer;
+    }
+    if (!configured) throw new Error('File was not found in PostgreSQL storage or Cloudinary.');
+
+    const upstream = await fetch(signedUrlFor(publicId, 'raw'));
+    if (!upstream.ok) throw new Error(`Cloudinary fetch failed (${upstream.status}).`);
+
+    const buffer = Buffer.from(await upstream.arrayBuffer());
     setCachedAsset(key, buffer);
     return buffer;
   }
@@ -175,11 +176,23 @@ export const deleteAsset = async (publicId, resourceType = 'raw') => {
   invalidateCachedAsset(`${resourceType}:${publicId}`);
   if (!publicId) return;
   if (resourceType === 'postgres') {
-    await getPostgresPool().query(
+    const result = await getPostgresPool().query(
       `DELETE FROM public.cloudinary_assets
-       WHERE public_id = $1 AND resource_type = 'postgres'`,
+       WHERE public_id = $1 AND resource_type = 'postgres'
+       RETURNING asset_id, octet_length(data) AS stored_bytes`,
       [publicId]
     );
+    if ((!result.rowCount || Number(result.rows[0].stored_bytes) === 0) && configured) {
+      try {
+        await cloudinary.uploader.destroy(publicId, {
+          resource_type: 'raw',
+          type: 'authenticated',
+          invalidate: true,
+        });
+      } catch {
+        // Cleanup is best-effort; an orphaned asset can be removed later.
+      }
+    }
     return;
   }
   if (!configured) return;

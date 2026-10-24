@@ -10,7 +10,8 @@
     "migrate:mongo-to-postgres": "node scripts/migrateMongoToPostgres.js",
     "sync:mongo-to-postgres": "node scripts/syncMongoToPostgres.js",
     "db:initialize-postgres": "node scripts/initializePostgresErpSchema.js",
-    "migrate:cloudinary-to-postgres": "node scripts/migrateCloudinaryToPostgres.js"
+    "migrate:cloudinary-to-postgres": "node scripts/migrateCloudinaryToPostgres.js",
+    "migrate:postgres-to-cloudinary": "node scripts/migratePostgresAssetsToCloudinary.js"
   },
   "engines": {
     "node": "22.x"

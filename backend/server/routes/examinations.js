@@ -468,8 +468,7 @@ router.post(
       pdfSize: file.size,
     };
 
-    // Offload the bytes to Cloudinary when configured; otherwise keep the legacy
-    // inline Buffer so the app still works before keys are set.
+    // Store file bytes in Cloudinary; keep the legacy inline field for old records.
     let storageFields;
     if (isFileStorageConfigured()) {
       try {
@@ -479,7 +478,7 @@ router.post(
           mimeType: metadata.pdfType,
         });
         storageFields = {
-          storage: 'postgres',
+          storage: uploaded.storage,
           publicId: uploaded.publicId,
           resourceType: uploaded.resourceType,
           fileData: undefined,
@@ -793,8 +792,7 @@ router.post(
     const uploadedByName = request.auth?.displayName || request.auth?.username || 'Admin';
     const mimeType = file.mimetype || 'application/pdf';
 
-    // Offload the bytes to Cloudinary when configured; otherwise keep the legacy
-    // inline Buffer so the app still works before keys are set.
+    // Store file bytes in Cloudinary; keep the legacy inline field for old records.
     let storageFields;
     if (isFileStorageConfigured()) {
       try {
@@ -804,7 +802,7 @@ router.post(
           mimeType,
         });
         storageFields = {
-          storage: 'postgres',
+          storage: uploaded.storage,
           publicId: uploaded.publicId,
           resourceType: uploaded.resourceType,
           data: undefined,
@@ -973,8 +971,7 @@ router.post(
 
     const uploadedByName = request.auth?.displayName || request.auth?.username || 'Admin';
 
-    // Offload the bytes to Cloudinary when configured; otherwise keep the legacy
-    // inline Buffer so the app still works before keys are set.
+    // Store file bytes in Cloudinary; keep the legacy inline field for old records.
     let storageFields;
     if (isFileStorageConfigured()) {
       try {
@@ -984,7 +981,7 @@ router.post(
           mimeType: file.mimetype,
         });
         storageFields = {
-          storage: 'postgres',
+          storage: uploaded.storage,
           publicId: uploaded.publicId,
           resourceType: uploaded.resourceType,
           data: undefined,

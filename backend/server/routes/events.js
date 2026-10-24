@@ -116,9 +116,8 @@ const isParticipationOpenNow = (event) => {
   return true;
 };
 
-// Offload the image bytes to Cloudinary when configured; otherwise keep the
-// legacy inline Buffer so the app still works before keys are set. Throws if a
-// Cloudinary upload fails so the caller can respond 502.
+// Store image bytes in Cloudinary; the model retains legacy fields for older
+// records. Throws if the upload fails so the caller can respond 502.
 const applyImageFields = async (event, file) => {
   if (!file) return;
 
@@ -132,7 +131,7 @@ const applyImageFields = async (event, file) => {
       publicId: cloudPublicId(event._id),
       mimeType: file.mimetype,
     });
-    event.storage = 'postgres';
+    event.storage = uploaded.storage;
     event.publicId = uploaded.publicId;
     event.resourceType = uploaded.resourceType;
     event.imageData = undefined;

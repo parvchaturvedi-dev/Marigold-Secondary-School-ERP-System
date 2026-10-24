@@ -76,7 +76,7 @@ router.post('/', ensureMongo, requireRole('admin', 'clerk'), upload.single('cale
     return;
   }
 
-  // Store the bytes in PostgreSQL; keep the legacy inline field for old records.
+  // Store file bytes outside the ERP database when Cloudinary is configured.
   const mimeType = file.mimetype || 'application/pdf';
   let storageFields;
   if (isFileStorageConfigured()) {
@@ -87,7 +87,7 @@ router.post('/', ensureMongo, requireRole('admin', 'clerk'), upload.single('cale
         mimeType,
       });
       storageFields = {
-        storage: 'postgres',
+        storage: uploaded.storage,
         publicId: uploaded.publicId,
         resourceType: uploaded.resourceType,
         fileData: undefined,

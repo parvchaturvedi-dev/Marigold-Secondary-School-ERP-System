@@ -126,8 +126,7 @@ router.post(
 
     const uploadedByName = request.auth?.displayName || request.auth?.username || 'Admin';
 
-    // Offload the bytes to Cloudinary when configured; otherwise keep the legacy
-    // inline Buffer so the app still works before keys are set.
+    // Store file bytes in Cloudinary; keep the legacy inline field for old records.
     let storageFields;
     if (isFileStorageConfigured()) {
       try {
@@ -137,7 +136,7 @@ router.post(
           mimeType: file.mimetype,
         });
         storageFields = {
-          storage: 'postgres',
+          storage: uploaded.storage,
           publicId: uploaded.publicId,
           resourceType: uploaded.resourceType,
           data: undefined,
@@ -268,7 +267,7 @@ router.post('/migrate', ensureMongo, requireRole('admin'), async (_request, resp
           mimeType,
         });
         storageFields = {
-          storage: 'postgres',
+          storage: uploaded.storage,
           publicId: uploaded.publicId,
           resourceType: uploaded.resourceType,
           data: undefined,

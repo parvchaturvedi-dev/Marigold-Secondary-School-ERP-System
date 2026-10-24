@@ -47,10 +47,8 @@ const isLocked = (checkingDate) => {
   return deadline < today;
 };
 
-// Attach an uploaded file to the assignment. Offloads the bytes to Cloudinary
-// when configured; otherwise keeps the legacy inline Buffer so the app still
-// works before keys are set. Returns false on a Cloudinary upload failure so the
-// caller can respond 502; true otherwise (including the no-file case).
+// Attach an uploaded file to the assignment. Stores bytes in Cloudinary and
+// returns false on upload failure so the caller can respond 502.
 const applyAttachment = async (assignment, file) => {
   if (!file) return true;
 
@@ -63,7 +61,7 @@ const applyAttachment = async (assignment, file) => {
         mimeType: file.mimetype,
       });
       storageFields = {
-        storage: 'postgres',
+        storage: uploaded.storage,
         publicId: uploaded.publicId,
         resourceType: uploaded.resourceType,
         data: undefined,
