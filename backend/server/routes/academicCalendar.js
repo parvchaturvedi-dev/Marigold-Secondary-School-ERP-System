@@ -108,7 +108,7 @@ router.post('/', ensureMongo, requireRole('admin', 'clerk'), upload.single('cale
   // Best-effort cleanup of any previously stored calendar asset before we
   // drop the old records (only one calendar is ever kept).
   const previous = await AcademicCalendar.find({
-    storage: { $in: ['cloudinary', 'postgres'] },
+    storage: { $in: ['cloudinary', 'local', 'postgres'] },
     publicId: { $ne: '' },
   })
     .select('publicId resourceType');
@@ -153,7 +153,7 @@ router.post('/', ensureMongo, requireRole('admin', 'clerk'), upload.single('cale
 router.delete('/', ensureMongo, requireRole('admin', 'clerk'), async (_request, response) => {
   // Remove any external-file assets alongside the PostgreSQL records.
   const previous = await AcademicCalendar.find({
-    storage: { $in: ['cloudinary', 'postgres'] },
+    storage: { $in: ['cloudinary', 'local', 'postgres'] },
     publicId: { $ne: '' },
   })
     .select('publicId resourceType');

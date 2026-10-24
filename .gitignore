@@ -40,3 +40,4 @@ release/
 *.sln
 *.sw?
 .neon
+/backend/uploads/

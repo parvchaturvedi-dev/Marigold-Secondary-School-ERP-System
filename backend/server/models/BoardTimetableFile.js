@@ -28,7 +28,7 @@ const boardTimetableFileSchema = new mongoose.Schema(
     },
     storage: {
       type: String,
-      enum: ['mongo', 'cloudinary', 'postgres'],
+      enum: ['mongo', 'cloudinary', 'local', 'postgres'],
       default: 'mongo',
     },
     publicId: {

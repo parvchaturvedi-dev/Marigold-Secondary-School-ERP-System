@@ -36,7 +36,7 @@ const teacherDocumentFileSchema = new mongoose.Schema(
     // 'mongo' is the legacy inline Buffer value; new files use PostgreSQL storage.
     storage: {
       type: String,
-      enum: ['mongo', 'cloudinary', 'postgres'],
+      enum: ['mongo', 'cloudinary', 'local', 'postgres'],
       default: 'mongo',
     },
     // External-file reference used by PostgreSQL storage and legacy Cloudinary assets.
