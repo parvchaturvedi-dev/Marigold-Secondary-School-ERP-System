@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from "./src/auth/AuthContext";
 import { ThemeProvider, useTheme } from "./src/theme/ThemeContext";
 
 import LoginScreen from "./src/modules/auth/screens/LoginScreen";
+import PasswordChangeScreen from "./src/modules/auth/screens/PasswordChangeScreen";
 import StudentDashboardScreen from "./src/screens/StudentDashboardScreen";
 import StudentModuleScreen from "./src/screens/StudentModuleScreen";
 import TimetableScreen from "./src/screens/TimetableScreen";
@@ -47,6 +48,7 @@ function Navigator() {
     return () => sub.remove();
   }, [screen, goBack]);
 
+  if (screen === "password-change") return <PasswordChangeScreen />;
   if (screen === "student-dashboard") return <StudentDashboardScreen />;
   if (screen === "student-module") return <StudentModuleScreen />;
   if (screen === "timetable") return <TimetableScreen />;

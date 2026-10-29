@@ -2,7 +2,7 @@ import express from 'express';
 import Timetable from '../models/Timetable.js';
 import { isMongoConnected } from '../db.js';
 import { requireRole } from '../middleware/auth.js';
-import { emitRealtimeEvent } from '../realtime.js';
+import { emitRealtimeInvalidation } from '../realtime.js';
 import { createNotification } from '../utils/notify.js';
 
 const router = express.Router();
@@ -169,7 +169,7 @@ router.post('/', ensureMongo, requireRole('admin', 'clerk'), async (request, res
     record = await Timetable.create({ ...payload, createdBy: payload.updatedBy });
   }
 
-  emitRealtimeEvent(TIMETABLE_UPDATED_EVENT, toPayload(record));
+  emitRealtimeInvalidation(TIMETABLE_UPDATED_EVENT, ['admin', 'clerk', 'teacher', 'student']);
 
   // Notify students of each class in the saved timetable. Non-blocking.
   for (const className of Array.isArray(record.classes) ? record.classes : []) {
@@ -193,7 +193,7 @@ router.delete('/:id', ensureMongo, requireRole('admin', 'clerk'), async (request
     return;
   }
 
-  emitRealtimeEvent(TIMETABLE_UPDATED_EVENT, { id: request.params.id, deleted: true });
+  emitRealtimeInvalidation(TIMETABLE_UPDATED_EVENT, ['admin', 'clerk', 'teacher', 'student']);
   response.json({ message: 'Timetable removed.' });
 });
 

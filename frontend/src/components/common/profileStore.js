@@ -1,7 +1,7 @@
 import { apiFetch, authFetch } from './api';
-import { AUTH_STORAGE_KEY, hydrateStudentSession } from './auth';
+import { AUTH_STORAGE_KEY, hydrateStudentSession, SESSION_UPDATED_EVENT } from './auth';
 
-export const SESSION_UPDATED_EVENT = 'mgps-erp-session-updated';
+export { SESSION_UPDATED_EVENT };
 
 export const publishSessionUpdate = (session) => {
   if (!session) return null;

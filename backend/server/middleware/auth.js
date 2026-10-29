@@ -1,6 +1,7 @@
 import { verifyAuthToken } from '../utils/authToken.js';
 import { isMongoConnected } from '../db.js';
 import User from '../models/User.js';
+import { isAllowedDuringPasswordChange, needsPasswordChange } from '../utils/passwordPolicy.js';
 
 const normalizeStudent = (student = {}, index = 0) => ({
   id: student.id || student.admissionNumber || `student-${index + 1}`,
@@ -46,6 +47,7 @@ const toAuthContext = (user, baseAuth = {}) => {
     assignedClassTeacherFor:
       profile.teacherProfile?.assignedClassTeacherFor || profile.assignedClassTeacherFor || '',
     photoDataUrl: profile.photoDataUrl || '',
+    mustChangePassword: needsPasswordChange(profile),
   };
 
   if (user.role === 'student') {
@@ -89,10 +91,24 @@ export const requireAuth = async (request, response, next) => {
       response.status(401).json({ message: 'Authentication is required.' });
       return;
     }
+    if (!isMongoConnected()) {
+      response.status(503).json({ message: 'Data service is not connected.' });
+      return;
+    }
     try {
       request.auth = await hydrateAuthFromDatabase(auth);
       if (!request.auth) {
         response.status(401).json({ message: 'Authentication is required.' });
+        return;
+      }
+      if (
+        request.auth.mustChangePassword &&
+        !isAllowedDuringPasswordChange(request.method, request.originalUrl)
+      ) {
+        response.status(403).json({
+          message: 'Change your password before using the ERP portal.',
+          code: 'PASSWORD_CHANGE_REQUIRED',
+        });
         return;
       }
       next();
@@ -105,9 +121,23 @@ export const requireAuth = async (request, response, next) => {
 
   const sessionAuth = request.session?.auth;
   if (sessionAuth?.username && sessionAuth?.role) {
+    if (!isMongoConnected()) {
+      response.status(503).json({ message: 'Data service is not connected.' });
+      return;
+    }
     request.auth = await hydrateAuthFromDatabase(sessionAuth);
     if (!request.auth) {
       response.status(401).json({ message: 'Authentication is required.' });
+      return;
+    }
+    if (
+      request.auth.mustChangePassword &&
+      !isAllowedDuringPasswordChange(request.method, request.originalUrl)
+    ) {
+      response.status(403).json({
+        message: 'Change your password before using the ERP portal.',
+        code: 'PASSWORD_CHANGE_REQUIRED',
+      });
       return;
     }
     next();

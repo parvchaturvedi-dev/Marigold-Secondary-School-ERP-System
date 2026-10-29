@@ -75,7 +75,7 @@ const EmployeeAssignment = () => {
       window.dispatchEvent(new CustomEvent(`mgps-erp-module-state:${EMPLOYEES_NAMESPACE}`, {
         detail: payload?.value ?? nextEmployees,
       }));
-      setNotice(`Employee created. Login ID: ${id} · Initial password: ${id}@MGPS`);
+      setNotice(`Employee created. Login ID: ${id}. A secure temporary password was provisioned; use User Management to send credentials.`);
       setForm(emptyForm);
       setUploadedFiles({});
     }).catch((saveError) => setNotice(`Could not save employee: ${saveError.message}`));

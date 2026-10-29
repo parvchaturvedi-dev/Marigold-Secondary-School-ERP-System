@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { getClerkProfile } from './clerkPortalData';
 import { apiFetch } from '../../components/common/api';
+import CloudSessionManager from '../../components/common/CloudSessionManager';
 
 const formatStorageSize = (bytes = 0) => {
   const size = Number(bytes);
@@ -107,7 +108,7 @@ const Settings = ({ session }) => {
         </p>
       </section>
 
-      {window.mgpsDesktop?.isDesktop && <DesktopSessionManager />}
+      {window.mgpsDesktop?.isDesktop ? <DesktopSessionManager /> : <CloudSessionManager />}
 
       <section className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
         <aside className="xl:col-span-4 space-y-6">

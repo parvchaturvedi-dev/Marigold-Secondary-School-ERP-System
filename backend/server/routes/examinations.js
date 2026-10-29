@@ -10,6 +10,11 @@ import { emitRealtimeEvent } from '../realtime.js';
 import { requireRole } from '../middleware/auth.js';
 import { createNotification } from '../utils/notify.js';
 import {
+  canReadBoardStudentResult,
+  filterExaminationState,
+  mergeTeacherExaminationState,
+} from '../utils/examinationAccess.js';
+import {
   isFileStorageConfigured,
   isFileStoredExternally,
   resourceTypeForMime,
@@ -116,9 +121,10 @@ const normalizeState = (state = {}) => ({
   principalSignature: typeof state.principalSignature === 'string' ? state.principalSignature : '',
 });
 
-router.get('/state', ensureMongo, async (_request, response) => {
+router.get('/state', ensureMongo, requireRole('admin', 'clerk', 'teacher', 'student'), async (request, response) => {
   const record = await ExaminationState.findOne().sort({ updatedAt: -1 });
-  response.json(record ? normalizeState(record.state) : EMPTY_EXAMINATION_STATE);
+  const state = record ? normalizeState(record.state) : EMPTY_EXAMINATION_STATE;
+  response.json(filterExaminationState(state, request.auth));
 });
 
 // Diff the previous vs next examination state and fire student-facing
@@ -198,11 +204,14 @@ const notifyExamStateChanges = async (prevState, nextState) => {
 };
 
 router.put('/state', ensureMongo, requireRole('admin', 'clerk', 'teacher'), async (request, response) => {
-  const nextState = normalizeState(request.body.state);
-
   // Snapshot the previous state so we can detect newly-entered marks / schedules.
   const existing = await ExaminationState.findOne().sort({ updatedAt: -1 });
   const prevState = existing ? normalizeState(existing.state) : { ...EMPTY_EXAMINATION_STATE };
+  const submittedState = normalizeState(request.body.state);
+  const nextState =
+    request.auth?.role === 'teacher'
+      ? mergeTeacherExaminationState(prevState, submittedState, request.auth)
+      : submittedState;
 
   const record = await ExaminationState.findOneAndUpdate(
     {},
@@ -225,7 +234,7 @@ router.put('/state', ensureMongo, requireRole('admin', 'clerk', 'teacher'), asyn
   }
 
   emitRealtimeEvent('mgps-erp-examination-updated');
-  response.json(normalizeState(record.state));
+  response.json(filterExaminationState(normalizeState(record.state), request.auth));
 });
 
 // -----------------------------------------------------------------------------
@@ -1132,8 +1141,14 @@ router.get(
   '/board-student-result/:admissionNumber/:examId',
   ensureMongo,
   async (request, response) => {
+    const admissionNumber = String(request.params.admissionNumber || '').trim().toUpperCase();
+    if (!canReadBoardStudentResult(request.auth, admissionNumber)) {
+      response.status(403).json({ message: 'You do not have permission to read this result.' });
+      return;
+    }
+
     const file = await BoardStudentResultFile.findOne({
-      admissionNumber: request.params.admissionNumber,
+      admissionNumber,
       examId: request.params.examId,
     });
     if (!file) {

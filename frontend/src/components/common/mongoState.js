@@ -104,15 +104,18 @@ export const useMongoState = (namespace, initialValue) => {
       }
     };
 
-    loadValue();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [namespace]);
-
-  useEffect(() => {
     const handleNamespaceUpdate = (event) => {
+      if (event.detail?.__moduleStateInvalidation === true) {
+        const cacheKey = getCacheKey(namespace);
+        if (cacheKey) {
+          bumpCacheVersion(cacheKey);
+          stateCache.delete(cacheKey);
+          pendingLoads.delete(cacheKey);
+        }
+        loadValue();
+        return;
+      }
+
       const cacheKey = getCacheKey(namespace);
       if (cacheKey) {
         bumpCacheVersion(cacheKey);
@@ -121,8 +124,13 @@ export const useMongoState = (namespace, initialValue) => {
       setValue(event.detail);
     };
 
+    loadValue();
     window.addEventListener(moduleStateEventName(namespace), handleNamespaceUpdate);
-    return () => window.removeEventListener(moduleStateEventName(namespace), handleNamespaceUpdate);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener(moduleStateEventName(namespace), handleNamespaceUpdate);
+    };
   }, [namespace]);
 
   const persistValue = useCallback(

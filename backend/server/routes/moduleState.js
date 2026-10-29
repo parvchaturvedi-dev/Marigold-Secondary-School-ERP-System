@@ -1,28 +1,15 @@
 import express from 'express';
 import ModuleState from '../models/ModuleState.js';
 import { isMongoConnected } from '../db.js';
-import { emitRealtimeEvent } from '../realtime.js';
+import { emitRealtimeEvent, realtimeRoleRoom } from '../realtime.js';
 import { IDENTITY_SOURCE_NAMESPACES, syncIdentityUsersFromState } from '../utils/identity.js';
+import {
+  filterModuleStateValue,
+  getModuleStateReadableRoles,
+} from '../utils/moduleStateAccess.js';
 import { requireRole } from '../middleware/auth.js';
 
 const router = express.Router();
-
-// Namespaces that carry personal data (Aadhaar, addresses, contacts, ledgers).
-// Students must never be able to pull the whole-school roster or staff lists.
-const STUDENT_BLOCKED_NAMESPACES = new Set([
-  'admin-student-management-students',
-  'admin-teacher-management-list',
-  'admin-clerk-management-list',
-  'admin-employee-management-list',
-  'admin-employee-designations',
-  'admin-finance-class-ledgers',
-  'admin-finance-alumni-pending',
-  'admin-communication-messages',
-]);
-const BACK_OFFICE_ONLY_NAMESPACES = new Set([
-  'admin-employee-management-list',
-  'admin-employee-designations',
-]);
 
 const ensureMongo = (_request, response, next) => {
   if (!isMongoConnected()) {
@@ -36,18 +23,7 @@ const ensureMongo = (_request, response, next) => {
 };
 
 const guardSensitiveRead = (request, response, next) => {
-  if (
-    BACK_OFFICE_ONLY_NAMESPACES.has(request.params.namespace) &&
-    !['admin', 'clerk'].includes(request.auth?.role)
-  ) {
-    response.status(403).json({ message: 'You do not have permission to read this data.' });
-    return;
-  }
-
-  if (
-    (request.auth?.role === 'student' || request.auth?.role === 'employee') &&
-    STUDENT_BLOCKED_NAMESPACES.has(request.params.namespace)
-  ) {
+  if (!getModuleStateReadableRoles(request.params.namespace).includes(request.auth?.role)) {
     response.status(403).json({ message: 'You do not have permission to read this data.' });
     return;
   }
@@ -57,7 +33,14 @@ const guardSensitiveRead = (request, response, next) => {
 
 router.get('/:namespace', ensureMongo, guardSensitiveRead, async (request, response) => {
   const record = await ModuleState.findOne({ namespace: request.params.namespace });
-  response.json({ value: record?.value ?? null });
+  response.json({
+    value: filterModuleStateValue(
+      request.auth?.role,
+      request.params.namespace,
+      record?.value ?? null,
+      request.auth
+    ),
+  });
 });
 
 // Master data is back-office state. Only admin/clerk may write it — a write to an
@@ -74,7 +57,12 @@ router.put('/:namespace', ensureMongo, requireRole('admin', 'clerk'), async (req
     await syncIdentityUsersFromState();
   }
 
-  emitRealtimeEvent(`mgps-erp-module-state:${request.params.namespace}`, record.value);
+  const roles = getModuleStateReadableRoles(request.params.namespace);
+  emitRealtimeEvent(
+    `mgps-erp-module-state:${request.params.namespace}`,
+    { __moduleStateInvalidation: true },
+    roles.map(realtimeRoleRoom)
+  );
   response.json({ value: record.value });
 });
 

@@ -27,12 +27,26 @@ export const trackRealtimeSocket = (socket) => {
 export const isUserActiveOnErp = (username = '') =>
   Boolean(username && activeSocketsByUsername.has(username));
 
-export const emitRealtimeEvent = (eventName, detail = null) => {
+export const realtimeRoleRoom = (role) => `role:${role}`;
+
+export const emitRealtimeInvalidation = (eventName, roles) => {
+  const rooms = [...new Set(roles)].map(realtimeRoleRoom);
+  emitRealtimeEvent(eventName, { invalidate: true }, rooms);
+};
+
+export const emitRealtimeEvent = (eventName, detail = null, targetRooms = null) => {
   if (!realtimeServer) return;
 
-  realtimeServer.emit('realtime:event', {
+  const payload = {
     eventName,
     detail,
     timestamp: new Date().toISOString(),
-  });
+  };
+
+  if (targetRooms !== null) {
+    realtimeServer.to(targetRooms).emit('realtime:event', payload);
+    return;
+  }
+
+  realtimeServer.emit('realtime:event', payload);
 };

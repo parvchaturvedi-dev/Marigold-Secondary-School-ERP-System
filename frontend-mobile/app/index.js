@@ -5,6 +5,7 @@ import { StatusBar } from "expo-status-bar";
 import { AuthProvider, useAuth } from "../src/auth/AuthContext";
 
 import LoginScreen from "../src/modules/auth/screens/LoginScreen";
+import PasswordChangeScreen from "../src/modules/auth/screens/PasswordChangeScreen";
 import StudentDashboardScreen from "../src/screens/StudentDashboardScreen";
 import StudentModuleScreen from "../src/screens/StudentModuleScreen";
 import TimetableScreen from "../src/screens/TimetableScreen";
@@ -33,6 +34,7 @@ function AppShell() {
 
   // Show splash while checking cached session
   if (screen === "splash") return <SplashScreen />;
+  if (screen === "password-change") return <PasswordChangeScreen />;
 
   // Role dashboards
   if (screen === "student-dashboard") return <StudentDashboardScreen />;

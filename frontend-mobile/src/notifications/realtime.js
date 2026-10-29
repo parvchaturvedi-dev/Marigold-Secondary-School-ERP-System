@@ -1,6 +1,6 @@
-// Realtime socket manager (singleton). The backend broadcasts a single
-// `realtime:event` to every connected socket whenever server state changes
-// (notices, fees, leave, meetings, assignments, etc.). Mobile authenticates the
+// Realtime socket manager (singleton). The backend sends invalidations to
+// authenticated role rooms so clients can refetch state through authorized APIs.
+// Mobile authenticates the
 // socket handshake with the same Bearer token used for REST calls.
 import { io } from "socket.io-client";
 import { API_BASE_URL } from "../api/apiClient";

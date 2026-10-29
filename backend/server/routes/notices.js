@@ -2,7 +2,8 @@ import express from 'express';
 import ModuleState from '../models/ModuleState.js';
 import { isMongoConnected } from '../db.js';
 import { requireRole } from '../middleware/auth.js';
-import { emitRealtimeEvent } from '../realtime.js';
+import { emitRealtimeEvent, realtimeRoleRoom } from '../realtime.js';
+import { getModuleStateReadableRoles } from '../utils/moduleStateAccess.js';
 
 // Notices are stored as a single ModuleState array. Unlike events (which expire
 // five days after they happen) a notice stays relevant for the whole academic
@@ -34,7 +35,11 @@ router.post('/reset', ensureMongo, requireRole('admin', 'clerk'), async (_reques
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
 
-  emitRealtimeEvent(`mgps-erp-module-state:${NOTICE_NAMESPACE}`, []);
+  emitRealtimeEvent(
+    `mgps-erp-module-state:${NOTICE_NAMESPACE}`,
+    { __moduleStateInvalidation: true },
+    getModuleStateReadableRoles(NOTICE_NAMESPACE).map(realtimeRoleRoom)
+  );
   response.json({ cleared });
 });
 

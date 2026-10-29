@@ -1,7 +1,11 @@
 import express from 'express';
 import Application from '../models/Application.js';
 import { isMongoConnected } from '../db.js';
-import { emitRealtimeEvent, isUserActiveOnErp } from '../realtime.js';
+import {
+  emitRealtimeEvent,
+  emitRealtimeInvalidation,
+  isUserActiveOnErp,
+} from '../realtime.js';
 import { resolveDisplayName } from '../utils/nameLookup.js';
 import { createNotification } from '../utils/notify.js';
 import { requireRole } from '../middleware/auth.js';
@@ -322,10 +326,12 @@ router.patch('/:id/reply-read', ensureMongo, async (request, response) => {
   application.replyEditedAfterRead = false;
   await application.save();
 
-  emitRealtimeEvent('mgps-erp-applications-updated', {
-    applicationId: application._id.toString(),
-    eventType: 'reply-read',
-  });
+  emitRealtimeInvalidation('mgps-erp-applications-updated', [
+    'admin',
+    'clerk',
+    'student',
+    'teacher',
+  ]);
   response.json(await normalizeApplication(application));
 });
 

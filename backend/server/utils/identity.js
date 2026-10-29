@@ -1,6 +1,7 @@
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import ModuleState from '../models/ModuleState.js';
 import User from '../models/User.js';
+import { needsPasswordChange } from './passwordPolicy.js';
 
 const STUDENT_NAMESPACE = 'admin-student-management-students';
 const TEACHER_NAMESPACE = 'admin-teacher-management-list';
@@ -78,7 +79,9 @@ const usernameFor = (role, rawId) => {
   return id;
 };
 
-const initialPasswordFor = (username) => `${username}@MGPS`;
+export const createInitialPassword = () => randomBytes(32).toString('base64url');
+
+const isLegacyDefaultPassword = (username, password) => password === `${username}@MGPS`;
 
 const getStateValue = async (namespace, fallback) => {
   const record = await ModuleState.findOne({ namespace }).lean();
@@ -129,9 +132,16 @@ const upsertGeneratedUser = async ({ username, role, displayName, profile, isAct
   const hasChangedPassword =
     Boolean(existing) &&
     (existing.profile?.passwordChanged === true || existing.profile?.initialPassword === '');
+  const shouldRotateInitialPassword =
+    !hasChangedPassword &&
+    (!existing ||
+      !existing.profile?.initialPassword ||
+      isLegacyDefaultPassword(username, existing.profile.initialPassword));
   const initialPassword = hasChangedPassword
     ? ''
-    : existing?.profile?.initialPassword || initialPasswordFor(username);
+    : shouldRotateInitialPassword
+      ? createInitialPassword()
+      : existing.profile.initialPassword;
 
   const mergedProfile = {
     ...(existing?.profile || {}),
@@ -143,6 +153,9 @@ const upsertGeneratedUser = async ({ username, role, displayName, profile, isAct
   if (hasChangedPassword) {
     mergedProfile.forcePasswordChange = false;
     mergedProfile.passwordChanged = true;
+  } else {
+    mergedProfile.forcePasswordChange = needsPasswordChange(mergedProfile);
+    mergedProfile.passwordChanged = false;
   }
 
   await User.findOneAndUpdate(
@@ -151,7 +164,10 @@ const upsertGeneratedUser = async ({ username, role, displayName, profile, isAct
       role,
       displayName,
       profile: mergedProfile,
-      passwordHash: existing?.passwordHash || createPasswordHash(initialPassword),
+      passwordHash:
+        existing && !shouldRotateInitialPassword
+          ? existing.passwordHash
+          : createPasswordHash(initialPassword),
       isActive,
     },
     { upsert: true, new: true, setDefaultsOnInsert: true }

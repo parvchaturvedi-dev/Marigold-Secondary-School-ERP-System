@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { gunzipSync, gzipSync } from 'node:zlib';
 import express from 'express';
 import mongoose from 'mongoose';
 import { getPostgresPool } from '../db.js';
@@ -50,6 +51,16 @@ const readAssets = async (queryable) => {
     ...row,
     data: row.data ? row.data.toString('base64') : '',
   }));
+};
+
+const omitBinaryValues = (value) => {
+  if (Array.isArray(value)) return value.map(omitBinaryValues);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => !/^(data|fileData|imageData|photoDataUrl)$/i.test(key))
+      .map(([key, entry]) => [key, omitBinaryValues(entry)])
+  );
 };
 
 const makeSnapshot = async (queryable, sessionName) => {
@@ -142,9 +153,80 @@ const makePromotionPreview = async (queryable) => {
 const isValidSessionName = (value) =>
   typeof value === 'string' && value.trim().length > 0 && value.trim().length <= 32;
 
-router.get('/current-session', requireRole('clerk'), desktopOnly, async (_request, response, next) => {
+router.get('/current-session', requireRole('admin', 'clerk'), async (_request, response, next) => {
   try {
     response.json({ currentSession: await currentSession(getPostgresPool()) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/archives', requireRole('admin', 'clerk'), async (_request, response, next) => {
+  try {
+    const result = await getPostgresPool().query(
+      `SELECT id, source_session, target_session, snapshot_sha256, record_count,
+              compressed_bytes, created_by, created_at
+       FROM public.session_archives
+       ORDER BY created_at DESC`
+    );
+    response.json(result.rows);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/archives/:id', requireRole('admin', 'clerk'), async (request, response, next) => {
+  if (!/^[0-9a-f-]{36}$/i.test(request.params.id)) {
+    response.status(400).json({ message: 'Session archive identifier is invalid.' });
+    return;
+  }
+  try {
+    const tableName = String(request.query.table || '');
+    const offset = Math.max(0, Number.parseInt(request.query.offset, 10) || 0);
+    const limit = Math.min(100, Math.max(1, Number.parseInt(request.query.limit, 10) || 25));
+    const result = await getPostgresPool().query(
+      `SELECT id, source_session, target_session, snapshot_sha256, record_count,
+              compressed_bytes, created_by, created_at, snapshot_gzip
+       FROM public.session_archives
+       WHERE id = $1`,
+      [request.params.id]
+    );
+    if (!result.rowCount) {
+      response.status(404).json({ message: 'Session archive not found.' });
+      return;
+    }
+
+    const { snapshot_gzip: compressedSnapshot, ...archive } = result.rows[0];
+    const snapshot = JSON.parse(gunzipSync(compressedSnapshot).toString('utf8'));
+    const actualHash = createHash('sha256').update(JSON.stringify(snapshot)).digest('hex');
+    if (actualHash !== archive.snapshot_sha256) {
+      throw new Error(`Session archive integrity check failed for ${archive.id}.`);
+    }
+    const tables = Object.entries(snapshot.tables).map(([name, rows]) => ({
+      name,
+      rowCount: rows.length,
+    }));
+    if (!tableName) {
+      response.json({ archive, tables });
+      return;
+    }
+
+    const rows = snapshot.tables[tableName];
+    if (!rows) {
+      response.status(404).json({ message: 'Table was not found in this session archive.' });
+      return;
+    }
+    const visibleRows = rows
+      .slice(offset, offset + limit)
+      .map(omitBinaryValues);
+    response.json({
+      archive,
+      tables,
+      table: tableName,
+      offset,
+      limit,
+      rows: visibleRows,
+    });
   } catch (error) {
     next(error);
   }
@@ -159,7 +241,7 @@ router.get('/current-snapshot', requireRole('clerk'), desktopOnly, async (_reque
   }
 });
 
-router.get('/rollover-preview', requireRole('clerk'), desktopOnly, async (_request, response, next) => {
+router.get('/rollover-preview', requireRole('admin', 'clerk'), async (_request, response, next) => {
   try {
     const pool = getPostgresPool();
     const sessionName = await currentSession(pool);
@@ -176,19 +258,15 @@ router.get('/rollover-preview', requireRole('clerk'), desktopOnly, async (_reque
   }
 });
 
-router.post('/rollover', requireRole('clerk'), desktopOnly, async (request, response, next) => {
+router.post('/rollover', requireRole('admin', 'clerk'), async (request, response, next) => {
   const { sourceSession, targetSession: rawTarget, snapshotSha256, archiveId } = request.body || {};
   const targetSession = String(rawTarget || '').trim();
   if (!isValidSessionName(targetSession)) {
     response.status(400).json({ message: 'Enter a new session name (maximum 32 characters).' });
     return;
   }
-  if (!/^[a-f0-9]{64}$/i.test(String(snapshotSha256 || ''))) {
-    response.status(400).json({ message: 'A verified local session backup is required before rollover.' });
-    return;
-  }
   if (!/^[0-9a-f-]{36}$/i.test(String(archiveId || ''))) {
-    response.status(400).json({ message: 'The local backup identifier is invalid.' });
+    response.status(400).json({ message: 'The session archive identifier is invalid.' });
     return;
   }
 
@@ -237,13 +315,32 @@ router.post('/rollover', requireRole('clerk'), desktopOnly, async (request, resp
     );
 
     const liveSnapshot = await makeSnapshot(client, source);
-    if (liveSnapshot.sha256 !== String(snapshotSha256).toLowerCase()) {
+    const snapshotBytes = Buffer.from(JSON.stringify(liveSnapshot.snapshot));
+    const compressedSnapshot = gzipSync(snapshotBytes);
+    const snapshotHash = createHash('sha256').update(snapshotBytes).digest('hex');
+    if (snapshotSha256 && liveSnapshot.sha256 !== String(snapshotSha256).toLowerCase()) {
       await client.query('ROLLBACK');
       response.status(409).json({
         message: 'Online data changed after the local backup. No rollover changes were made; create a fresh backup and retry.',
       });
       return;
     }
+    await client.query(
+      `INSERT INTO public.session_archives
+         (id, source_session, target_session, snapshot_sha256, record_count,
+          compressed_bytes, snapshot_gzip, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        archiveId,
+        source,
+        targetSession,
+        snapshotHash,
+        liveSnapshot.snapshot.recordCount,
+        compressedSnapshot.length,
+        compressedSnapshot,
+        String(request.auth?.username || ''),
+      ]
+    );
 
     const studentsState = await getModuleState(client, 'admin-student-management-students', true);
     const preferencesState = await getModuleState(client, 'admin-class-preferences', true);
@@ -305,7 +402,7 @@ router.post('/rollover', requireRole('clerk'), desktopOnly, async (request, resp
         archiveId,
         source,
         targetSession,
-        snapshotSha256,
+        snapshotHash,
         JSON.stringify(result),
         String(request.auth?.username || ''),
       ]

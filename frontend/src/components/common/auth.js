@@ -2,6 +2,7 @@ import { apiFetch } from './api';
 import { getActiveStudentProfile, getSessionStudentProfiles, normalizeStudentProfile } from './portalProfiles';
 
 export const AUTH_STORAGE_KEY = 'mgps_erp_auth_session';
+export const SESSION_UPDATED_EVENT = 'mgps-erp-session-updated';
 
 export const ROLE_DASHBOARD_PATHS = {
   admin: '/admin/dashboard',
@@ -237,9 +238,11 @@ export const saveSession = (authPayload) => {
     role === 'student' ? hydrateStudentSession(session) : session;
 
   localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(hydratedSession));
+  window.dispatchEvent(new CustomEvent(SESSION_UPDATED_EVENT, { detail: hydratedSession }));
   return hydratedSession;
 };
 
 export const clearSession = () => {
   localStorage.removeItem(AUTH_STORAGE_KEY);
+  window.dispatchEvent(new CustomEvent(SESSION_UPDATED_EVENT, { detail: null }));
 };

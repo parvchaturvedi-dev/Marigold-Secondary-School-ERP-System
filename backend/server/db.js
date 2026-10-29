@@ -123,7 +123,21 @@ export const connectPostgres = async () => {
         result JSONB NOT NULL,
         actor_username TEXT NOT NULL,
         completed_at TIMESTAMPTZ NOT NULL DEFAULT now()
-      )
+      );
+
+      CREATE TABLE IF NOT EXISTS public.session_archives (
+        id UUID PRIMARY KEY,
+        source_session TEXT NOT NULL,
+        target_session TEXT NOT NULL,
+        snapshot_sha256 TEXT NOT NULL,
+        record_count BIGINT NOT NULL,
+        compressed_bytes BIGINT NOT NULL,
+        snapshot_gzip BYTEA NOT NULL,
+        created_by TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS session_archives_created_at_idx
+      ON public.session_archives (created_at DESC)
     `);
     await activePool.query(`
       CREATE TABLE IF NOT EXISTS public.inventory_items (

@@ -32,11 +32,14 @@ import studentDocumentRoutes from './routes/studentDocuments.js';
 import teacherDocumentRoutes from './routes/teacherDocuments.js';
 import timetableRoutes from './routes/timetable.js';
 import vaultRoutes from './routes/vault.js';
-import { connectPostgres, getDbStatus } from './db.js';
+import { connectPostgres, getDbStatus, isMongoConnected } from './db.js';
 import { scheduleEventCleanup } from './utils/eventCleanup.js';
 import { requireAuth } from './middleware/auth.js';
 import { verifyAuthToken } from './utils/authToken.js';
-import { setRealtimeServer, trackRealtimeSocket } from './realtime.js';
+import User from './models/User.js';
+import { needsPasswordChange } from './utils/passwordPolicy.js';
+import { createCorsOriginPolicy } from './utils/corsPolicy.js';
+import { realtimeRoleRoom, setRealtimeServer, trackRealtimeSocket } from './realtime.js';
 import { createSessionMiddleware } from './utils/session.js';
 import { startBrevoOutboxWorker } from './utils/mailer.js';
 
@@ -44,39 +47,7 @@ const app = express();
 const server = createServer(app);
 const port = process.env.PORT || 5000;
 
-const normalizeOrigin = (origin = '') => String(origin).trim().replace(/\/+$/, '');
-
-const parseOriginList = (value = '') =>
-  String(value)
-    .split(',')
-    .map(normalizeOrigin)
-    .filter(Boolean);
-const localDevOriginPattern = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
-const vercelOrigin = process.env.VERCEL_URL ? `https://${normalizeOrigin(process.env.VERCEL_URL)}` : '';
-const frontendUrl = process.env.FRONTEND_URL || process.env.FRONTEND_ORIGIN || '';
-const defaultAllowedOrigins = [
-  'https://www.mghub.marigoldschoolbehror.com',
-  'https://mghub.marigoldschoolbehror.com',
-  'http://localhost:5173',
-  'https://marigold-secondary-school-erp-system-frontend-dhuizf172.vercel.app',
-];
-const schoolVercelPreviewPattern =
-  /^https:\/\/marigold-secondary-school-erp-system-frontend-[a-z0-9-]+\.vercel\.app$/;
-const configuredOrigins = new Set(
-  [
-    ...defaultAllowedOrigins,
-    ...parseOriginList(process.env.CORS_ORIGINS),
-    ...parseOriginList(process.env.CLIENT_ORIGIN),
-    ...parseOriginList(frontendUrl),
-    vercelOrigin,
-  ].filter(Boolean)
-);
-
-const isAllowedOrigin = (origin) =>
-  !origin ||
-  configuredOrigins.has(normalizeOrigin(origin)) ||
-  localDevOriginPattern.test(origin) ||
-  schoolVercelPreviewPattern.test(origin);
+const { isAllowedOrigin } = createCorsOriginPolicy(process.env);
 
 const corsOrigin = (origin, callback) => {
   if (isAllowedOrigin(origin)) {
@@ -128,15 +99,10 @@ const io = new Server(server, {
 io.engine.use(sessionMiddleware);
 setRealtimeServer(io);
 
-io.use((socket, next) => {
+io.use(async (socket, next) => {
   // Web clients authenticate via the cookie session; mobile clients (no cookie
   // jar) pass a Bearer token in the socket handshake auth payload.
   const sessionAuth = socket.request.session?.auth;
-  if (sessionAuth?.username && sessionAuth?.role) {
-    socket.data.auth = sessionAuth;
-    return next();
-  }
-
   const handshake = socket.handshake || {};
   const rawToken =
     handshake.auth?.token ||
@@ -146,18 +112,40 @@ io.use((socket, next) => {
     handshake.query?.token ||
     '';
 
-  if (rawToken) {
-    const tokenAuth = verifyAuthToken(String(rawToken));
-    if (tokenAuth?.username && tokenAuth?.role) {
-      socket.data.auth = tokenAuth;
-    }
+  const tokenAuth = rawToken ? verifyAuthToken(String(rawToken)) : null;
+  const auth = rawToken
+    ? tokenAuth
+    : sessionAuth?.username && sessionAuth?.role
+      ? sessionAuth
+      : null;
+  if (!auth?.username || !auth?.role || !isMongoConnected()) {
+    next(new Error('Authentication is required.'));
+    return;
   }
 
-  next();
+  try {
+    const user = await User.findOne({ username: auth.username })
+      .select('username role isActive profile')
+      .lean();
+    if (!user || !user.isActive || user.role !== auth.role) {
+      next(new Error('Authentication is required.'));
+      return;
+    }
+    if (needsPasswordChange(user.profile)) {
+      next(new Error('Change your password before using the ERP portal.'));
+      return;
+    }
+
+    socket.data.auth = { username: user.username, role: user.role };
+    next();
+  } catch {
+    next(new Error('Authentication is required.'));
+  }
 });
 
 io.on('connection', (socket) => {
   trackRealtimeSocket(socket);
+  socket.join(realtimeRoleRoom(socket.data.auth.role));
 });
 
 app.get('/api/health', (_request, response) => {

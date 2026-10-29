@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { io } from 'socket.io-client';
-import { API_ORIGIN } from './api';
+import { API_ORIGIN, getAuthToken } from './api';
 
 let realtimeSocket = null;
 
@@ -12,6 +12,7 @@ export const getRealtimeSocket = () => {
     path: '/socket.io',
     transports: ['websocket', 'polling'],
     withCredentials: true,
+    auth: (callback) => callback({ token: getAuthToken() }),
     timeout: 20000,
     reconnectionAttempts: 5,
   });
@@ -21,13 +22,24 @@ export const getRealtimeSocket = () => {
 
 export const useRealtimeBridge = () => {
   useEffect(() => {
-    const handleRealtimeEvent = ({ eventName, detail }) => {
+    let isArchiveMode = false;
+    const handleRealtimeEvent = ({ eventName, detail, invalidate }) => {
       if (!eventName) return;
-      window.dispatchEvent(new CustomEvent(eventName, { detail }));
+      window.dispatchEvent(
+        new CustomEvent(eventName, {
+          detail: invalidate ? { __moduleStateInvalidation: true } : detail,
+        })
+      );
     };
 
     let socket = null;
+    const handleSessionUpdate = (event) => {
+      if (!socket || isArchiveMode) return;
+      socket.disconnect();
+      if (event.detail?.username) socket.connect();
+    };
     const setArchiveMode = (activeSession) => {
+      isArchiveMode = Boolean(activeSession);
       if (activeSession) {
         if (socket) {
           socket.off('realtime:event', handleRealtimeEvent);
@@ -43,6 +55,7 @@ export const useRealtimeBridge = () => {
       }
     };
 
+    window.addEventListener('mgps-erp-session-updated', handleSessionUpdate);
     if (window.mgpsDesktop?.archives) {
       const unsubscribe = window.mgpsDesktop.archives.onActiveChanged(setArchiveMode);
       window.mgpsDesktop.archives.getActive().then(setArchiveMode).catch((error) => {
@@ -50,10 +63,14 @@ export const useRealtimeBridge = () => {
       });
       return () => {
         unsubscribe();
+        window.removeEventListener('mgps-erp-session-updated', handleSessionUpdate);
         socket?.off('realtime:event', handleRealtimeEvent);
       };
     }
     setArchiveMode(null);
-    return () => socket?.off('realtime:event', handleRealtimeEvent);
+    return () => {
+      window.removeEventListener('mgps-erp-session-updated', handleSessionUpdate);
+      socket?.off('realtime:event', handleRealtimeEvent);
+    };
   }, []);
 };

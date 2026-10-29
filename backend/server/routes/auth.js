@@ -15,10 +15,12 @@ import {
   logSmtpError,
 } from '../utils/mailer.js';
 import {
+  createInitialPassword,
   createPasswordHash,
   listIdentityUsers,
   verifyPassword,
 } from '../utils/identity.js';
+import { needsPasswordChange } from '../utils/passwordPolicy.js';
 
 const router = express.Router();
 
@@ -165,7 +167,7 @@ const buildAdminPayload = (body = {}) => {
   const email = String(body.email || '').trim();
   const mobile = String(body.mobile || body.phone || '').trim();
   const designation = String(body.designation || 'Administrator').trim();
-  const initialPassword = String(body.password || body.initialPassword || `${username}@MGPS`);
+  const initialPassword = String(body.password || body.initialPassword || createInitialPassword());
 
   return {
     username,
@@ -217,7 +219,7 @@ const toSessionPayload = (user) => {
     photoDataUrl: profile.photoDataUrl || '',
     createdAt: new Date().toISOString(),
     token: createAuthToken(user),
-    mustChangePassword: Boolean(user.profile?.forcePasswordChange),
+    mustChangePassword: needsPasswordChange(profile),
   };
 
   if (user.role === 'student') {
@@ -328,9 +330,7 @@ router.post('/login', loginLimiter, ensureMongo, async (request, response) => {
   }
 
   const payload = toSessionPayload(user);
-  payload.mustChangePassword =
-    Boolean(user.profile?.forcePasswordChange) ||
-    Boolean(user.profile?.initialPassword && password === user.profile.initialPassword);
+  payload.mustChangePassword = needsPasswordChange(user.profile);
   persistSessionAuth(request, payload, response);
 });
 
@@ -365,6 +365,7 @@ router.post('/users/admins', ensureMongo, requireAuth, requireRole('admin'), asy
       mobile: payload.mobile,
       designation: payload.designation,
       initialPassword: payload.initialPassword,
+      forcePasswordChange: true,
       managedByAdminPanel: true,
     },
   });
@@ -703,9 +704,7 @@ router.get('/session', optionalAuth, async (request, response) => {
     }
 
     const payload = toSessionPayload(user);
-    payload.mustChangePassword =
-      Boolean(user.profile?.forcePasswordChange) ||
-      Boolean(user.profile?.initialPassword);
+    payload.mustChangePassword = needsPasswordChange(user.profile);
     saveSessionAuth(request, payload, response);
   } catch (error) {
     console.error('[auth:session]', {

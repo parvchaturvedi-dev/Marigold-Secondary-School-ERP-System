@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Settings as SettingsIcon, ShieldAlert, KeyRound, Eye, EyeOff, ToggleLeft, ToggleRight, BellRing, Sliders, AlertTriangle, Trash2, X, Loader2 } from 'lucide-react';
 import { apiFetch } from '../../services/api';
+import CloudSessionManager from '../../components/common/CloudSessionManager';
 
 const Settings = ({ onLogout } = {}) => {
   // Password Fields State Manager
@@ -103,6 +104,10 @@ const Settings = ({ onLogout } = {}) => {
         <p className="text-xs text-slate-500 mt-1">
           Manage security options, change your password, and control institution-wide system settings.
         </p>
+      </div>
+
+      <div className="mb-6">
+        <CloudSessionManager canEditCurrentSession canDeleteArchives />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">

@@ -7,7 +7,7 @@ import ModuleState from '../models/ModuleState.js';
 import User from '../models/User.js';
 import { isMongoConnected } from '../db.js';
 import { requireRole } from '../middleware/auth.js';
-import { emitRealtimeEvent } from '../realtime.js';
+import { emitRealtimeInvalidation } from '../realtime.js';
 import { createNotification } from '../utils/notify.js';
 
 const router = express.Router();
@@ -525,7 +525,7 @@ router.put('/settings', requireRole('admin'), async (request, response) => {
     { new: true, upsert: true, setDefaultsOnInsert: true }
   );
 
-  emitRealtimeEvent(eventName, { type: 'settings', setting });
+  emitRealtimeInvalidation(eventName, ['admin', 'clerk', 'teacher', 'employee']);
   response.json(setting);
 });
 
@@ -576,7 +576,7 @@ router.put('/biometrics', requireRole('admin', 'clerk'), async (request, respons
     { new: true, upsert: true, setDefaultsOnInsert: true }
   );
 
-  emitRealtimeEvent(eventName, { type: 'biometric', biometric });
+  emitRealtimeInvalidation(eventName, ['admin', 'clerk', 'teacher']);
   response.json({ message: 'Biometric profile saved.', biometric });
 });
 
@@ -648,7 +648,7 @@ router.post('/scan', requireRole('admin', 'clerk', 'teacher'), validateAttendanc
     { new: true, upsert: true, setDefaultsOnInsert: true }
   );
 
-  emitRealtimeEvent(eventName, { type: 'scan', log });
+  emitRealtimeInvalidation(eventName, ['admin', 'clerk', 'teacher']);
   response.json({ message: 'Attendance marked.', log, setting });
 });
 
@@ -740,7 +740,7 @@ router.post('/clock', requireRole('admin', 'clerk', 'teacher', 'employee'), vali
     { new: true, upsert: true, setDefaultsOnInsert: true }
   );
 
-  emitRealtimeEvent(eventName, { type: 'clock', log });
+  emitRealtimeInvalidation(eventName, ['admin', 'clerk', 'teacher', 'employee']);
   response.json({ message: `${isClockOut ? 'Clock-out' : 'Clock-in'} recorded.`, log, setting });
 });
 
@@ -880,7 +880,7 @@ router.post('/students/batch', requireRole('admin', 'clerk', 'teacher'), async (
   }
 
   const logs = await AttendanceLog.find({ attendanceDate, className, entityType: 'student' }).lean();
-  emitRealtimeEvent(eventName, { type: 'student-batch', attendanceDate, className });
+  emitRealtimeInvalidation(eventName, ['admin', 'clerk', 'teacher']);
   response.json({ message: `Saved ${writes.length} attendance records.`, count: writes.length, logs });
 });
 

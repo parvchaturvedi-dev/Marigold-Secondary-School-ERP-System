@@ -101,9 +101,13 @@ export function AuthProvider({ children }) {
         const cachedUser = hydrateUser(session);
         lastSessionRefreshRef.current = Date.now();
         setUser(cachedUser);
-        setScreen(`${session.role}-dashboard`);
-        registerPushToken();
-        connectRealtime(session.token);
+        setScreen(session.mustChangePassword ? "password-change" : `${session.role}-dashboard`);
+        if (session.mustChangePassword) {
+          disconnectRealtime();
+        } else {
+          registerPushToken();
+          connectRealtime(session.token);
+        }
 
         // Fire-and-forget refresh (doesn't block the dashboard from rendering).
         apiRequest("/auth/session")
@@ -111,7 +115,19 @@ export function AuthProvider({ children }) {
             if (serverSession && serverSession.role && serverSession.username) {
               lastSessionRefreshRef.current = Date.now();
               setUser(hydrateUser(serverSession));
+              if (serverSession.mustChangePassword) {
+                setSelectedModule(null);
+                setScreen("password-change");
+              } else if (session.mustChangePassword) {
+                setScreen(`${serverSession.role}-dashboard`);
+              }
               await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(serverSession));
+              if (serverSession.mustChangePassword) {
+                disconnectRealtime();
+              } else {
+                registerPushToken();
+                connectRealtime(serverSession.token);
+              }
             } else {
               // Server explicitly rejected — clear + go to login.
               await AsyncStorage.removeItem(SESSION_KEY);
@@ -155,9 +171,21 @@ export function AuthProvider({ children }) {
 
         const nextUser = hydrateUser(serverSession);
         await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(serverSession));
-        if (userRef.current?.username === serverSession.username) setUser(nextUser);
+        if (userRef.current?.username === serverSession.username) {
+          setUser(nextUser);
+          if (serverSession.mustChangePassword) {
+            setSelectedModule(null);
+            setScreen("password-change");
+          } else if (currentUser.mustChangePassword) {
+            setScreen(`${serverSession.role}-dashboard`);
+          }
+        }
         lastSessionRefreshRef.current = Date.now();
-        connectRealtime(serverSession.token);
+        if (serverSession.mustChangePassword) {
+          disconnectRealtime();
+        } else {
+          connectRealtime(serverSession.token);
+        }
       } catch (error) {
         console.warn("Session refresh failed; keeping the current session:", error?.message || error);
       } finally {
@@ -187,9 +215,13 @@ export function AuthProvider({ children }) {
       await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(sessionData));
       lastSessionRefreshRef.current = Date.now();
       setUser(sessionData);
-      setScreen(`${role}-dashboard`);
-      registerPushToken();
-      connectRealtime(sessionData.token);
+      setScreen(sessionData.mustChangePassword ? "password-change" : `${role}-dashboard`);
+      if (sessionData.mustChangePassword) {
+        disconnectRealtime();
+      } else {
+        registerPushToken();
+        connectRealtime(sessionData.token);
+      }
     } catch (error) {
       // Re-throw so LoginScreen can show the error in an Alert
       throw error;
@@ -282,8 +314,22 @@ export function AuthProvider({ children }) {
       return;
     }
 
+    if (user.mustChangePassword) {
+      setScreen("password-change");
+      return;
+    }
+
     setSelectedModule(null);
     setScreen(`${user.role}-dashboard`);
+  }
+
+  async function completePasswordChange() {
+    const nextUser = { ...userRef.current, mustChangePassword: false };
+    setUser(nextUser);
+    setScreen(`${nextUser.role}-dashboard`);
+    lastSessionRefreshRef.current = Date.now();
+    await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(nextUser));
+    connectRealtime(nextUser.token);
   }
 
   async function logout() {
@@ -339,6 +385,7 @@ export function AuthProvider({ children }) {
         loading,
         login,
         logout,
+        completePasswordChange,
         openStudentModule,
         openTimetable: () => {
           setSelectedModule("Timetable");
