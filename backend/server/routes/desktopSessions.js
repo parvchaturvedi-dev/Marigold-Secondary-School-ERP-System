@@ -161,6 +161,30 @@ router.get('/current-session', requireRole('admin', 'clerk'), async (_request, r
   }
 });
 
+router.patch('/current-session', requireRole('admin'), async (request, response, next) => {
+  const sessionName = String(request.body?.sessionName || '').trim();
+  if (!isValidSessionName(sessionName)) {
+    response.status(400).json({ message: 'Enter a session name (maximum 32 characters).' });
+    return;
+  }
+
+  try {
+    const result = await getPostgresPool().query(
+      `UPDATE public.desktop_session_state
+       SET current_session_name = $1, updated_at = now()
+       WHERE id = 1
+       RETURNING current_session_name`,
+      [sessionName]
+    );
+    if (!result.rowCount) {
+      throw new Error('Desktop session state has not been initialized.');
+    }
+    response.json({ currentSession: result.rows[0].current_session_name });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.get('/archives', requireRole('admin', 'clerk'), async (_request, response, next) => {
   try {
     const result = await getPostgresPool().query(
@@ -170,6 +194,27 @@ router.get('/archives', requireRole('admin', 'clerk'), async (_request, response
        ORDER BY created_at DESC`
     );
     response.json(result.rows);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete('/archives/:id', requireRole('admin'), async (request, response, next) => {
+  if (!/^[0-9a-f-]{36}$/i.test(request.params.id)) {
+    response.status(400).json({ message: 'Session archive identifier is invalid.' });
+    return;
+  }
+
+  try {
+    const result = await getPostgresPool().query(
+      'DELETE FROM public.session_archives WHERE id = $1 RETURNING id',
+      [request.params.id]
+    );
+    if (!result.rowCount) {
+      response.status(404).json({ message: 'Session archive not found.' });
+      return;
+    }
+    response.json({ deleted: true, id: result.rows[0].id });
   } catch (error) {
     next(error);
   }
