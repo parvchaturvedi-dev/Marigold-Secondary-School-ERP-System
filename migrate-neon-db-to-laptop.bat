@@ -17,11 +17,8 @@ if not defined DISTRO (
   exit /b 1
 )
 
-set "WSL_READY="
-for /f "delims=" %%A in ('wsl.exe -d "%DISTRO%" --exec /bin/echo MGPS_WSL_READY 2^>nul') do (
-  if "%%A"=="MGPS_WSL_READY" set "WSL_READY=1"
-)
-if not defined WSL_READY (
+wsl.exe -d "%DISTRO%" --exec /bin/true
+if errorlevel 1 (
   echo.
   echo WSL distribution "%DISTRO%" was not found or could not start.
   echo Choose an installed Ubuntu distribution from the list above.
