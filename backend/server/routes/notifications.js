@@ -5,11 +5,112 @@ import { isMongoConnected } from '../db.js';
 import { emitRealtimeEvent } from '../realtime.js';
 import { resolveDisplayNames } from '../utils/nameLookup.js';
 import { createNotification, notifyMany } from '../utils/notify.js';
+import { sendExpoPush } from '../utils/push.js';
 import { requireRole } from '../middleware/auth.js';
 
 export const NOTIFICATIONS_UPDATED_EVENT = 'mgps-erp-notifications-updated';
 
 const router = express.Router();
+
+const NOTIFICATION_ROLES = ['admin', 'clerk', 'teacher', 'student', 'employee'];
+const LINK_PAGES_BY_ROLE = {
+  admin: [
+    'Dashboard', 'AI Assistant', 'Academic Calender', 'Application', 'Assignment',
+    'Attendance', 'Admin Management', 'Class Management', 'Class Preferences',
+    'Clerk Management', 'Documents Management', 'Events', 'Examinations',
+    'Exam Creation', 'Paper Creation', 'Paper Analysis', 'Paper Selected',
+    'Report Card Management', 'Marks Management', 'Finance', 'Stock & Inventory',
+    'Payroll', 'Id Card', 'Transfer Certificate', 'Study Certificate',
+    'Leave Requests', 'Meetings', 'Notices', 'Profile', 'Student Ledger',
+    'Student Profile', 'Subject Management', 'Teacher Management', 'Teacher Assignment',
+    'Teacher Profile', 'Employee Management', 'Employee Assignment Management',
+    'Class Finance List', 'Timetable', 'Timetable Management', 'Settings',
+    'Student Assigning', 'Student Management', 'Sibling Assigning', 'Fees Receipt',
+    'Users Management', 'Vault', 'Certification', 'About Us',
+  ],
+  clerk: [
+    'Dashboard', 'Academic Calender', 'Application', 'Assignment', 'Attendance',
+    'Class Management', 'Class Preferences', 'Paathshala History',
+    'Documents Management', 'Events', 'Examinations', 'Exam Creation',
+    'Paper Creation', 'Paper Analysis', 'Paper Selected', 'Marks Management',
+    'Id Card', 'Transfer Certificate', 'Study Certificate', 'Leave Requests',
+    'Meetings', 'Notices', 'Profile', 'My Salary', 'Settings', 'Sibling Assigning',
+    'Student Assigning', 'Student Management', 'Student Profile',
+    'Subject Management', 'Teacher Assignment', 'Teacher Management',
+    'Teacher Profile', 'Employee Management', 'Employee Assignment Management',
+    'Timetable', 'Timetable Management', 'Vault', 'Certification', 'About Us',
+  ],
+  student: [
+    'Dashboard', 'Academic Calender', 'My Class', 'Timetable', 'Application',
+    'Assignment', 'Attendance', 'Events', 'Examinations', 'Fees', 'Id Card',
+    'Leave Requests', 'Meetings', 'Notices', 'Profile', 'Settings', 'Vault',
+    'Certification', 'About Us',
+  ],
+  teacher: [
+    'Dashboard', 'Academic Calender', 'My Class', 'Timetable', 'Application',
+    'Assignment', 'Attendance', 'Events', 'Examinations', 'Paper Analysis',
+    'Marks Management', 'Id Card', 'Leave Requests', 'Meetings', 'Notices',
+    'Profile', 'My Salary', 'Settings', 'Vault', 'Certification', 'About Us',
+  ],
+  employee: ['Attendance', 'Notices', 'Payroll', 'Id Card', 'Academic Calender'],
+};
+
+const getStudentClassNames = (profile = {}) => {
+  const source = profile && typeof profile === 'object' ? profile : {};
+  return [...new Set(
+    [
+      ...(Array.isArray(source.studentProfiles) ? source.studentProfiles : []),
+      ...(source.className ? [{ className: source.className }] : []),
+    ]
+      .map((student) => String(student?.className || '').trim())
+      .filter(Boolean)
+  )];
+};
+
+const getStudentClassCount = (users, className) =>
+  users.filter((user) => getStudentClassNames(user.profile).includes(className)).length;
+
+const getUserDesignation = (profile = {}) => {
+  const source = profile && typeof profile === 'object' ? profile : {};
+  return String(
+    source.designation ||
+    source.teacherProfile?.designation ||
+    source.employeeProfile?.designation ||
+    ''
+  ).trim();
+};
+
+const collectPushTokens = (users = []) =>
+  [...new Set(users.flatMap((user) => Array.isArray(user.pushTokens) ? user.pushTokens : []))];
+
+const adminTargets = async (_request, response) => {
+  const users = await User.find({ isActive: true }).select('role profile').lean();
+  const roleOptions = NOTIFICATION_ROLES.map((role) => {
+    const roleUsers = users.filter((user) => user.role === role);
+    const designations = role === 'teacher' || role === 'employee'
+      ? [...new Set(roleUsers.map((user) => getUserDesignation(user.profile)).filter(Boolean))]
+          .sort()
+          .map((name) => ({
+            name,
+            count: roleUsers.filter(
+              (user) => getUserDesignation(user.profile).toLowerCase() === name.toLowerCase()
+            ).length,
+          }))
+      : [];
+    return {
+      role,
+      count: roleUsers.length,
+      classes: role === 'student'
+        ? [...new Set(roleUsers.flatMap((user) => getStudentClassNames(user.profile)))]
+            .sort()
+            .map((name) => ({ name, count: getStudentClassCount(roleUsers, name) }))
+        : [],
+      designations,
+      linkPages: LINK_PAGES_BY_ROLE[role],
+    };
+  });
+  response.json({ roles: roleOptions });
+};
 
 const ensureMongo = (_request, response, next) => {
   if (!isMongoConnected()) {
@@ -21,6 +122,121 @@ const ensureMongo = (_request, response, next) => {
 
   next();
 };
+
+router.get('/admin-targets', ensureMongo, requireRole('admin'), adminTargets);
+
+router.post('/admin-broadcast', ensureMongo, requireRole('admin'), async (request, response) => {
+  const title = String(request.body?.title || '').trim();
+  const description = String(request.body?.description || '').trim();
+  const recipientRole = String(request.body?.recipientRole || '').trim();
+  const recipientClassName = String(request.body?.recipientClassName || '').trim();
+  const recipientDesignation = String(request.body?.recipientDesignation || '').trim();
+  const linkPage = String(request.body?.linkPage || '').trim();
+
+  if (!title || title.length > 120 || description.length > 2000) {
+    response.status(400).json({ message: 'A title is required (up to 120 characters); the description must be at most 2000 characters.' });
+    return;
+  }
+  if (!NOTIFICATION_ROLES.includes(recipientRole)) {
+    response.status(400).json({ message: 'Choose a valid recipient role.' });
+    return;
+  }
+  if (recipientClassName && recipientRole !== 'student') {
+    response.status(400).json({ message: 'Class targeting is available for student notifications only.' });
+    return;
+  }
+  if (recipientDesignation && !['teacher', 'employee'].includes(recipientRole)) {
+    response.status(400).json({ message: 'Designation targeting is available for teachers or employees only.' });
+    return;
+  }
+  if (linkPage && !LINK_PAGES_BY_ROLE[recipientRole].includes(linkPage)) {
+    response.status(400).json({ message: 'The selected page is not available to the recipient role.' });
+    return;
+  }
+
+  const users = await User.find({ role: recipientRole, isActive: true })
+    .select('username role profile pushTokens')
+    .lean();
+  const recipients = users.filter((user) => {
+    if (recipientClassName && !getStudentClassNames(user.profile).includes(recipientClassName)) {
+      return false;
+    }
+    if (recipientDesignation && getUserDesignation(user.profile).toLowerCase() !== recipientDesignation.toLowerCase()) {
+      return false;
+    }
+    return true;
+  });
+
+  if (!recipients.length) {
+    response.status(404).json({ message: 'No active users match this role and audience filter.' });
+    return;
+  }
+
+  const createdByRole = request.auth?.role || '';
+  const createdByUsername = request.auth?.username || '';
+  const notifications = recipientDesignation
+    ? await Notification.insertMany(recipients.map((user) => ({
+        recipientRole,
+        recipientUsername: user.username,
+        title,
+        description,
+        type: 'general',
+        linkPage,
+        createdByRole,
+        createdByUsername,
+        readBy: [],
+      })))
+    : [await Notification.create({
+        recipientRole,
+        recipientClassName,
+        title,
+        description,
+        type: 'general',
+        linkPage,
+        createdByRole,
+        createdByUsername,
+        readBy: [],
+      })];
+
+  let pushSent = 0;
+  let pushErrors = 0;
+  const tokens = collectPushTokens(recipients);
+  if (tokens.length) {
+    try {
+      const pushResult = await sendExpoPush(tokens, {
+        title,
+        body: description || title,
+        data: { type: 'general', linkPage },
+        categoryId: 'general',
+      });
+      pushSent = pushResult.sent;
+      pushErrors = pushResult.errors.length;
+      if (pushErrors) {
+        console.error('[notifications] Custom broadcast push errors:', pushResult.errors);
+      }
+      if (pushResult.invalidTokens.length) {
+        await User.updateMany(
+          { pushTokens: { $in: pushResult.invalidTokens } },
+          { $pull: { pushTokens: { $in: pushResult.invalidTokens } } }
+        );
+      }
+    } catch (error) {
+      pushErrors += 1;
+      console.error('[notifications] Custom broadcast push processing failed:', {
+        name: error?.name,
+        code: error?.code,
+      });
+    }
+  }
+
+  emitRealtimeEvent(NOTIFICATIONS_UPDATED_EVENT);
+  response.status(201).json({
+    created: notifications.length,
+    recipientCount: recipients.length,
+    pushSent,
+    pushErrors,
+  });
+});
 
 const toPayload = (notification, username = '', authorNames = new Map()) => {
   const authorName = notification.createdByUsername
@@ -62,8 +278,8 @@ const getRecipientQuery = ({ role, username, className, studentId }) => {
     filters.push({ recipientRole: 'student', recipientClassName: className });
   }
 
-  if (role === 'teacher') {
-    filters.push({ recipientRole: 'teacher', recipientUsername: '' });
+  if (role === 'teacher' || role === 'employee') {
+    filters.push({ recipientRole: role, recipientUsername: '' });
   }
 
   if (role === 'admin' || role === 'clerk') {

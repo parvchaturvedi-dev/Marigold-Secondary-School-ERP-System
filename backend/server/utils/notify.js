@@ -71,21 +71,16 @@ const resolveRecipientUsers = async ({
     return [];
   }
 
-  // If a class is specified, best-effort filter users of that role whose
-  // profile.allottedClasses (or className) matches. If nothing matches on the
-  // class filter, fall back to all users of that role.
+  // A class-targeted notification must never degrade into a role-wide broadcast.
   if (recipientClassName) {
-    const classMatched = await User.find({
+    return User.find({
       role: recipientRole,
       $or: [
         { 'profile.allottedClasses': recipientClassName },
         { 'profile.className': recipientClassName },
+        { 'profile.studentProfiles.className': recipientClassName },
       ],
     }).lean();
-
-    if (classMatched.length) {
-      return classMatched;
-    }
   }
 
   return User.find({ role: recipientRole }).lean();

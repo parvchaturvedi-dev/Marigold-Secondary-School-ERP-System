@@ -68,6 +68,21 @@ const Header = ({ session, onLogout, onPageChange, onStudentChange }) => {
 
   const { notifications, error: notificationError, markRead } = useNotificationsDatabase(session);
 
+  const openNotification = async (notification) => {
+    if (notification?.unread && notification.id) {
+      try {
+        await markRead([notification.id]);
+      } catch (error) {
+        console.error('Unable to mark notification as read:', error);
+      }
+    }
+    setShowUnreadBox(false);
+    setShowFullPanel(false);
+    if (notification?.linkPage && typeof onPageChange === 'function') {
+      onPageChange(notification.linkPage);
+    }
+  };
+
   // Derived unread computations
   const unreadCount = notifications.filter(n => n.unread).length;
   const studentProfiles = session?.studentProfiles || [];
@@ -352,12 +367,18 @@ const Header = ({ session, onLogout, onPageChange, onStudentChange }) => {
                   <p className="p-4 text-center text-slate-500 text-[11px] italic font-semibold">No recent notifications.</p>
                 ) : (
                   notifications.slice(0, 10).map((notif) => (
-                    <div key={notif.id} className="p-3 hover:bg-white/70 transition-colors">
+                    <button
+                      key={notif.id}
+                      type="button"
+                      disabled={!notif.linkPage}
+                      onClick={() => openNotification(notif)}
+                      className="block w-full p-3 text-left hover:bg-white/70 transition-colors disabled:cursor-default"
+                    >
                       <p className="text-slate-900 text-[11px] leading-tight font-black">{notif.title}</p>
                       <p className="text-slate-500 text-[10px] leading-tight font-semibold mt-1">{notif.text}</p>
                       <span className="text-[9px] text-slate-400 font-mono block mt-1">{formatNotificationTime(notif.time)}</span>
                       {!notif.unread && <span className="text-[9px] font-bold uppercase tracking-wide text-slate-400">Read</span>}
-                    </div>
+                    </button>
                   ))
                 )}
               </div>
@@ -465,9 +486,12 @@ const Header = ({ session, onLogout, onPageChange, onStudentChange }) => {
               {notifications.length === 0 ? (
                 <p className="p-4 text-center text-slate-500 text-[11px] italic font-semibold">No recent notifications.</p>
               ) : notifications.map((notif) => (
-                <div
+                <button
                   key={notif.id}
-                  className={`p-3.5 rounded-xl glass-soft text-[11px] font-bold text-slate-900 space-y-1.5 transition-all ${notif.unread ? 'border-amber-300/80 ring-1 ring-amber-200/60' : ''}`}
+                  type="button"
+                  disabled={!notif.linkPage}
+                  onClick={() => openNotification(notif)}
+                  className={`block w-full p-3.5 rounded-xl glass-soft text-left text-[11px] font-bold text-slate-900 space-y-1.5 transition-all disabled:cursor-default ${notif.unread ? 'border-amber-300/80 ring-1 ring-amber-200/60' : ''}`}
                 >
                   <p className="leading-relaxed font-black">{notif.title}</p>
                   <p className="leading-relaxed text-slate-500">{notif.text}</p>
@@ -478,7 +502,7 @@ const Header = ({ session, onLogout, onPageChange, onStudentChange }) => {
                       <span className="ml-auto text-[8px] text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">New</span>
                     )}
                   </div>
-                </div>
+                </button>
               ))}
             </div>
 

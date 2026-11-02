@@ -353,6 +353,18 @@ export default function ConnectedModuleScreen() {
     }
   }
 
+  async function handleOpenNotification(row) {
+    if (row.unread && row.id) {
+      try {
+        await markNotificationsRead([row.id]);
+        await load();
+      } catch (actionError) {
+        Alert.alert(title, actionError.message);
+      }
+    }
+    openNotificationTarget(row.linkPage);
+  }
+
   async function handleParticipate(row) {
     setActing(true);
     try {
@@ -616,7 +628,7 @@ export default function ConnectedModuleScreen() {
               title={title}
               onParticipate={handleParticipate}
               onRowAction={handleRowAction}
-              onOpenLink={openNotificationTarget}
+              onOpenLink={handleOpenNotification}
               acting={acting}
               user={user}
             />
@@ -685,7 +697,7 @@ function DataCard({ row, index, title, onParticipate, onRowAction, onOpenLink, a
         <TouchableOpacity
           activeOpacity={isTappableNotification ? 0.7 : 1}
           disabled={!isTappableNotification}
-          onPress={isTappableNotification ? () => onOpenLink(row.linkPage) : undefined}
+          onPress={isTappableNotification ? () => onOpenLink(row) : undefined}
         >
       <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
         <View style={[styles.indexBadge, { backgroundColor: palette.tile }]}>

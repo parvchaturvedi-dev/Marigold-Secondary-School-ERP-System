@@ -147,6 +147,7 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
     { name: 'Dashboard', icon: LayoutGrid },
     { name: 'AI Assistant', icon: Sparkles },
     { name: 'Academic Calender', icon: Calendar },
+    { name: 'Notifications', icon: Bell },
     { name: 'Application', icon: FileText },
     { name: 'Assignment', icon: ClipboardList },
     { name: 'Attendance', icon: CheckSquare },
