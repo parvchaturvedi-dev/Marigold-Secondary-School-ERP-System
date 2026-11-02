@@ -297,6 +297,37 @@ const toPayload = (notification, username = '', authorNames = new Map()) => {
   };
 };
 
+router.get('/admin-history', ensureMongo, requireRole('admin'), async (request, response) => {
+  const parsedPage = Number.parseInt(request.query.page, 10);
+  const parsedPageSize = Number.parseInt(request.query.pageSize, 10);
+  const page = Number.isInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+  const pageSize = Number.isInteger(parsedPageSize)
+    ? Math.min(Math.max(parsedPageSize, 1), 100)
+    : 50;
+  const [total, items] = await Promise.all([
+    Notification.countDocuments({}),
+    Notification.find({})
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * pageSize)
+      .limit(pageSize)
+      .lean(),
+  ]);
+  const authorNames = await resolveDisplayNames(items.map((item) => item.createdByUsername));
+  response.json({
+    items: items.map((item) => toPayload(item, '', authorNames)),
+    page,
+    pageSize,
+    total,
+    totalPages: Math.ceil(total / pageSize),
+  });
+});
+
+router.delete('/admin-history', ensureMongo, requireRole('admin'), async (_request, response) => {
+  const result = await Notification.deleteMany({});
+  emitRealtimeEvent(NOTIFICATIONS_UPDATED_EVENT);
+  response.json({ deleted: result.deletedCount || 0 });
+});
+
 const getRecipientQuery = ({ role, username, className, studentId }) => {
   const filters = [{ recipientRole: role, recipientUsername: username }];
 
@@ -331,40 +362,16 @@ router.get('/', ensureMongo, async (request, response) => {
   const studentId = role === 'student'
     ? (activeStudent.admissionNumber || activeStudent.id || username)
     : String(request.query.studentId || '');
-  const retentionCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  await Notification.deleteMany({
-    recipientRole: role,
-    recipientUsername: username,
-    readBy: username,
-    $or: [
-      {
-        readReceipts: {
-          $elemMatch: { username, readAt: { $lte: retentionCutoff } },
-        },
-      },
-      {
-        readReceipts: { $not: { $elemMatch: { username } } },
-        updatedAt: { $lte: retentionCutoff },
-      },
-    ],
-  });
   const notifications = await Notification.find(
     getRecipientQuery({ role, username, className, studentId })
   )
     .sort({ createdAt: -1 })
     .limit(120);
 
-  const isExpiredRead = (item) => {
-    if (!item.readBy?.includes(username)) return false;
-    const readAt = item.readReceipts?.find((receipt) => receipt.username === username)?.readAt || item.updatedAt;
-    return Boolean(readAt && readAt <= retentionCutoff);
-  };
-
-  const recentNotifications = notifications.filter((item) => !isExpiredRead(item));
   const authorNames = await resolveDisplayNames(
-    recentNotifications.map((item) => item.createdByUsername)
+    notifications.map((item) => item.createdByUsername)
   );
-  response.json(recentNotifications.map((item) => toPayload(item, username, authorNames)));
+  response.json(notifications.map((item) => toPayload(item, username, authorNames)));
 });
 
 router.patch('/read', ensureMongo, async (request, response) => {

@@ -59,6 +59,11 @@ export function AuthProvider({ children }) {
   const userRef = useRef(user);
   userRef.current = user;
 
+  function openNotificationInbox(role) {
+    setSelectedModule("Notifications");
+    setScreen(role === "student" ? "student-module" : "connected-module");
+  }
+
   // Any 401 from the API auto-logs-out to the Login screen (session expired /
   // invalid after a fresh install) instead of leaving the user on an error.
   useEffect(() => {
@@ -96,12 +101,17 @@ export function AuthProvider({ children }) {
           return;
         }
 
-        // OPTIMISTIC: trust the cached session and go straight to the dashboard.
+        // OPTIMISTIC: trust the cached session and open the notification inbox.
         // The backend validation runs in the background — if it fails we log out.
         const cachedUser = hydrateUser(session);
         lastSessionRefreshRef.current = Date.now();
         setUser(cachedUser);
-        setScreen(session.mustChangePassword ? "password-change" : `${session.role}-dashboard`);
+        if (session.mustChangePassword) {
+          setSelectedModule(null);
+          setScreen("password-change");
+        } else {
+          openNotificationInbox(session.role);
+        }
         if (session.mustChangePassword) {
           disconnectRealtime();
         } else {
@@ -109,7 +119,7 @@ export function AuthProvider({ children }) {
           connectRealtime(session.token);
         }
 
-        // Fire-and-forget refresh (doesn't block the dashboard from rendering).
+        // Fire-and-forget refresh (doesn't block the inbox from rendering).
         apiRequest("/auth/session")
           .then(async (serverSession) => {
             if (serverSession && serverSession.role && serverSession.username) {
@@ -119,7 +129,7 @@ export function AuthProvider({ children }) {
                 setSelectedModule(null);
                 setScreen("password-change");
               } else if (session.mustChangePassword) {
-                setScreen(`${serverSession.role}-dashboard`);
+                openNotificationInbox(serverSession.role);
               }
               await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(serverSession));
               if (serverSession.mustChangePassword) {
@@ -215,10 +225,12 @@ export function AuthProvider({ children }) {
       await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(sessionData));
       lastSessionRefreshRef.current = Date.now();
       setUser(sessionData);
-      setScreen(sessionData.mustChangePassword ? "password-change" : `${role}-dashboard`);
       if (sessionData.mustChangePassword) {
+        setSelectedModule(null);
+        setScreen("password-change");
         disconnectRealtime();
       } else {
+        openNotificationInbox(role);
         registerPushToken();
         connectRealtime(sessionData.token);
       }
@@ -330,7 +342,7 @@ export function AuthProvider({ children }) {
   async function completePasswordChange() {
     const nextUser = { ...userRef.current, mustChangePassword: false };
     setUser(nextUser);
-    setScreen(`${nextUser.role}-dashboard`);
+    openNotificationInbox(nextUser.role);
     lastSessionRefreshRef.current = Date.now();
     await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(nextUser));
     connectRealtime(nextUser.token);

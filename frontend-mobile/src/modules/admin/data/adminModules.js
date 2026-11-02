@@ -2,6 +2,14 @@ export const adminModules = [
   { title: "Academic Calendar", icon: "calendar-outline", color: "#6366F1" },
   { title: "Application", icon: "document-text-outline", color: "#22C55E" },
   { title: "Assignment", icon: "clipboard-outline", color: "#F97316" },
+  {
+    title: "Notification Desk",
+    icon: "notifications-outline",
+    color: "#F59E0B",
+    subItems: [
+      { title: "Notifications", icon: "notifications-outline" }
+    ]
+  },
   { title: "Attendance", icon: "checkbox-outline", color: "#10B981" },
   {
     title: "Employee Desk",

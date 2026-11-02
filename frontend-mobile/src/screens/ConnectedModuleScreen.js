@@ -15,6 +15,7 @@ import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system";
 
 import { useAuth } from "../auth/AuthContext";
+import { onRealtimeEvent } from "../notifications/realtime";
 import PageHeader from "../components/cards/PageHeader";
 import AuroraBackground from "../shared/components/AuroraBackground";
 import GlassCard from "../shared/components/GlassCard";
@@ -339,6 +340,13 @@ export default function ConnectedModuleScreen() {
     setForm(initialForm(title, user));
     load();
   }, [load, title, user]);
+
+  useEffect(() => {
+    if (title !== "Notifications") return undefined;
+    return onRealtimeEvent((event) => {
+      if (event?.eventName === "mgps-erp-notifications-updated") load();
+    });
+  }, [load, title]);
 
   async function handleMarkRead() {
     if (!unreadIds.length) return;

@@ -147,7 +147,15 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
     { name: 'Dashboard', icon: LayoutGrid },
     { name: 'AI Assistant', icon: Sparkles },
     { name: 'Academic Calender', icon: Calendar },
-    { name: 'Notifications', icon: Bell },
+    {
+      name: 'Notification Desk',
+      icon: Bell,
+      hasSub: true,
+      subItems: [
+        { name: 'Notifications', icon: Bell },
+        { name: 'Notification History', icon: ClipboardList },
+      ],
+    },
     { name: 'Application', icon: FileText },
     { name: 'Assignment', icon: ClipboardList },
     { name: 'Attendance', icon: CheckSquare },

@@ -26,6 +26,7 @@ export const portalRoutes = {
       'AI Assistant': lazyPage('../pages/Admin/AiAssistant'),
       'Academic Calender': lazyPage('../pages/Admin/AcademicCalender'),
       Notifications: lazyPage('../pages/Admin/Notifications'),
+      'Notification History': lazyPage('../pages/Admin/NotificationHistory'),
       Application: lazyPage('../pages/Admin/Application'),
       Assignment: lazyPage('../pages/Admin/Assignment'),
       Attendance: lazyPage('../pages/Admin/Attendance'),
