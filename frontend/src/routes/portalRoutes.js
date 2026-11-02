@@ -173,6 +173,7 @@ export const portalRoutes = {
   employee: {
     defaultPage: 'Attendance',
     pages: {
+      Dashboard: lazyPage('../pages/Employee/Attendance'),
       Attendance: lazyPage('../pages/Employee/Attendance'),
       Notices: lazyPage('../pages/Teacher/Notices'),
       Payroll: lazyPage('../pages/common/MySalary'),

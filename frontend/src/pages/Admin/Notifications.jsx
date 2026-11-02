@@ -5,7 +5,7 @@ import { apiFetch } from '../../components/common/api';
 const initialForm = {
   title: '',
   description: '',
-  recipientRole: '',
+  recipientRoles: [],
   recipientClassName: '',
   recipientDesignation: '',
   linkPage: '',
@@ -47,15 +47,18 @@ export default function Notifications() {
     };
   }, []);
 
-  const selectedTarget = useMemo(
-    () => targets.find((item) => item.role === form.recipientRole),
-    [targets, form.recipientRole]
+  const selectedTargets = useMemo(
+    () => targets.filter((item) => form.recipientRoles.includes(item.role)),
+    [targets, form.recipientRoles]
   );
-  const audienceCount = form.recipientClassName
-    ? selectedTarget?.classes.find((item) => item.name === form.recipientClassName)?.count || 0
-    : form.recipientDesignation
-      ? selectedTarget?.designations.find((item) => item.name === form.recipientDesignation)?.count || 0
-      : selectedTarget?.count || 0;
+  const selectedTarget = selectedTargets.length === 1 ? selectedTargets[0] : null;
+  const audienceCount = selectedTarget
+    ? form.recipientClassName
+      ? selectedTarget.classes.find((item) => item.name === form.recipientClassName)?.count || 0
+      : form.recipientDesignation
+        ? selectedTarget.designations.find((item) => item.name === form.recipientDesignation)?.count || 0
+        : selectedTarget.count || 0
+    : selectedTargets.reduce((total, target) => total + target.count, 0);
 
   const updateForm = (key, value) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -63,10 +66,18 @@ export default function Notifications() {
     setSuccess('');
   };
 
-  const handleRoleChange = (recipientRole) => {
-    setForm({
-      ...initialForm,
-      recipientRole,
+  const handleRoleToggle = (role) => {
+    setForm((current) => {
+      const recipientRoles = current.recipientRoles.includes(role)
+        ? current.recipientRoles.filter((item) => item !== role)
+        : [...current.recipientRoles, role];
+      return {
+        ...current,
+        recipientRoles,
+        recipientClassName: '',
+        recipientDesignation: '',
+        linkPage: recipientRoles.length > 1 ? 'Dashboard' : '',
+      };
     });
     setError('');
     setSuccess('');
@@ -83,10 +94,18 @@ export default function Notifications() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       });
+      const pushStatus = result.pushTokenCount
+        ? `Expo accepted ${result.pushSent} of ${result.pushTokenCount} device push request${result.pushTokenCount === 1 ? '' : 's'}; this does not confirm delivery to the device.`
+        : `No registered mobile push tokens were found, so no mobile popup was sent.`;
+      const unregisteredStatus = result.accountsWithoutPushToken
+        ? ` ${result.accountsWithoutPushToken} recipient account${result.accountsWithoutPushToken === 1 ? ' has' : 's have'} no registered device token.`
+        : '';
+      const errorsStatus = result.pushErrors
+        ? ` ${result.pushErrors} push delivery or token-cleanup error${result.pushErrors === 1 ? '' : 's'} occurred.`
+        : '';
       setSuccess(
-        `Notification delivered to ${result.recipientCount} account${result.recipientCount === 1 ? '' : 's'}. ` +
-        `${result.pushSent} mobile push${result.pushSent === 1 ? '' : 'es'} sent.` +
-        (result.pushErrors ? ` ${result.pushErrors} push delivery or cleanup error${result.pushErrors === 1 ? '' : 's'} occurred.` : '')
+        `In-app notification saved for ${result.recipientCount} account${result.recipientCount === 1 ? '' : 's'}. ` +
+        `${pushStatus}${unregisteredStatus}${errorsStatus}`
       );
       setForm(initialForm);
     } catch (sendError) {
@@ -107,7 +126,7 @@ export default function Notifications() {
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-600">Admin Broadcast</p>
             <h1 className="mt-1 text-2xl font-black text-slate-900">Send Notification</h1>
             <p className="mt-2 max-w-2xl text-sm font-medium leading-6 text-slate-600">
-              Send an in-app notification and mobile push to a role, a student class, or a staff designation.
+              Send an in-app notification and mobile push to one or more roles, a student class, or a staff designation.
             </p>
           </div>
         </div>
@@ -160,24 +179,31 @@ export default function Notifications() {
             </div>
           ) : (
             <>
-              <label className="block space-y-1.5">
-                <span className="text-xs font-bold text-slate-700">Role</span>
-                <select
-                  className={fieldClass}
-                  required
-                  value={form.recipientRole}
-                  onChange={(event) => handleRoleChange(event.target.value)}
-                >
-                  <option value="">Select a role</option>
+              <fieldset className="space-y-2">
+                <legend className="text-xs font-bold text-slate-700">Roles (select one or more)</legend>
+                <div className="grid gap-2 sm:grid-cols-2">
                   {targets.map((target) => (
-                    <option key={target.role} value={target.role}>
-                      {roleLabels[target.role] || target.role} ({target.count} active)
-                    </option>
+                    <label
+                      key={target.role}
+                      className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm font-semibold text-slate-800 transition hover:border-indigo-300"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={form.recipientRoles.includes(target.role)}
+                        onChange={() => handleRoleToggle(target.role)}
+                        className="h-4 w-4 accent-indigo-600"
+                      />
+                      <span>{roleLabels[target.role] || target.role}</span>
+                      <span className="ml-auto text-right text-xs text-slate-500">
+                        {target.count} active
+                        <span className="block">{target.pushTokenAccounts || 0} phones registered</span>
+                      </span>
+                    </label>
                   ))}
-                </select>
-              </label>
+                </div>
+              </fieldset>
 
-              {form.recipientRole === 'student' && selectedTarget?.classes?.length > 0 && (
+              {selectedTarget?.role === 'student' && selectedTarget.classes?.length > 0 && (
                 <label className="block space-y-1.5">
                   <span className="text-xs font-bold text-slate-700">Class (optional)</span>
                   <select
@@ -193,7 +219,7 @@ export default function Notifications() {
                 </label>
               )}
 
-              {['teacher', 'employee'].includes(form.recipientRole) && selectedTarget?.designations?.length > 0 && (
+              {['teacher', 'employee'].includes(selectedTarget?.role) && selectedTarget.designations?.length > 0 && (
                 <label className="block space-y-1.5">
                   <span className="text-xs font-bold text-slate-700">Designation (optional)</span>
                   <select
@@ -201,7 +227,7 @@ export default function Notifications() {
                     value={form.recipientDesignation}
                     onChange={(event) => updateForm('recipientDesignation', event.target.value)}
                   >
-                    <option value="">All {roleLabels[form.recipientRole]?.toLowerCase()}s</option>
+                    <option value="">All {roleLabels[selectedTarget.role]?.toLowerCase()}s</option>
                     {selectedTarget.designations.map((item) => (
                       <option key={item.name} value={item.name}>{item.name} ({item.count})</option>
                     ))}
@@ -209,7 +235,7 @@ export default function Notifications() {
                 </label>
               )}
 
-              {selectedTarget && (
+              {selectedTargets.length > 0 && (
                 <p className="rounded-xl bg-indigo-50 px-4 py-3 text-xs font-bold text-indigo-800">
                   This notification will reach {audienceCount} active account{audienceCount === 1 ? '' : 's'}.
                 </p>
@@ -222,6 +248,12 @@ export default function Notifications() {
           <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">Optional page link</h2>
           <label className="block space-y-1.5">
             <span className="text-xs font-bold text-slate-700">Open this page when tapped</span>
+            {selectedTargets.length > 1 ? (
+              <div className={`${fieldClass} flex items-center justify-between bg-slate-100`}>
+                <span>Dashboard</span>
+                <span className="text-xs text-indigo-700">Automatically selected for multiple roles</span>
+              </div>
+            ) : (
             <select
               className={fieldClass}
               disabled={!selectedTarget}
@@ -233,8 +265,11 @@ export default function Notifications() {
                 <option key={page} value={page}>{page}</option>
               ))}
             </select>
+            )}
             <span className="block text-xs font-medium text-slate-500">
-              Only pages available to the selected role are listed.
+              {selectedTargets.length > 1
+                ? 'Dashboard opens for all selected roles.'
+                : 'Only pages available to the selected role are listed.'}
             </span>
           </label>
         </section>
@@ -245,7 +280,7 @@ export default function Notifications() {
           </p>
           <button
             type="submit"
-            disabled={isLoading || isSending || !form.recipientRole || !form.title.trim()}
+            disabled={isLoading || isSending || !form.recipientRoles.length || !form.title.trim()}
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-indigo-200 transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isSending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}

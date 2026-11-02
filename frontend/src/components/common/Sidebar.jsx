@@ -384,6 +384,7 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
   ];
 
   const employeeMenuItems = [
+    { name: 'Dashboard', icon: LayoutGrid },
     { name: 'Attendance', icon: CheckSquare },
     { name: 'Notices', icon: Bell },
     { name: 'Payroll', icon: Wallet },

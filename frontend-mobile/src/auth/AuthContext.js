@@ -262,6 +262,10 @@ export function AuthProvider({ children }) {
       pendingLinkRef.current = page;
       return;
     }
+    if (page === "Dashboard") {
+      goHome();
+      return;
+    }
     const isTimetable = page === "Timetable" || page.endsWith("> Timetable");
     const canEditTimetable = user.role === "admin" || user.role === "clerk";
     if (user.role === "student") {

@@ -52,7 +52,7 @@ const LINK_PAGES_BY_ROLE = {
     'Marks Management', 'Id Card', 'Leave Requests', 'Meetings', 'Notices',
     'Profile', 'My Salary', 'Settings', 'Vault', 'Certification', 'About Us',
   ],
-  employee: ['Attendance', 'Notices', 'Payroll', 'Id Card', 'Academic Calender'],
+  employee: ['Dashboard', 'Attendance', 'Notices', 'Payroll', 'Id Card', 'Academic Calender'],
 };
 
 const getStudentClassNames = (profile = {}) => {
@@ -80,11 +80,15 @@ const getUserDesignation = (profile = {}) => {
   ).trim();
 };
 
+const isExpoToken = (token) =>
+  typeof token === 'string' &&
+  (token.startsWith('ExponentPushToken') || token.startsWith('ExpoPushToken'));
+
 const collectPushTokens = (users = []) =>
-  [...new Set(users.flatMap((user) => Array.isArray(user.pushTokens) ? user.pushTokens : []))];
+  [...new Set(users.flatMap((user) => Array.isArray(user.pushTokens) ? user.pushTokens : []).filter(isExpoToken))];
 
 const adminTargets = async (_request, response) => {
-  const users = await User.find({ isActive: true }).select('role profile').lean();
+  const users = await User.find({ isActive: true }).select('role profile pushTokens').lean();
   const roleOptions = NOTIFICATION_ROLES.map((role) => {
     const roleUsers = users.filter((user) => user.role === role);
     const designations = role === 'teacher' || role === 'employee'
@@ -100,6 +104,9 @@ const adminTargets = async (_request, response) => {
     return {
       role,
       count: roleUsers.length,
+      pushTokenAccounts: roleUsers.filter(
+        (user) => Array.isArray(user.pushTokens) && user.pushTokens.some(isExpoToken)
+      ).length,
       classes: role === 'student'
         ? [...new Set(roleUsers.flatMap((user) => getStudentClassNames(user.profile)))]
             .sort()
@@ -128,19 +135,34 @@ router.get('/admin-targets', ensureMongo, requireRole('admin'), adminTargets);
 router.post('/admin-broadcast', ensureMongo, requireRole('admin'), async (request, response) => {
   const title = String(request.body?.title || '').trim();
   const description = String(request.body?.description || '').trim();
-  const recipientRole = String(request.body?.recipientRole || '').trim();
+  const requestedRoles = Array.isArray(request.body?.recipientRoles)
+    ? request.body.recipientRoles
+    : [request.body?.recipientRole];
+  const recipientRoles = [...new Set(
+    requestedRoles
+      .filter((role) => typeof role === 'string')
+      .map((role) => role.trim())
+      .filter(Boolean)
+  )];
   const recipientClassName = String(request.body?.recipientClassName || '').trim();
   const recipientDesignation = String(request.body?.recipientDesignation || '').trim();
-  const linkPage = String(request.body?.linkPage || '').trim();
+  const linkPage = recipientRoles.length > 1
+    ? 'Dashboard'
+    : String(request.body?.linkPage || '').trim();
 
   if (!title || title.length > 120 || description.length > 2000) {
     response.status(400).json({ message: 'A title is required (up to 120 characters); the description must be at most 2000 characters.' });
     return;
   }
-  if (!NOTIFICATION_ROLES.includes(recipientRole)) {
-    response.status(400).json({ message: 'Choose a valid recipient role.' });
+  if (!recipientRoles.length || recipientRoles.some((role) => !NOTIFICATION_ROLES.includes(role))) {
+    response.status(400).json({ message: 'Choose at least one valid recipient role.' });
     return;
   }
+  if (recipientRoles.length > 1 && (recipientClassName || recipientDesignation)) {
+    response.status(400).json({ message: 'Class or designation targeting requires choosing just one role.' });
+    return;
+  }
+  const recipientRole = recipientRoles[0];
   if (recipientClassName && recipientRole !== 'student') {
     response.status(400).json({ message: 'Class targeting is available for student notifications only.' });
     return;
@@ -149,12 +171,12 @@ router.post('/admin-broadcast', ensureMongo, requireRole('admin'), async (reques
     response.status(400).json({ message: 'Designation targeting is available for teachers or employees only.' });
     return;
   }
-  if (linkPage && !LINK_PAGES_BY_ROLE[recipientRole].includes(linkPage)) {
-    response.status(400).json({ message: 'The selected page is not available to the recipient role.' });
+  if (linkPage && recipientRoles.some((role) => !LINK_PAGES_BY_ROLE[role].includes(linkPage))) {
+    response.status(400).json({ message: 'The selected page is not available to every recipient role.' });
     return;
   }
 
-  const users = await User.find({ role: recipientRole, isActive: true })
+  const users = await User.find({ role: { $in: recipientRoles }, isActive: true })
     .select('username role profile pushTokens')
     .lean();
   const recipients = users.filter((user) => {
@@ -174,8 +196,8 @@ router.post('/admin-broadcast', ensureMongo, requireRole('admin'), async (reques
 
   const createdByRole = request.auth?.role || '';
   const createdByUsername = request.auth?.username || '';
-  const notifications = recipientDesignation
-    ? await Notification.insertMany(recipients.map((user) => ({
+  const notificationDocuments = recipientDesignation
+    ? recipients.map((user) => ({
         recipientRole,
         recipientUsername: user.username,
         title,
@@ -185,9 +207,9 @@ router.post('/admin-broadcast', ensureMongo, requireRole('admin'), async (reques
         createdByRole,
         createdByUsername,
         readBy: [],
-      })))
-    : [await Notification.create({
-        recipientRole,
+      }))
+    : recipientRoles.map((role) => ({
+        recipientRole: role,
         recipientClassName,
         title,
         description,
@@ -196,11 +218,15 @@ router.post('/admin-broadcast', ensureMongo, requireRole('admin'), async (reques
         createdByRole,
         createdByUsername,
         readBy: [],
-      })];
+      }));
+  const notifications = await Notification.insertMany(notificationDocuments);
 
   let pushSent = 0;
   let pushErrors = 0;
   const tokens = collectPushTokens(recipients);
+  const pushTokenRecipientCount = recipients.filter(
+    (user) => Array.isArray(user.pushTokens) && user.pushTokens.some(isExpoToken)
+  ).length;
   if (tokens.length) {
     try {
       const pushResult = await sendExpoPush(tokens, {
@@ -233,6 +259,8 @@ router.post('/admin-broadcast', ensureMongo, requireRole('admin'), async (reques
   response.status(201).json({
     created: notifications.length,
     recipientCount: recipients.length,
+    pushTokenCount: tokens.length,
+    accountsWithoutPushToken: recipients.length - pushTokenRecipientCount,
     pushSent,
     pushErrors,
   });
