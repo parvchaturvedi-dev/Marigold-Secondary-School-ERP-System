@@ -473,6 +473,8 @@ npx expo start              # open in Expo Go / dev client
 
 Push to `main` triggers Render (backend) + Vercel (web) auto-deploys.
 
+For the WSL-hosted laptop backend, run `bash scripts/install-wsl-auto-update.sh` once from the laptop's clean `main` checkout. The installer starts and health-checks the backend, then a systemd timer checks GitHub `main` every two minutes while WSL is running, fast-forwards the checkout, installs changed npm dependencies, and restarts the backend after a healthy database check. It skips dirty or diverged checkouts and does not run database migrations automatically. Inspect activity with `sudo journalctl -u mgps-erp-auto-update.service -n 50 --no-pager`.
+
 The `.github/workflows/keep-alive.yml` workflow requests `/api/health` every five minutes to reduce
 Render free-tier cold starts. GitHub schedule timing can drift or pause after prolonged repository
 inactivity, so it cannot guarantee the backend will always stay awake.
