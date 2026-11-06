@@ -131,22 +131,6 @@ export default function FeesScreen({ user }) {
           <RefreshControl refreshing={refreshing} onRefresh={() => load({ isRefresh: true })} tintColor={colors.primary} />
         }
       >
-        <GlassCard style={styles.headerCard}>
-          <View style={styles.headerRow}>
-            <View style={[styles.headerIcon, { backgroundColor: `${glassColors.accent}1f`, borderColor: `${glassColors.accent}33` }]}>
-              <Ionicons name="wallet-outline" size={20} color={glassColors.accent} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.headerTitle}>Fees &amp; Services</Text>
-              {!!activeStudent && (
-                <Text style={styles.headerSubtitle} numberOfLines={1}>
-                  {activeStudent.name} | {activeStudent.className || "-"} | {activeStudent.admissionNumber}
-                </Text>
-              )}
-            </View>
-          </View>
-        </GlassCard>
-
         {showSiblingSwitcher && (
           <ScrollView
             horizontal
@@ -223,33 +207,6 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 40,
     gap: 14,
-  },
-  headerCard: {
-    padding: 16,
-  },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  headerIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: "900",
-    color: glassColors.ink,
-  },
-  headerSubtitle: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: glassColors.inkSoft,
-    marginTop: 3,
   },
   siblingRow: {
     gap: 8,

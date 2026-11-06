@@ -13,6 +13,7 @@ import {
   deleteAsset,
 } from '../utils/cloudinary.js';
 import { mediaUrlFor } from '../utils/mediaToken.js';
+import { canTeacherPublishAssignment } from '../utils/assignmentAccess.js';
 
 const router = express.Router();
 const upload = multer({
@@ -177,10 +178,18 @@ router.post('/', ensureMongo, requireRole('admin', 'clerk', 'teacher'), upload.s
     return;
   }
 
+  const subject = String(request.body.subject || '').trim();
+  if (!canTeacherPublishAssignment(request.auth, subject, targetClasses)) {
+    response.status(403).json({
+      message: 'You can publish assignments only for subjects assigned to you in the selected classes.',
+    });
+    return;
+  }
+
   const assignment = new Assignment({
     title: request.body.title,
     description: request.body.description,
-    subject: request.body.subject || 'General',
+    subject: subject || 'General',
     targetClasses,
     checkingDate: request.body.checkingDate,
     createdByRole: request.body.createdByRole,
@@ -238,6 +247,18 @@ router.patch('/:id', ensureMongo, requireRole('admin', 'clerk', 'teacher'), uplo
     return;
   }
 
+  const requestedTargetClasses = parseTargetClasses(request.body.targetClasses);
+  const nextTargetClasses = requestedTargetClasses.length
+    ? requestedTargetClasses
+    : assignment.targetClasses;
+  const nextSubject = String(request.body.subject || assignment.subject || '').trim();
+  if (!canTeacherPublishAssignment(request.auth, nextSubject, nextTargetClasses)) {
+    response.status(403).json({
+      message: 'You can publish assignments only for subjects assigned to you in the selected classes.',
+    });
+    return;
+  }
+
   // Snapshot the current attachment's storage reference so we can clean up its
   // Cloudinary asset if this update replaces or removes it.
   const previousAttachment = assignment.attachment
@@ -248,11 +269,10 @@ router.patch('/:id', ensureMongo, requireRole('admin', 'clerk', 'teacher'), uplo
       }
     : null;
 
-  const targetClasses = parseTargetClasses(request.body.targetClasses);
   assignment.title = request.body.title || assignment.title;
   assignment.description = request.body.description || assignment.description;
-  assignment.subject = request.body.subject || assignment.subject;
-  assignment.targetClasses = targetClasses.length ? targetClasses : assignment.targetClasses;
+  assignment.subject = nextSubject;
+  assignment.targetClasses = nextTargetClasses;
   assignment.updatedByName = request.body.actorName || assignment.updatedByName;
 
   if (request.body.removeAttachment === 'true') {

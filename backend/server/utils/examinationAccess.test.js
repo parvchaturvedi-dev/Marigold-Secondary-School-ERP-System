@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   canReadBoardStudentResult,
+  canTeacherReviewPaper,
   filterExaminationState,
   getStudentIdentifiers,
   mergeTeacherExaminationState,
@@ -73,18 +74,6 @@ test('student examination response filters nested marks rows by stable identity'
   assert.deepEqual(getStudentIdentifiers({ studentProfiles: [{ id: 'A-2' }] }), new Set(['A-2']));
 });
 
-test('teachers receive examination rows only for assigned classes', () => {
-  const result = filterExaminationState(state, {
-    role: 'teacher',
-    allottedClasses: ['Class 6'],
-  });
-
-  assert.deepEqual(result.papers, state.papers.slice(0, 1));
-  assert.deepEqual(result.schedules, state.schedules.slice(0, 1));
-  assert.deepEqual(result.marks, state.marks.slice(0, 1));
-  assert.deepEqual(result.boardResults, state.boardResults.slice(0, 2));
-});
-
 test('admin and clerk retain complete examination state', () => {
   assert.equal(filterExaminationState(state, { role: 'admin' }), state);
   assert.equal(filterExaminationState(state, { role: 'clerk' }), state);
@@ -110,8 +99,10 @@ test('teachers are limited to their assigned subjects inside each class', () => 
   const subjectState = {
     exams: [{ id: 'EXAM-1', name: 'Quarterly' }],
     papers: [
-      { id: 'P-1', className: 'Class 6', subject: 'Mathematics' },
-      { id: 'P-2', className: 'Class 6', subject: 'Science' },
+      { id: 'P-1', className: 'Class 6', subject: 'Mathematics', teacherUsername: 'math-teacher', status: 'teacher_review' },
+      { id: 'P-2', className: 'Class 6', subject: 'Mathematics', teacherUsername: 'other-teacher', status: 'teacher_review' },
+      { id: 'P-3', className: 'Class 6', subject: 'Mathematics', teacherUsername: 'math-teacher', status: 'teacher_approved' },
+      { id: 'P-4', className: 'Class 6', subject: 'Science', teacherUsername: 'math-teacher', status: 'teacher_review' },
     ],
     schedules: [
       { id: 'S-1', className: 'Class 6', subject: 'Mathematics' },
@@ -130,6 +121,7 @@ test('teachers are limited to their assigned subjects inside each class', () => 
 
   const teacherAuth = {
     role: 'teacher',
+    username: 'math-teacher',
     teacherProfile: {
       classAssignments: [
         { className: 'Class 6', subject: 'Mathematics' },
@@ -139,42 +131,47 @@ test('teachers are limited to their assigned subjects inside each class', () => 
 
   const result = filterExaminationState(subjectState, teacherAuth);
   assert.deepEqual(result.papers.map((paper) => paper.id), ['P-1']);
-  assert.deepEqual(result.schedules.map((schedule) => schedule.id), ['S-1']);
+  assert.deepEqual(result.schedules, []);
   assert.deepEqual(result.marks.map((mark) => mark.id), ['M-1']);
+  assert.deepEqual(result.boardClasses, []);
+  assert.deepEqual(result.boardResults, []);
 });
 
-test('teacher state writes preserve other classes and reject unauthorized classes', () => {
+test('teachers can update assigned-subject marks while other examination sections remain unchanged', () => {
   const previous = {
     ...state,
-    marks: state.marks,
-    papers: state.papers,
-    schedules: state.schedules,
+    papers: [
+      { id: 'P-1', className: 'Class 6', subject: 'Mathematics', teacherUsername: 'math-teacher', status: 'teacher_review' },
+      { id: 'P-2', className: 'Class 7', subject: 'Science', teacherUsername: 'other-teacher', status: 'teacher_review' },
+    ],
+    schedules: [{ id: 'S-1', className: 'Class 6', subject: 'Mathematics' }],
+    marks: [
+      { id: 'MARK-1', examId: 'EXAM-1', className: 'Class 6', subject: 'Mathematics', rows: [{ studentId: 'A-1', marks: 80 }] },
+      { id: 'MARK-2', examId: 'EXAM-1', className: 'Class 7', subject: 'Science', rows: [{ studentId: 'B-1', marks: 70 }] },
+    ],
     boardResults: state.boardResults,
   };
-  const submitted = filterExaminationState(state, {
+  const auth = {
     role: 'teacher',
-    allottedClasses: ['Class 6'],
-  });
+    username: 'math-teacher',
+    teacherProfile: { classAssignments: [{ className: 'Class 6', subject: 'Mathematics' }] },
+  };
+  const submitted = filterExaminationState(previous, auth);
   submitted.marks = [{ ...submitted.marks[0], updatedAt: 'new' }];
 
-  const merged = mergeTeacherExaminationState(previous, submitted, {
-    role: 'teacher',
-    allottedClasses: ['Class 6'],
-  });
+  const merged = mergeTeacherExaminationState(previous, submitted, auth);
   assert.equal(merged.marks.find((record) => record.id === 'MARK-1').updatedAt, 'new');
-  assert.deepEqual(merged.marks.find((record) => record.id === 'MARK-2'), state.marks[1]);
-  assert.deepEqual(merged.papers.find((record) => record.id === 'PAPER-2'), state.papers[1]);
+  assert.deepEqual(merged.marks.find((record) => record.id === 'MARK-2'), previous.marks[1]);
+  assert.deepEqual(merged.papers, previous.papers);
+  assert.deepEqual(merged.schedules, previous.schedules);
   assert.deepEqual(merged.boardResults, state.boardResults);
 
   assert.throws(
     () =>
       mergeTeacherExaminationState(previous, {
         ...submitted,
-        marks: [{ id: 'MARK-2', className: 'Class 7' }],
-      }, {
-        role: 'teacher',
-        allottedClasses: ['Class 6'],
-      }),
+        marks: [{ id: 'MARK-2', examId: 'EXAM-1', className: 'Class 7', subject: 'Science' }],
+      }, auth),
     { statusCode: 403 }
   );
 });
@@ -183,16 +180,17 @@ test('teacher writes reject a different subject inside an assigned class', () =>
   const previous = {
     ...state,
     marks: [
-      { id: 'M-1', className: 'Class 6', subject: 'Mathematics', rows: [{ studentId: 'A-1', marks: 80 }] },
-      { id: 'M-2', className: 'Class 6', subject: 'Science', rows: [{ studentId: 'A-1', marks: 70 }] },
+      { id: 'M-1', examId: 'EXAM-1', className: 'Class 6', subject: 'Mathematics', rows: [{ studentId: 'A-1', marks: 80 }] },
+      { id: 'M-2', examId: 'EXAM-1', className: 'Class 6', subject: 'Science', rows: [{ studentId: 'A-1', marks: 70 }] },
     ],
     papers: [],
     schedules: [],
   };
 
   const unauthorizedSubject = {
+    exams: previous.exams,
     marks: [
-      { id: 'M-2', className: 'Class 6', subject: 'Science', rows: [{ studentId: 'A-1', marks: 95 }] },
+      { id: 'M-2', examId: 'EXAM-1', className: 'Class 6', subject: 'Science', rows: [{ studentId: 'A-1', marks: 95 }] },
     ],
     papers: [],
     schedules: [],
@@ -202,10 +200,89 @@ test('teacher writes reject a different subject inside an assigned class', () =>
     () =>
       mergeTeacherExaminationState(previous, unauthorizedSubject, {
         role: 'teacher',
+        username: 'math-teacher',
         teacherProfile: {
           classAssignments: [{ className: 'Class 6', subject: 'Mathematics' }],
         },
       }),
     { statusCode: 403 }
   );
+});
+
+test('teacher writes reject changes to exams, papers, and schedules', () => {
+  const current = {
+    exams: [{ id: 'EXAM-1', name: 'Quarterly' }],
+    papers: [{ id: 'P-1', className: 'Class 6', subject: 'Mathematics', teacherUsername: 'math-teacher', status: 'teacher_review' }],
+    schedules: [{ id: 'S-1', className: 'Class 6', subject: 'Mathematics' }],
+    marks: [{ id: 'M-1', className: 'Class 6', subject: 'Mathematics', rows: [] }],
+  };
+  const auth = {
+    role: 'teacher',
+    username: 'math-teacher',
+    teacherProfile: { classAssignments: [{ className: 'Class 6', subject: 'Mathematics' }] },
+  };
+  const submitted = filterExaminationState(current, auth);
+
+  for (const section of ['exams', 'papers', 'schedules']) {
+    assert.throws(
+      () => mergeTeacherExaminationState(current, { ...submitted, [section]: [...submitted[section], { id: 'NEW' }] }, auth),
+      { statusCode: 403 },
+      `teacher changed ${section}`
+    );
+  }
+});
+
+test('teacher marks must reference an existing examination and explicitly assigned subject', () => {
+  const current = {
+    exams: [{ id: 'EXAM-1' }],
+    papers: [],
+    schedules: [],
+    marks: [],
+  };
+  const auth = {
+    role: 'teacher',
+    username: 'math-teacher',
+    teacherProfile: { classAssignments: [{ className: 'Class 6', subject: 'Mathematics' }] },
+  };
+  const submitted = filterExaminationState(current, auth);
+
+  assert.throws(
+    () =>
+      mergeTeacherExaminationState(current, {
+        ...submitted,
+        marks: [{ id: 'M-1', examId: 'EXAM-2', className: 'Class 6', subject: 'Mathematics' }],
+      }, auth),
+    { statusCode: 403 }
+  );
+  assert.throws(
+    () =>
+      mergeTeacherExaminationState(current, {
+        ...submitted,
+        marks: [{ id: 'M-1', examId: 'EXAM-1', className: 'Class 6', subject: 'Science' }],
+      }, {
+        ...auth,
+        teacherProfile: { classAssignments: [{ className: 'Class 6' }] },
+      }),
+    { statusCode: 403 }
+  );
+});
+
+test('teacher paper review requires the assigned reviewer and an assigned class-subject', () => {
+  const paper = {
+    id: 'P-1',
+    className: 'Class 6',
+    subject: 'Mathematics',
+    teacherUsername: 'math-teacher',
+    status: 'teacher_review',
+  };
+  const auth = {
+    role: 'teacher',
+    username: 'math-teacher',
+    teacherProfile: { classAssignments: [{ className: 'Class 6', subject: 'Mathematics' }] },
+  };
+
+  assert.equal(canTeacherReviewPaper(paper, auth), true);
+  assert.equal(canTeacherReviewPaper(paper, { ...auth, username: 'other-teacher' }), false);
+  assert.equal(canTeacherReviewPaper({ ...paper, subject: 'Science' }, auth), false);
+  assert.equal(canTeacherReviewPaper({ ...paper, status: 'teacher_approved' }, auth), false);
 });

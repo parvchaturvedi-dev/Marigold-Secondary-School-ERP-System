@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -7,10 +7,12 @@ import {
   Image,
   Modal,
   Dimensions,
-  StyleSheet
+  StyleSheet,
+  Animated,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors } from "../../../shared/theme/colors";
 import { gradients, glassColors } from "../../../shared/theme/glass";
 import { useTheme } from "../../../theme/ThemeContext";
@@ -18,25 +20,84 @@ import AuroraBackground from "../../../shared/components/AuroraBackground";
 import { useAuth } from "../../../auth/AuthContext";
 import { useDashboardSummary } from "../../../hooks/useDashboardSummary";
 import { useUnreadNotifications } from "../../../hooks/useUnreadNotifications";
-import { teacherModules, teacherBottomTabs } from "../data/teacherModules";
+import { teacherModules } from "../data/teacherModules";
 import ModuleCard from "../../../components/cards/ModuleCard";
-import OverviewCard from "../../../components/cards/OverviewCard";
 import AttendanceScreen from "../../../screens/AttendanceScreen";
+import { apiRequest } from "../../../api/apiClient";
 
 const logo = require("../../../../assets/images/logo.png");
 const width = Dimensions.get("window").width;
+const QUICK_ACCESS_EXCLUDED_MODULES = new Set([
+  "Academic Calendar",
+  "Application",
+  "Events",
+  "Examination Desk",
+  "Id Card",
+  "Meetings",
+  "Profile",
+  "Vault",
+  "Certification",
+  "About Us",
+  "Settings",
+]);
+
+function formatClockTime(value, timezone) {
+  if (!value) return "--:--";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "--:--";
+  return date.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    ...(timezone ? { timeZone: timezone } : {}),
+  });
+}
 
 export default function TeacherDashboardScreen() {
   const { palette } = useTheme();
+  const insets = useSafeAreaInsets();
   const { user, logout, openConnectedModule } = useAuth();
-  const { summary, loading, error } = useDashboardSummary();
+  const { summary } = useDashboardSummary();
   const unreadCount = useUnreadNotifications();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("home");
   const [selectedParentModule, setSelectedParentModule] = useState(null);
   const [subModalOpen, setSubModalOpen] = useState(false);
+  const [clockStatus, setClockStatus] = useState(null);
+  const [clockStatusLoading, setClockStatusLoading] = useState(true);
+  const [clockStatusError, setClockStatusError] = useState("");
+  const [clockStatusRefresh, setClockStatusRefresh] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    if (activeTab !== "home") return undefined;
+
+    apiRequest("/attendance/my-clock-status")
+      .then((status) => {
+        if (!active) return;
+        setClockStatus(status || null);
+        setClockStatusError("");
+      })
+      .catch((error) => {
+        if (!active) return;
+        setClockStatusError(error?.message || "Attendance status could not be loaded.");
+      })
+      .finally(() => {
+        if (active) setClockStatusLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [activeTab, clockStatusRefresh]);
 
   function handleModulePress(module) {
+    if (module.title === "Home" || module.title === "Dashboard (Home)") {
+      setDrawerOpen(false);
+      setSubModalOpen(false);
+      setActiveTab("home");
+      return;
+    }
+
     if (module.subItems && module.subItems.length > 0) {
       setSelectedParentModule(module);
       setSubModalOpen(true);
@@ -59,8 +120,16 @@ export default function TeacherDashboardScreen() {
     openConnectedModule(`${parentTitle} > ${subItem.title}`);
   }
 
+  function handleTabChange(tab) {
+    if (tab === "home") {
+      setClockStatusLoading(true);
+      setClockStatusError("");
+    }
+    setActiveTab(tab);
+  }
+
   if (activeTab === "attendance") {
-    return <AttendanceScreen role="teacher" onBack={() => setActiveTab("home")} />;
+    return <AttendanceScreen role="teacher" onBack={() => handleTabChange("home")} />;
   }
 
   return (
@@ -132,41 +201,117 @@ export default function TeacherDashboardScreen() {
             <HomeContent
               user={user}
               summary={summary}
-              loading={loading}
-              error={error}
+              clockStatus={clockStatus}
+              clockStatusLoading={clockStatusLoading}
+              clockStatusError={clockStatusError}
+              onRetryClockStatus={() => {
+                setClockStatusLoading(true);
+                setClockStatusError("");
+                setClockStatusRefresh((current) => current + 1);
+              }}
+              onMarkAttendance={() => setActiveTab("attendance")}
               onModulePress={handleModulePress}
             />
           )}
 
-          {activeTab === "assignment" && (
-            <SimpleTabPage
-              title="Assignments Desk"
-              icon="clipboard-outline"
-              text="Track class submissions and grading stats from connected ERP assignments."
-            />
-          )}
-
-          {activeTab === "notices" && (
-            <SimpleTabPage
-              title="Notices"
-              icon="notifications-outline"
-              text="View important school notices, assemblies, and upcoming holidays."
-            />
-          )}
-
-          {activeTab === "profile" && (
-            <SimpleTabPage
-              title="Profile"
-              icon="person-circle-outline"
-              text="Faculty details, class teacher mapping, and active classes will appear here."
-              logout={logout}
-            />
-          )}
         </View>
       </ScrollView>
 
-      {/* Bottom Navigation */}
-      <BottomTabs activeTab={activeTab} setActiveTab={setActiveTab} openConnectedModule={openConnectedModule} />
+      <View
+        pointerEvents="box-none"
+        style={{
+          position: "absolute",
+          left: 18,
+          right: 18,
+          bottom: Math.max(insets.bottom, 12) + 12,
+          flexDirection: "row",
+          justifyContent: "space-between",
+        }}
+      >
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            left: 58,
+            right: 58,
+            height: 54,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <View
+            style={{
+              height: 50,
+              minWidth: 188,
+              maxWidth: "100%",
+              paddingHorizontal: 14,
+              borderRadius: 25,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: palette.card,
+              borderWidth: 1,
+              borderColor: palette.cardBorder,
+              shadowColor: palette.shadow,
+              shadowOpacity: palette.shadowOpacity,
+              shadowRadius: 8,
+              shadowOffset: { width: 0, height: 3 },
+              elevation: 4,
+            }}
+          >
+            <Ionicons name="calendar-outline" size={20} color={palette.accentDeep} />
+            <View style={{ marginLeft: 9 }}>
+              <Text
+                style={{
+                  color: palette.inkFaint,
+                  fontSize: 9,
+                  fontWeight: "900",
+                  letterSpacing: 1,
+                }}
+              >
+                TODAY
+              </Text>
+              <Text style={{ color: palette.ink, fontSize: 12, fontWeight: "800", marginTop: 1 }}>
+                {new Date().toLocaleDateString("en-IN", {
+                  weekday: "short",
+                  day: "numeric",
+                  month: "short",
+                  year: "numeric",
+                })}
+              </Text>
+            </View>
+          </View>
+        </View>
+        {[
+          { title: "Profile", icon: "person-outline", label: "Open profile" },
+          { title: "Settings", icon: "settings-outline", label: "Open settings" },
+        ].map((item) => (
+          <TouchableOpacity
+            key={item.title}
+            accessibilityRole="button"
+            accessibilityLabel={item.label}
+            onPress={() => openConnectedModule(item.title)}
+            activeOpacity={0.8}
+            style={{
+              width: 54,
+              height: 54,
+              borderRadius: 27,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: palette.card,
+              borderWidth: 1,
+              borderColor: palette.cardBorder,
+              shadowColor: palette.shadow,
+              shadowOpacity: palette.shadowOpacity,
+              shadowRadius: 8,
+              shadowOffset: { width: 0, height: 3 },
+              elevation: 4,
+            }}
+          >
+            <Ionicons name={item.icon} size={25} color={palette.accentDeep} />
+          </TouchableOpacity>
+        ))}
+      </View>
 
       {/* Main Drawer Menu */}
       <Drawer
@@ -227,42 +372,154 @@ export default function TeacherDashboardScreen() {
   );
 }
 
-function HomeContent({ user, summary, loading, error, onModulePress }) {
+function AttendanceActionButton({ onPress, label }) {
+  const [pulse] = useState(() => new Animated.Value(0));
+
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 700, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 700, useNativeDriver: true }),
+      ])
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [pulse]);
+
+  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.035] });
+
+  return (
+    <Animated.View style={{ transform: [{ scale }] }}>
+      <TouchableOpacity
+        accessibilityRole="button"
+        onPress={onPress}
+        activeOpacity={0.85}
+        style={{
+          borderRadius: 28,
+          overflow: "hidden",
+          shadowColor: "#4f46e5",
+          shadowOpacity: 0.18,
+          shadowRadius: 10,
+          shadowOffset: { width: 0, height: 5 },
+          elevation: 4,
+        }}
+      >
+        <LinearGradient
+          colors={gradients.primary}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={{
+            minHeight: 54,
+            paddingHorizontal: 18,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Ionicons name="sparkles-outline" size={20} color="#fff" style={{ marginRight: 9 }} />
+          <Text style={{ color: "#fff", fontSize: 16, fontWeight: "900" }}>{label}</Text>
+        </LinearGradient>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
+
+function ClockTimeTile({ label, value, icon, color, palette }) {
+  return (
+    <View
+      style={{
+        flex: 1,
+        minHeight: 78,
+        borderRadius: 15,
+        padding: 12,
+        backgroundColor: palette.cardSoft,
+        borderWidth: 1,
+        borderColor: palette.cardBorder,
+        flexDirection: "row",
+        alignItems: "center",
+      }}
+    >
+      <View
+        style={{
+          width: 34,
+          height: 34,
+          borderRadius: 11,
+          backgroundColor: `${color}18`,
+          alignItems: "center",
+          justifyContent: "center",
+          marginRight: 9,
+        }}
+      >
+        <Ionicons name={icon} size={19} color={color} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={{ color: palette.inkSoft, fontSize: 11, fontWeight: "700" }}>{label}</Text>
+        <Text style={{ color: palette.ink, fontSize: 16, fontWeight: "900", marginTop: 3 }}>
+          {value}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function HomeContent({
+  user,
+  summary,
+  clockStatus,
+  clockStatusLoading,
+  clockStatusError,
+  onRetryClockStatus,
+  onMarkAttendance,
+  onModulePress,
+}) {
   const { palette } = useTheme();
   const profile = summary?.profile || {};
-  const action = summary?.action || {};
-  const stats = summary?.stats?.length
-    ? summary.stats
-    : [
-      { title: "Classes", value: loading ? "..." : "0", subtitle: "Allotted", color: "#22C55E" },
-      { title: "Assignments", value: loading ? "..." : "0", subtitle: "Visible", color: "#F97316" },
-      { title: "Notices", value: loading ? "..." : "0", subtitle: "Unread", color: "#2563EB" },
-    ];
+  const quickAccessModules = teacherModules.filter(
+    (module) => !QUICK_ACCESS_EXCLUDED_MODULES.has(module.title)
+  );
+
+  const clockedIn = Boolean(clockStatus?.clockedIn);
+  const clockedOut = Boolean(clockStatus?.clockedOut || clockStatus?.clockOutAt);
+  const hasClockActivity = clockedIn || clockedOut;
 
   return (
     <View style={{ marginTop: 36 }}>
-      {/* Good Morning Greeting Card */}
       <View
         style={{
           flexDirection: "row",
           alignItems: "center",
           justifyContent: "space-between",
+          backgroundColor: palette.card,
+          borderWidth: 1,
+          borderColor: palette.cardBorder,
+          borderRadius: 22,
+          padding: 18,
           marginBottom: 22,
+          shadowColor: palette.shadow,
+          shadowOpacity: palette.shadowOpacity,
+          shadowRadius: 12,
+          shadowOffset: { width: 0, height: 5 },
+          elevation: 3,
         }}
       >
-        <View>
-          <Text style={{ fontSize: 18, color: palette.ink }}>Good Morning, 👋</Text>
+        <View style={{ flex: 1, paddingRight: 12 }}>
+          <Text style={{ fontSize: 15, color: palette.inkSoft, fontWeight: "600" }}>
+            Good Morning, 👋
+          </Text>
           <Text
             style={{
-              fontSize: 26,
+              fontSize: 23,
               fontWeight: "900",
               color: palette.ink,
-              marginTop: 8,
+              marginTop: 5,
             }}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.8}
           >
             {user?.name || user?.displayName || "Teacher Portal"}
           </Text>
-          <Text style={{ marginTop: 8, color: palette.inkLabel, fontSize: 16 }}>
+          <Text style={{ marginTop: 6, color: palette.inkLabel, fontSize: 14 }}>
             {[profile.classLabel || "No class assigned", profile.designation || "Faculty"].filter(Boolean).join(" | ")}
           </Text>
         </View>
@@ -272,9 +529,9 @@ function HomeContent({ user, summary, loading, error, onModulePress }) {
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={{
-            width: 86,
-            height: 86,
-            borderRadius: 43,
+            width: 66,
+            height: 66,
+            borderRadius: 33,
             alignItems: "center",
             justifyContent: "center",
           }}
@@ -283,7 +540,6 @@ function HomeContent({ user, summary, loading, error, onModulePress }) {
         </LinearGradient>
       </View>
 
-      {/* Teacher Action Card */}
       <View
         style={{
           backgroundColor: palette.card,
@@ -296,59 +552,87 @@ function HomeContent({ user, summary, loading, error, onModulePress }) {
           elevation: 2,
           borderRadius: 18,
           padding: 18,
-          flexDirection: "row",
-          alignItems: "center",
           marginBottom: 26,
         }}
       >
-        <LinearGradient
-          colors={gradients.chip}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={{
-            width: 54,
-            height: 54,
-            borderRadius: 17,
-            alignItems: "center",
-            justifyContent: "center",
-            marginRight: 16,
-          }}
-        >
-          <Ionicons name="book-outline" size={30} color="#fff" />
-        </LinearGradient>
-
-        <View style={{ flex: 1 }}>
-          <Text style={{ color: palette.ink, fontSize: 15, fontWeight: "800" }}>
-            {action.label || "Attendance Status"}
-          </Text>
-          <Text
+        <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 16 }}>
+          <LinearGradient
+            colors={gradients.chip}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
             style={{
-              color: palette.ink,
-              fontSize: 21,
-              fontWeight: "900",
-              marginTop: 4,
+              width: 44,
+              height: 44,
+              borderRadius: 14,
+              alignItems: "center",
+              justifyContent: "center",
+              marginRight: 12,
             }}
           >
-            {action.title || "Not marked"}
-          </Text>
-          <Text style={{ color: palette.inkSoft, marginTop: 6, fontSize: 15 }}>
-            {error || action.subtitle || "Live ERP data"}
-          </Text>
+            <Ionicons name="time-outline" size={25} color="#fff" />
+          </LinearGradient>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: palette.ink, fontSize: 17, fontWeight: "900" }}>
+              Today&apos;s Attendance
+            </Text>
+            <Text style={{ color: palette.inkSoft, marginTop: 3, fontSize: 13 }}>
+              {clockedOut ? "Your attendance is complete" : clockedIn ? "You are currently clocked in" : "Clock in when you arrive at school"}
+            </Text>
+          </View>
         </View>
 
-        <TouchableOpacity
-          onPress={() => onModulePress({ title: "My Class" })}
-          style={{
-            backgroundColor: "rgba(99,102,241,0.12)",
-            paddingVertical: 12,
-            paddingHorizontal: 14,
-            borderRadius: 14,
-          }}
-        >
-          <Text style={{ color: colors.primary, fontWeight: "800" }}>
-            Open Class
-          </Text>
-        </TouchableOpacity>
+        {clockStatusLoading ? (
+          <View style={{ minHeight: 54, alignItems: "center", justifyContent: "center" }}>
+            <Text style={{ color: palette.inkSoft, fontSize: 14 }}>Loading attendance...</Text>
+          </View>
+        ) : clockStatusError ? (
+          <View>
+            <Text style={{ color: palette.inkSoft, fontSize: 13, marginBottom: 12 }}>
+              {clockStatusError}
+            </Text>
+            <TouchableOpacity
+              accessibilityRole="button"
+              onPress={onRetryClockStatus}
+              style={{ alignSelf: "flex-start", paddingVertical: 8 }}
+            >
+              <Text style={{ color: colors.primaryDark, fontSize: 14, fontWeight: "800" }}>
+                Retry
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : !hasClockActivity ? (
+          <AttendanceActionButton onPress={onMarkAttendance} label="Mark your attendance" />
+        ) : (
+          <>
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              <ClockTimeTile
+                label="Clock In"
+                value={formatClockTime(clockStatus?.clockInAt, clockStatus?.timezone)}
+                icon="log-in-outline"
+                color="#16a34a"
+                palette={palette}
+              />
+              <ClockTimeTile
+                label="Clock Out"
+                value={clockedOut ? formatClockTime(clockStatus?.clockOutAt, clockStatus?.timezone) : "Pending"}
+                icon="log-out-outline"
+                color="#f97316"
+                palette={palette}
+              />
+            </View>
+            {!clockedOut && (
+              <TouchableOpacity
+                onPress={onMarkAttendance}
+                activeOpacity={0.8}
+                style={{ alignSelf: "flex-end", marginTop: 12, paddingVertical: 8, paddingHorizontal: 2 }}
+              >
+                <Text style={{ color: colors.primaryDark, fontSize: 13, fontWeight: "800" }}>
+                  Open attendance
+                </Text>
+              </TouchableOpacity>
+            )}
+          </>
+        )}
       </View>
 
       {/* Quick Access Title */}
@@ -373,156 +657,17 @@ function HomeContent({ user, summary, loading, error, onModulePress }) {
           justifyContent: "space-between",
         }}
       >
-        {teacherModules.map((module) => (
+        {quickAccessModules.map((module) => (
           <ModuleCard
             key={module.title}
             title={module.title}
             icon={module.icon}
             color={module.color}
+            width="48%"
             onPress={() => onModulePress(module)}
           />
         ))}
       </View>
-
-      {/* Overview/Statistics Title */}
-      <Text
-        style={{
-          fontSize: 20,
-          fontWeight: "900",
-          color: palette.ink,
-          marginTop: 16,
-          marginBottom: 14,
-        }}
-      >
-        Today&apos;s Statistics
-      </Text>
-
-      {/* 3 Columns matching original Student layout */}
-      <View style={{ flexDirection: "row", marginHorizontal: -5 }}>
-        {stats.map((item) => (
-          <OverviewCard key={item.title} title={item.title} value={item.value} subtitle={item.subtitle} color={item.color} loading={loading} />
-        ))}
-      </View>
-    </View>
-  );
-}
-
-function SimpleTabPage({ title, icon, text, logout }) {
-  const { palette } = useTheme();
-  return (
-    <View style={{ marginTop: 60 }}>
-      <View
-        style={{
-          backgroundColor: palette.card,
-          borderWidth: 1,
-          borderColor: palette.cardBorder,
-          shadowColor: palette.shadow,
-          shadowOpacity: palette.shadowOpacity,
-          shadowRadius: 8,
-          shadowOffset: { width: 0, height: 3 },
-          elevation: 2,
-          borderRadius: 24,
-          padding: 28,
-          alignItems: "center",
-        }}
-      >
-        <Ionicons name={icon} size={70} color={colors.primaryDark} />
-        <Text
-          style={{
-            marginTop: 20,
-            fontSize: 28,
-            fontWeight: "900",
-            color: palette.ink,
-          }}
-        >
-          {title}
-        </Text>
-        <Text
-          style={{
-            textAlign: "center",
-            marginTop: 12,
-            fontSize: 16,
-            lineHeight: 24,
-            color: palette.inkSoft,
-          }}
-        >
-          {text}
-        </Text>
-
-        {logout && (
-          <TouchableOpacity
-            onPress={logout}
-            style={{
-              marginTop: 24,
-              backgroundColor: glassColors.danger,
-              paddingHorizontal: 24,
-              paddingVertical: 14,
-              borderRadius: 14,
-            }}
-          >
-            <Text style={{ color: "#fff", fontWeight: "900" }}>Logout</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    </View>
-  );
-}
-
-function BottomTabs({ activeTab, setActiveTab, openConnectedModule }) {
-  const moduleTargets = {
-    assignment: "Assignment",
-    notices: "Notices",
-    profile: "Profile",
-  };
-  return (
-    <View
-      style={{
-        position: "absolute",
-        bottom: 0,
-        left: 0,
-        right: 0,
-        height: 82,
-        backgroundColor: "#fff",
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-around",
-        elevation: 12,
-        borderTopWidth: 1,
-        borderTopColor: "#EEF2F7",
-      }}
-    >
-      {teacherBottomTabs.map((tab) => {
-        const active = activeTab === tab.key;
-        return (
-          <TouchableOpacity
-            key={tab.key}
-            onPress={() => {
-              if (moduleTargets[tab.key]) {
-                openConnectedModule(moduleTargets[tab.key]);
-                return;
-              }
-              setActiveTab(tab.key);
-            }}
-            style={{ alignItems: "center", justifyContent: "center" }}
-          >
-            <Ionicons
-              name={active ? tab.icon.replace("-outline", "") : tab.icon}
-              size={27}
-              color={active ? "#4F46E5" : "#64748B"}
-            />
-            <Text
-              style={{
-                marginTop: 5,
-                fontSize: 12,
-                fontWeight: active ? "900" : "600",
-                color: active ? "#4F46E5" : "#64748B",
-              }}
-            >
-              {tab.title}
-            </Text>
-          </TouchableOpacity>
-        );
-      })}
     </View>
   );
 }

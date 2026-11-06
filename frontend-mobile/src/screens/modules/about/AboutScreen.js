@@ -2,19 +2,18 @@
 // ConnectedModuleScreen wraps registered screens with AuroraBackground + a
 // back/home PageHeader, so this screen renders only its own scroll content.
 import React from "react";
-import { ScrollView, Text, View } from "react-native";
+import { Image, ScrollView, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 
 import GlassCard from "../../../shared/components/GlassCard";
 import { useTheme } from "../../../theme/ThemeContext";
-import { gradients } from "../../../shared/theme/glass";
 import { colors } from "../../../shared/theme/colors";
 
+const schoolLogo = require("../../../../assets/images/logo.png");
+
 const DETAILS = [
-  { icon: "pricetag-outline", label: "Version", value: "1.0.0" },
-  { icon: "calendar-outline", label: "Release Date", value: "05 July 2026" },
-  { icon: "phone-portrait-outline", label: "Platform", value: "React Native / Expo" },
+  { icon: "pricetag-outline", label: "Version", value: "1.0.1" },
+  { icon: "calendar-outline", label: "Release Date", value: "07 November 2026" },
 ];
 
 export default function AboutScreen() {
@@ -23,17 +22,10 @@ export default function AboutScreen() {
     <ScrollView contentContainerStyle={styles.content}>
       <GlassCard style={styles.card}>
         <View style={styles.inner}>
-          <LinearGradient
-            colors={gradients.chip}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.iconWrap}
-          >
-            <Ionicons name="school-outline" size={40} color="#fff" />
-          </LinearGradient>
+          <Image source={schoolLogo} resizeMode="contain" style={styles.schoolLogo} />
 
           <Text style={[styles.appName, { color: palette.ink }]}>
-            MGPS ERP — Marigold Secondary School
+            MGHUB — Marigold Secondary School
           </Text>
           <Text style={[styles.desc, { color: palette.inkSoft }]}>
             A unified school management portal connecting administrators, clerks,
@@ -75,12 +67,9 @@ const styles = {
   content: { padding: 16, paddingBottom: 40 },
   card: { borderRadius: 20, marginBottom: 14 },
   inner: { padding: 22, alignItems: "center" },
-  iconWrap: {
-    width: 76,
-    height: 76,
-    borderRadius: 24,
-    alignItems: "center",
-    justifyContent: "center",
+  schoolLogo: {
+    width: 84,
+    height: 84,
     marginBottom: 16,
   },
   appName: { fontSize: 19, fontWeight: "900", textAlign: "center" },

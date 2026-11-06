@@ -49,6 +49,7 @@ import {
   createExamRecord,
   DEFAULT_GRADE_SCALE,
   decideAdminOnPaper,
+  decideTeacherOnPaper,
   enableTeacherMarksEdit,
   ensureStudentInRoster,
   fetchExaminationState,
@@ -1147,16 +1148,27 @@ const PaperAnalysisSection = ({ state, actor, role, session, onRefresh, onRework
     setCommentDrafts((prev) => ({ ...prev, [paperId]: value }));
   };
 
-  const decide = (paper, decision, requiresComment = false) => {
+  const decide = async (paper, decision, requiresComment = false) => {
     const comment = commentDrafts[paper.id]?.trim() || '';
     if (requiresComment && !comment) {
-      alert('Please write a correction comment before rejecting or returning the paper.');
+      alert('Please write a review note before deciding on this paper.');
       return;
     }
 
-    const nextState = addPaperDecision(paper.id, decision, actor, comment);
-    onRefresh(nextState);
-    updateComment(paper.id, '');
+    try {
+      const nextState =
+        actor.role === 'teacher'
+          ? await decideTeacherOnPaper(
+              paper.id,
+              decision.status === 'teacher_approved' ? 'approved' : 'rejected',
+              comment
+            )
+          : addPaperDecision(paper.id, decision, actor, comment);
+      onRefresh(nextState);
+      updateComment(paper.id, '');
+    } catch (error) {
+      alert(error.message || 'Could not save paper review.');
+    }
   };
 
   // Simple approval workflow: draft → pending_admin → approved|rejected.
@@ -1286,7 +1298,9 @@ const PaperAnalysisSection = ({ state, actor, role, session, onRefresh, onRework
                   placeholder={
                     paper.status === 'pending_admin'
                       ? 'Optional comment on approve, required to reject...'
-                      : 'Write mistake/correction comment...'
+                      : role === 'teacher'
+                        ? 'Review note required for approval or rejection...'
+                        : 'Write mistake/correction comment...'
                   }
                   rows={3}
                   className="mt-4 w-full rounded-2xl border border-white/70 bg-white/60 p-3 text-xs font-bold outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all"
@@ -1332,7 +1346,7 @@ const PaperActionBar = ({ paper, role, onDecision, onWorkflow, onRework }) => {
   const workflowActions = [];
 
   // ------ Simple approval workflow (draft → pending_admin → approved|rejected)
-  if (paper.status === 'draft' && ['teacher', 'admin', 'clerk'].includes(role)) {
+  if (paper.status === 'draft' && ['admin', 'clerk'].includes(role)) {
     workflowActions.push({
       label: 'Submit for approval',
       tone: 'border-indigo-200 bg-indigo-50 text-indigo-700',
@@ -1355,7 +1369,7 @@ const PaperActionBar = ({ paper, role, onDecision, onWorkflow, onRework }) => {
 
   if (role === 'teacher' && paper.status === 'teacher_review') {
     actions.push({
-      label: 'Reject To Clerk',
+      label: 'Reject',
       tone: 'border-rose-200 bg-rose-50 text-rose-700',
       decision: { status: 'teacher_rejected', action: 'Teacher Rejected' },
       requiresComment: true,
@@ -1364,22 +1378,6 @@ const PaperActionBar = ({ paper, role, onDecision, onWorkflow, onRework }) => {
       label: 'Approve',
       tone: 'border-emerald-200 bg-emerald-50 text-emerald-700',
       decision: { status: 'teacher_approved', action: 'Teacher Approved' },
-    });
-  }
-
-  if (role === 'teacher' && paper.status === 'teacher_approved') {
-    actions.push({
-      label: 'Send To Admin',
-      tone: 'border-blue-200 bg-blue-50 text-blue-700',
-      decision: { status: 'admin_review', action: 'Sent To Admin' },
-    });
-  }
-
-  if (role === 'teacher' && paper.status === 'admin_rejected') {
-    actions.push({
-      label: 'Return To Clerk',
-      tone: 'border-orange-200 bg-orange-50 text-orange-700',
-      decision: { status: 'teacher_rejected', action: 'Returned To Clerk' },
       requiresComment: true,
     });
   }

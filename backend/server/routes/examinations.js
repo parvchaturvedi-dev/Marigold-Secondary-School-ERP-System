@@ -10,6 +10,7 @@ import { emitRealtimeEvent } from '../realtime.js';
 import { requireRole } from '../middleware/auth.js';
 import { createNotification } from '../utils/notify.js';
 import {
+  canTeacherReviewPaper,
   canReadBoardStudentResult,
   filterExaminationState,
   mergeTeacherExaminationState,
@@ -241,8 +242,8 @@ router.put('/state', ensureMongo, requireRole('admin', 'clerk', 'teacher'), asyn
 // Paper approval workflow
 //
 // State machine (in-place on state.papers[i].status):
-//   draft ─── submit-for-approval ──▶ pending_admin
-//   pending_admin ── admin-decision ─▶ approved | rejected
+//   draft ─── submit-for-approval ──▶ pending_admin ── admin-decision ──▶ approved | rejected
+//   teacher_review ── teacher-decision ──▶ teacher_approved | teacher_rejected
 //
 // Both routes read the singleton ExaminationState doc, mutate the matching
 // paper by id, mark the mixed `state` field dirty, save, and broadcast
@@ -273,7 +274,7 @@ const loadPaper = async (paperId, response) => {
 router.patch(
   '/papers/:id/submit-for-approval',
   ensureMongo,
-  requireRole('teacher', 'admin', 'clerk'),
+  requireRole('admin', 'clerk'),
   async (request, response) => {
     const paperId = request.params.id;
     const loaded = await loadPaper(paperId, response);
@@ -406,6 +407,83 @@ router.patch(
     }
 
     response.json({ paper: nextPaper, state: normalizeState(record.state) });
+  }
+);
+
+router.patch(
+  '/papers/:id/teacher-decision',
+  ensureMongo,
+  requireRole('teacher'),
+  async (request, response) => {
+    const decision = String(request.body?.decision || '').toLowerCase();
+    const comment = String(request.body?.comment || '').trim();
+    if (!['approved', 'rejected'].includes(decision)) {
+      response.status(400).json({ message: 'decision must be "approved" or "rejected".' });
+      return;
+    }
+    if (!comment) {
+      response.status(400).json({ message: 'A review note is required for every decision.' });
+      return;
+    }
+
+    const loaded = await loadPaper(request.params.id, response);
+    if (!loaded) return;
+
+    const { record, paper, index } = loaded;
+    if (!canTeacherReviewPaper(paper, request.auth)) {
+      response.status(403).json({ message: 'This paper is not assigned to you for review.' });
+      return;
+    }
+
+    const timestamp = nowIso();
+    const actorName = request.auth?.displayName || request.auth?.username || 'Teacher';
+    const nextPaper = {
+      ...paper,
+      status: decision === 'approved' ? 'teacher_approved' : 'teacher_rejected',
+      ...(decision === 'approved' ? { teacherApprovedAt: timestamp } : {}),
+      teacherReviewedAt: timestamp,
+      updatedAt: timestamp,
+      comments: [
+        ...(Array.isArray(paper.comments) ? paper.comments : []),
+        {
+          id: `CMT-${Date.now()}`,
+          role: 'teacher',
+          actorName,
+          action: decision === 'approved' ? 'Teacher Approved' : 'Teacher Rejected',
+          comment,
+          createdAt: timestamp,
+        },
+      ],
+    };
+
+    record.state.papers[index] = nextPaper;
+    record.updatedBy = request.auth?.username || record.updatedBy || '';
+    record.markModified('state');
+    await record.save();
+    broadcastExaminationsUpdated();
+
+    const recipientUsername = paper.createdByUsername || '';
+    if (recipientUsername) {
+      try {
+        await createNotification({
+          title: `Paper ${decision === 'approved' ? 'approved' : 'rejected'}`,
+          description: `${actorName} ${decision} "${paper.title || paper.subject || 'Paper'}": ${comment}`,
+          type: 'examination',
+          linkPage: 'Paper Analysis',
+          recipientUsername,
+        });
+      } catch (error) {
+        console.error('[examinations] paper review notify failed:', {
+          name: error?.name,
+          code: error?.code,
+        });
+      }
+    }
+
+    response.json({
+      paper: nextPaper,
+      state: filterExaminationState(normalizeState(record.state), request.auth),
+    });
   }
 );
 

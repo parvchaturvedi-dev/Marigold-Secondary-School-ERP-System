@@ -144,8 +144,6 @@ export default function MeetingsScreen({ rows, user, reload }) {
     }
   }
 
-  const ongoingCount = meetings.filter((meeting) => meeting.status === "ongoing").length;
-
   return (
     <View style={{ flex: 1 }}>
       <AuroraBackground />
@@ -154,20 +152,6 @@ export default function MeetingsScreen({ rows, user, reload }) {
         contentContainerStyle={styles.container}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={glassColors.accent} />}
       >
-      <GlassCard style={styles.heroCard}>
-        <View style={styles.heroInner}>
-          <View style={styles.heroIcon}>
-            <Ionicons name="videocam-outline" size={26} color={glassColors.accent} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.heroTitle}>
-              {ongoingCount > 0 ? `${ongoingCount} meeting${ongoingCount === 1 ? "" : "s"} live now` : "No live meetings"}
-            </Text>
-            <Text style={styles.heroSubtitle}>Join Jitsi meetings scoped to your class or the whole school.</Text>
-          </View>
-        </View>
-      </GlassCard>
-
       {canHost && (
         <CreateMeetingForm user={user} allottedClasses={allottedClasses} onCreate={handleCreate} creating={creating} />
       )}
@@ -221,35 +205,6 @@ const styles = StyleSheet.create({
   container: {
     padding: 16,
     paddingBottom: 40,
-  },
-  heroCard: {
-    marginBottom: 16,
-  },
-  heroInner: {
-    padding: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-  },
-  heroIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
-    backgroundColor: `${glassColors.accent}1a`,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  heroTitle: {
-    fontSize: 16,
-    fontWeight: "900",
-    color: glassColors.ink,
-  },
-  heroSubtitle: {
-    marginTop: 4,
-    fontSize: 12.5,
-    color: glassColors.inkSoft,
-    fontWeight: "600",
-    lineHeight: 18,
   },
   loadingCard: {
     minHeight: 180,

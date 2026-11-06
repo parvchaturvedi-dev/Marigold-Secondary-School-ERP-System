@@ -3,14 +3,14 @@ import { TouchableOpacity, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../theme/ThemeContext";
 
-export default function ModuleCard({ title, icon, color, onPress }) {
+export default function ModuleCard({ title, icon, color, onPress, width = "23%" }) {
   const { palette } = useTheme();
   return (
     <TouchableOpacity
       onPress={onPress}
       activeOpacity={0.82}
       style={{
-        width: "23%",
+        width,
         minHeight: 100,
         borderRadius: 18,
         alignItems: "center",

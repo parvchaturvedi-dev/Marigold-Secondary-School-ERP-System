@@ -1,6 +1,6 @@
-// Examination Management (WRITE / admin counterpart to the read-only ExaminationsScreen).
-// Brings the web ExaminationHub to full write-parity on mobile: create exams, papers,
-// schedules, and enter marks. Persists via the REST examination state:
+// Examination management. Admin/clerk users manage exams, papers, and schedules;
+// teachers review routed papers and update marks for assigned class-subject pairs.
+// Persists via the REST examination state:
 //   GET  /examinations/state -> { exams, papers, schedules, marks, deliveries, boardClasses, boardResults }
 //   PUT  /examinations/state  { state: <whole state>, updatedBy }  (read-modify-write)
 // Record shapes are copied EXACTLY from web frontend/src/components/common/examinationStore.js
@@ -101,9 +101,10 @@ const getExamLabel = (exam) => (exam ? `${exam.name} Examination` : "Examination
 const getPaperStatusMeta = (status) => {
   switch (status) {
     case "pending_admin":
-    case "teacher_review":
     case "admin_review":
       return { label: "Pending admin review", dot: "#f59e0b", ink: "#b45309" };
+    case "teacher_review":
+      return { label: "Pending teacher review", dot: "#f59e0b", ink: "#b45309" };
     case "approved":
     case "selected":
     case "teacher_approved":
@@ -145,13 +146,16 @@ const normalizeStudent = (student = {}, index = 0, className = "") => ({
   admissionNumber: student.admissionNumber || student.id || "",
 });
 
-export default function ExaminationManageScreen({ user }) {
+export default function ExaminationManageScreen({ user, initialSection = "exam" }) {
   const { palette } = useTheme();
   const banner = useBanner();
-  const [section, setSection] = useState("exam");
+  const role = user?.role || "";
+  const isTeacher = role === "teacher";
+  const initialTeacherSection = initialSection === "paper" ? "paper" : "marks";
+  const defaultSection = isTeacher ? initialTeacherSection : initialSection;
+  const [section, setSection] = useState(defaultSection);
   // Top-level desk: "school" (existing sections) or "board" (Board Examination).
   const [desk, setDesk] = useState("school");
-  const role = user?.role || "";
   const isBoardManager = role === "admin" || role === "clerk";
 
   // Hardware Back: step back through the desk/section toggles before the app-level
@@ -163,7 +167,7 @@ export default function ExaminationManageScreen({ user }) {
         setDesk("school"); // board desk open → back to the school examination desk
         return true;
       }
-      if (section !== "exam") {
+      if (!isTeacher && section !== "exam") {
         setSection("exam"); // a non-default section is open → back to the Exam section
         return true;
       }
@@ -171,7 +175,7 @@ export default function ExaminationManageScreen({ user }) {
     };
     const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
     return () => sub.remove();
-  }, [desk, section]);
+  }, [desk, isTeacher, section]);
 
   // ---- REST examination state (read-modify-write) --------------------------
   const [state, setState] = useState(EMPTY_STATE);
@@ -241,9 +245,46 @@ export default function ExaminationManageScreen({ user }) {
     return [...new Set(names)];
   }, [classesNs.items]);
 
+  const teacherSubjectsByClass = useMemo(() => {
+    const assignments = Array.isArray(user?.teacherProfile?.classAssignments)
+      ? user.teacherProfile.classAssignments
+      : Array.isArray(user?.classAssignments)
+        ? user.classAssignments
+        : [];
+    const byClass = new Map();
+    assignments.forEach((assignment) => {
+      const className = String(assignment?.className || assignment?.class || "").trim();
+      const subject = String(
+        assignment?.subject ||
+          assignment?.subjectName ||
+          assignment?.paperSubject ||
+          assignment?.examSubject ||
+          ""
+      ).trim();
+      if (!className || !subject) return;
+      const key = className.toLowerCase();
+      const entry = byClass.get(key) || { className, subjects: new Set() };
+      entry.subjects.add(subject);
+      byClass.set(key, entry);
+    });
+    return byClass;
+  }, [user]);
+
+  const visibleClassNames = useMemo(
+    () =>
+      isTeacher
+        ? [...teacherSubjectsByClass.values()].map((assignment) => assignment.className)
+        : classNames,
+    [classNames, isTeacher, teacherSubjectsByClass]
+  );
+
   // Subjects for a class: prefer the class mapping, fall back to the global registry.
   const subjectsForClass = useCallback(
     (className) => {
+      if (isTeacher) {
+        const assignment = teacherSubjectsByClass.get(String(className || "").trim().toLowerCase());
+        return assignment ? [...assignment.subjects] : [];
+      }
       const mapping = (Array.isArray(classSubjectsNs.items) ? classSubjectsNs.items : []).find(
         (rec) => getClassName(rec) === className
       );
@@ -257,7 +298,7 @@ export default function ExaminationManageScreen({ user }) {
         .filter(Boolean);
       return [...new Set(globals)];
     },
-    [classSubjectsNs.items, globalSubjectsNs.items]
+    [classSubjectsNs.items, globalSubjectsNs.items, isTeacher, teacherSubjectsByClass]
   );
 
   const studentsForClass = useCallback(
@@ -299,7 +340,9 @@ export default function ExaminationManageScreen({ user }) {
         subtitle={
           showBoardDesk
             ? "Publish the board timetable and each student's final result."
-            : "Create exams, papers, schedules, and enter student marks."
+            : isTeacher
+              ? "Review papers routed to you and update marks only for your assigned classes and subjects."
+              : "Create exams, papers, schedules, and enter student marks."
         }
       />
 
@@ -347,13 +390,15 @@ export default function ExaminationManageScreen({ user }) {
         />
       ) : (
         <>
-          <View style={{ marginBottom: 14 }}>
-            <Segmented
-              options={isBoardManager ? [...SECTIONS, REPORTS_SECTION] : SECTIONS}
-              value={section}
-              onChange={setSection}
-            />
-          </View>
+          {!isTeacher ? (
+            <View style={{ marginBottom: 14 }}>
+              <Segmented
+                options={isBoardManager ? [...SECTIONS, REPORTS_SECTION] : SECTIONS}
+                value={section}
+                onChange={setSection}
+              />
+            </View>
+          ) : null}
 
           {section === "exam" && (
             <ExamSection
@@ -371,7 +416,7 @@ export default function ExaminationManageScreen({ user }) {
               saving={saving}
               commit={commit}
               banner={banner}
-              classNames={classNames}
+              classNames={visibleClassNames}
               subjectsForClass={subjectsForClass}
               actorName={actorName}
               actorRole={actorRole}
@@ -385,7 +430,7 @@ export default function ExaminationManageScreen({ user }) {
               saving={saving}
               commit={commit}
               banner={banner}
-              classNames={classNames}
+              classNames={visibleClassNames}
               subjectsForClass={subjectsForClass}
             />
           )}
@@ -395,7 +440,7 @@ export default function ExaminationManageScreen({ user }) {
               saving={saving}
               commit={commit}
               banner={banner}
-              classNames={classNames}
+              classNames={visibleClassNames}
               subjectsForClass={subjectsForClass}
               studentsForClass={studentsForClass}
               actorName={actorName}
@@ -500,7 +545,7 @@ function ExamSection({ state, saving, commit, banner, actorName, actorRole }) {
 }
 
 // ---------------------------------------------------------------------------
-// Create Paper
+// Paper creation and teacher review
 // ---------------------------------------------------------------------------
 function PaperSection({
   state,
@@ -517,8 +562,9 @@ function PaperSection({
   const { palette } = useTheme();
   const [busyPaperId, setBusyPaperId] = useState("");
   const [rejectCommentByPaperId, setRejectCommentByPaperId] = useState({});
+  const isTeacher = actorRole === "teacher";
   const canDecideAsAdmin = actorRole === "admin";
-  const canSubmitDrafts = ["teacher", "admin", "clerk"].includes(actorRole);
+  const canSubmitDrafts = ["admin", "clerk"].includes(actorRole);
 
   // POST /examinations/papers/:id/submit-for-approval  → draft → pending_admin
   // Server broadcasts mgps-erp-examinations-updated and notifies admins.
@@ -569,6 +615,37 @@ function PaperSection({
         );
       } catch (err) {
         banner.showError(err.message || "Could not save decision.");
+      } finally {
+        setBusyPaperId("");
+      }
+    },
+    [banner, rejectCommentByPaperId, setState]
+  );
+
+  const decideAsTeacher = useCallback(
+    async (paper, decision) => {
+      const comment = (rejectCommentByPaperId[paper.id] || "").trim();
+      if (!comment) {
+        banner.showError("A review note is required for every decision.");
+        return;
+      }
+      setBusyPaperId(paper.id);
+      banner.clear();
+      try {
+        const result = await apiRequest(
+          `/examinations/papers/${encodeURIComponent(paper.id)}/teacher-decision`,
+          {
+            method: "PATCH",
+            body: JSON.stringify({ decision, comment }),
+          }
+        );
+        if (result?.state) setState(normalizeState(result.state));
+        setRejectCommentByPaperId((prev) => ({ ...prev, [paper.id]: "" }));
+        banner.showSuccess(
+          decision === "approved" ? `Approved "${paper.title}".` : `Rejected "${paper.title}".`
+        );
+      } catch (err) {
+        banner.showError(err.message || "Could not save paper review.");
       } finally {
         setBusyPaperId("");
       }
@@ -636,51 +713,61 @@ function PaperSection({
     }
   };
 
-  if (!state.exams.length) {
+  if (!isTeacher && !state.exams.length) {
     return <EmptyState icon="document-outline" title="No exams yet" text="Create an examination first, then add papers." />;
   }
 
-  const examPapers = state.papers.filter((p) => p.examId === examId);
+  const examPapers = isTeacher
+    ? state.papers.filter((paper) => paper.status === "teacher_review")
+    : state.papers.filter((paper) => paper.examId === examId);
 
   return (
     <>
-      <Card>
-        <SectionTitle>Create Paper</SectionTitle>
-        <Select
-          label="Examination"
-          options={state.exams.map((e) => ({ value: e.id, label: e.name }))}
-          value={examId}
-          onChange={setExamId}
-          placeholder="Select examination"
-        />
-        <Select
-          label="Class"
-          options={classNames}
-          value={className}
-          onChange={setClassName}
-          placeholder={classNames.length ? "Select class" : "No classes found."}
-        />
-        <Select
-          label="Subject"
-          options={subjects}
-          value={subject}
-          onChange={setSubject}
-          placeholder={subjects.length ? "Select subject" : "No subjects mapped for this class."}
-        />
-        <Select label="Paper Type" options={PAPER_TYPES} value={type} onChange={setType} placeholder="Select type" />
-        <TextField
-          label="Maximum Marks"
-          value={maxMarks}
-          onChangeText={setMaxMarks}
-          keyboardType="number-pad"
-          placeholder="80"
-        />
-        <PrimaryButton icon="create-outline" label="Create Paper" onPress={handleCreate} loading={saving} />
-      </Card>
+      {!isTeacher ? (
+        <Card>
+          <SectionTitle>Create Paper</SectionTitle>
+          <Select
+            label="Examination"
+            options={state.exams.map((e) => ({ value: e.id, label: e.name }))}
+            value={examId}
+            onChange={setExamId}
+            placeholder="Select examination"
+          />
+          <Select
+            label="Class"
+            options={classNames}
+            value={className}
+            onChange={setClassName}
+            placeholder={classNames.length ? "Select class" : "No classes found."}
+          />
+          <Select
+            label="Subject"
+            options={subjects}
+            value={subject}
+            onChange={setSubject}
+            placeholder={subjects.length ? "Select subject" : "No subjects mapped for this class."}
+          />
+          <Select label="Paper Type" options={PAPER_TYPES} value={type} onChange={setType} placeholder="Select type" />
+          <TextField
+            label="Maximum Marks"
+            value={maxMarks}
+            onChangeText={setMaxMarks}
+            keyboardType="number-pad"
+            placeholder="80"
+          />
+          <PrimaryButton icon="create-outline" label="Create Paper" onPress={handleCreate} loading={saving} />
+        </Card>
+      ) : null}
 
-      <SectionTitle>Papers · {getExamLabel(exam)} ({examPapers.length})</SectionTitle>
+      <SectionTitle>
+        {isTeacher ? "Papers Awaiting Your Review" : `Papers · ${getExamLabel(exam)}`} ({examPapers.length})
+      </SectionTitle>
       {!examPapers.length ? (
-        <EmptyState icon="documents-outline" title="No papers yet" text="No papers created for this exam." />
+        <EmptyState
+          icon="documents-outline"
+          title={isTeacher ? "No papers to review" : "No papers yet"}
+          text={isTeacher ? "Papers assigned to you for review will appear here." : "No papers created for this exam."}
+        />
       ) : (
         examPapers.map((paper) => {
           const meta = getPaperStatusMeta(paper.status);
@@ -696,6 +783,37 @@ function PaperSection({
               <Text style={[styles.sub, { color: palette.inkSoft }]}>
                 {paper.className} · {paper.subject} · {paper.type}
               </Text>
+              {isTeacher && paper.content ? (
+                <Text style={[styles.help, { color: palette.inkSoft }]}>
+                  {String(paper.content).replace(/<[^>]*>/g, " ").replace(/&nbsp;/g, " ").trim()}
+                </Text>
+              ) : null}
+
+              {isTeacher && paper.status === "teacher_review" ? (
+                <>
+                  <TextField
+                    label="Review note (required)"
+                    value={commentDraft}
+                    onChangeText={(value) =>
+                      setRejectCommentByPaperId((prev) => ({ ...prev, [paper.id]: value }))
+                    }
+                    placeholder="Add your approval or correction note..."
+                    multiline
+                  />
+                  <PrimaryButton
+                    icon="checkmark-circle-outline"
+                    label="Approve"
+                    onPress={() => decideAsTeacher(paper, "approved")}
+                    loading={isBusy}
+                  />
+                  <PrimaryButton
+                    icon="close-circle-outline"
+                    label="Reject"
+                    onPress={() => decideAsTeacher(paper, "rejected")}
+                    loading={isBusy}
+                  />
+                </>
+              ) : null}
 
               {/* Teacher draft: submit-for-approval */}
               {canSubmitDrafts && paper.status === "draft" ? (

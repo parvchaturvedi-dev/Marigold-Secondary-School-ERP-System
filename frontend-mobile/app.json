@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "MGPS ERP Mobile",
+    "name": "MGHUB",
     "slug": "mgps-erp-mobile",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "scheme": "mgpserp",
     "userInterfaceStyle": "automatic",
@@ -13,7 +13,7 @@
       "backgroundColor": "#eef2ff"
     },
     "owner": "parvchaturvediofficial",
-    "description": "Marigold Secondary School ERP Mobile Application",
+    "description": "MGHUB - Marigold Secondary School Mobile Application",
     "sdkVersion": "58.0.0",
     "platforms": [
       "ios",

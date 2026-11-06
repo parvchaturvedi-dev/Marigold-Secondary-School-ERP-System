@@ -1,5 +1,3 @@
-import { getAssignedClassNames } from './moduleStateAccess.js';
-
 const normalizeIdentifier = (value) => String(value || '').trim().toUpperCase();
 const normalizeClassName = (value) => String(value || '').trim().toLowerCase();
 const normalizeSubjectName = (value) => String(value || '').trim().toLowerCase();
@@ -41,10 +39,6 @@ const getTeacherAssignmentMap = (auth = {}) => {
     map.set(className, assignedSubjects);
   }
 
-  for (const className of getAssignedClassNames(auth)) {
-    if (!map.has(className)) map.set(className, new Set());
-  }
-
   return map;
 };
 
@@ -56,12 +50,8 @@ const canAccessTeacherRow = (row = {}, auth = {}) => {
   if (!teacherAssignments.has(className)) return false;
 
   const allowedSubjects = teacherAssignments.get(className) || new Set();
-  if (allowedSubjects.size === 0) return true;
-
   const rowSubject = normalizeSubjectName(getSubjectName(row));
-  if (!rowSubject) return true;
-
-  return allowedSubjects.has(rowSubject);
+  return Boolean(rowSubject && allowedSubjects.has(rowSubject));
 };
 
 export const getStudentIdentifiers = (auth = {}) => {
@@ -118,17 +108,16 @@ export const filterExaminationState = (state, auth = {}) => {
   if (role === 'admin' || role === 'clerk') return state;
 
   if (role === 'teacher') {
-    const classes = getAssignedClassNames(auth);
     return {
       ...state,
-      papers: filterTeacherRows(state.papers, auth),
-      schedules: filterTeacherRows(state.schedules, auth),
-      marks: filterTeacherRows(state.marks, auth),
-      deliveries: filterTeacherRows(state.deliveries, auth),
-      boardClasses: state.boardClasses.filter((className) =>
-        classes.has(normalizeClassName(className))
+      papers: filterTeacherRows(state.papers, auth).filter(
+        (paper) => paper.teacherUsername === auth.username && paper.status === 'teacher_review'
       ),
-      boardResults: filterClassRows(state.boardResults, classes),
+      schedules: [],
+      marks: filterTeacherRows(state.marks, auth),
+      deliveries: [],
+      boardClasses: [],
+      boardResults: [],
     };
   }
 
@@ -160,7 +149,7 @@ export const filterExaminationState = (state, auth = {}) => {
 
 export class ExaminationAuthorizationError extends Error {
   constructor() {
-    super('You do not have permission to change examination data outside your assigned classes.');
+    super('Teachers may update marks only for assigned subjects in their assigned classes and existing exams.');
     this.statusCode = 403;
   }
 }
@@ -169,7 +158,7 @@ const mergeAssignedRows = (currentRows, submittedRows, classes, auth = {}) => {
   const submitted = Array.isArray(submittedRows) ? submittedRows : [];
   const existingUnassignedIds = new Set(
     currentRows
-      .filter((row) => !classes.has(normalizeClassName(row?.className)))
+      .filter((row) => !classes.has(normalizeClassName(row?.className)) || !canAccessTeacherRow(row, auth))
       .map((row) => row?.id)
       .filter(Boolean)
   );
@@ -199,13 +188,33 @@ const mergeAssignedRows = (currentRows, submittedRows, classes, auth = {}) => {
 };
 
 export const mergeTeacherExaminationState = (currentState, submittedState, auth = {}) => {
-  const classes = getAssignedClassNames(auth);
+  const classes = new Set(getTeacherAssignmentMap(auth).keys());
   if (!classes.size) throw new ExaminationAuthorizationError();
+
+  const visibleState = filterExaminationState(currentState, auth);
+  for (const section of ['exams', 'papers', 'schedules']) {
+    if (JSON.stringify(submittedState[section]) !== JSON.stringify(visibleState[section])) {
+      throw new ExaminationAuthorizationError();
+    }
+  }
+
+  const examIds = new Set((currentState.exams || []).map((exam) => exam?.id).filter(Boolean));
+  if (
+    (submittedState.marks || []).some(
+      (record) => !record?.examId || !examIds.has(record.examId)
+    )
+  ) {
+    throw new ExaminationAuthorizationError();
+  }
 
   return {
     ...currentState,
     marks: mergeAssignedRows(currentState.marks, submittedState.marks, classes, auth),
-    papers: mergeAssignedRows(currentState.papers, submittedState.papers, classes, auth),
-    schedules: mergeAssignedRows(currentState.schedules, submittedState.schedules, classes, auth),
   };
 };
+
+export const canTeacherReviewPaper = (paper = {}, auth = {}) =>
+  auth.role === 'teacher' &&
+  paper.teacherUsername === auth.username &&
+  paper.status === 'teacher_review' &&
+  canAccessTeacherRow(paper, auth);

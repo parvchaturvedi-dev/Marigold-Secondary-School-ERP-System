@@ -64,21 +64,8 @@ export function Card({ children, style }) {
   );
 }
 
-export function Hero({ icon = "apps-outline", title, subtitle }) {
-  const { palette } = useTheme();
-  return (
-    <GlassCard style={styles.heroCard}>
-      <View style={styles.heroInner}>
-        <LinearGradient colors={gradients.chip} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.heroIcon}>
-          <Ionicons name={icon} size={26} color="#fff" />
-        </LinearGradient>
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.heroTitle, { color: palette.ink }]}>{title}</Text>
-          {!!subtitle && <Text style={[styles.heroText, { color: palette.inkSoft }]}>{subtitle}</Text>}
-        </View>
-      </View>
-    </GlassCard>
-  );
+export function Hero() {
+  return null;
 }
 
 export function SectionTitle({ children, right }) {
@@ -617,11 +604,6 @@ export function useModuleState(namespace) {
 const styles = {
   card: { borderRadius: 20, marginBottom: 14 },
   cardInner: { padding: 16 },
-  heroCard: { borderRadius: 20, marginBottom: 14 },
-  heroInner: { padding: 16, flexDirection: "row", alignItems: "center" },
-  heroIcon: { width: 52, height: 52, borderRadius: 16, alignItems: "center", justifyContent: "center", marginRight: 14 },
-  heroTitle: { color: "#0F172A", fontSize: 17, fontWeight: "900" },
-  heroText: { color: "#64748B", lineHeight: 19, marginTop: 4 },
   sectionRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10, marginTop: 4 },
   sectionTitle: { color: "#0F172A", fontSize: 16, fontWeight: "900" },
   divider: { height: 1, backgroundColor: "#EEF2F7", marginVertical: 12 },

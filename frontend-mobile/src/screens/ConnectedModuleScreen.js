@@ -45,6 +45,8 @@ import { getActiveStudentProfile, getStaffProfile, getTeacherProfile } from "../
 import FeesScreen from "./modules/fees/FeesScreen";
 import ExaminationsScreen from "./modules/examinations/ExaminationsScreen";
 import MeetingsScreen from "./modules/meetings/MeetingsScreen";
+import AssignmentsScreen from "./modules/assignments/AssignmentsScreen";
+import TeacherMyClassScreen from "../modules/teacher/screens/TeacherMyClassScreen";
 import { resolveModuleScreen } from "./modules/registry";
 import { exportIdCardPdf, exportManyIdCards } from "./modules/idcard/exportIdCard";
 
@@ -141,12 +143,6 @@ function getDetails(row = {}) {
   return Object.entries(row)
     .filter(([key, value]) => !hiddenKeys.has(key) && !titleKeys.includes(key) && !subKeys.includes(key) && valueToText(value))
     .slice(0, 5);
-}
-
-function getCountLabel(title, rows) {
-  if (title === "Academic Calendar") return rows.length ? "Latest file available" : "No file uploaded";
-  if (title === "Profile" || title === "Settings" || title === "Id Card" || title === "ID Card") return "Account synced";
-  return `${rows.length} record${rows.length === 1 ? "" : "s"}`;
 }
 
 const todayIsoDate = () => new Date().toISOString().slice(0, 10);
@@ -255,7 +251,13 @@ function getDefaultAssignmentTargets(user = {}) {
   const classes = Array.isArray(user.allottedClasses) && user.allottedClasses.length
     ? user.allottedClasses
     : teacherProfile.allottedClasses || [];
-  return user.role === "teacher" ? classes.slice(0, 1).join(", ") : "";
+  const firstSubjectAssignment = (Array.isArray(teacherProfile.classAssignments) ? teacherProfile.classAssignments : [])
+    .find((assignment) =>
+      (assignment?.className || assignment?.class) &&
+      (assignment?.subject || assignment?.subjectName || assignment?.paperSubject)
+    );
+  const firstAssignedClass = firstSubjectAssignment?.className || firstSubjectAssignment?.class;
+  return user.role === "teacher" ? firstAssignedClass || classes.slice(0, 1).join(", ") : "";
 }
 
 function initialForm(title, user = {}) {
@@ -305,7 +307,6 @@ function initialForm(title, user = {}) {
 }
 
 export default function ConnectedModuleScreen() {
-  const { palette } = useTheme();
   const { selectedModule, user, openNotificationTarget } = useAuth();
   const [rows, setRows] = useState([]);
   const [config, setConfig] = useState(null);
@@ -576,6 +577,10 @@ export default function ConnectedModuleScreen() {
   );
 
   const RegisteredScreen = resolveModuleScreen(title);
+  if (title === "My Class" && user?.role === "teacher") {
+    return <TeacherMyClassScreen />;
+  }
+
   if (RegisteredScreen) {
     const node = <RegisteredScreen user={user} />;
     return NEEDS_WRAPPER.has(title) ? wrapWithHeader(node) : node;
@@ -590,6 +595,9 @@ export default function ConnectedModuleScreen() {
   if (title === "Meetings") {
     return <MeetingsScreen user={user} />;
   }
+  if ((title === "Assignment" || title === "Assignments") && ["teacher", "student"].includes(user?.role)) {
+    return <AssignmentsScreen user={user} />;
+  }
 
   return (
     <View style={{ flex: 1 }}>
@@ -599,18 +607,6 @@ export default function ConnectedModuleScreen() {
         refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={glassColors.accent} />}
         contentContainerStyle={{ padding: 16, paddingBottom: 34 }}
       >
-        <GlassCard style={styles.heroCard}>
-          <View style={styles.heroCardInner}>
-            <LinearGradient colors={gradients.chip} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.heroIcon}>
-              <Ionicons name={title === "Notifications" ? "notifications-outline" : "apps-outline"} size={28} color="#fff" />
-            </LinearGradient>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.heroTitle, { color: palette.ink }]}>{getCountLabel(title, rows)}</Text>
-              <Text style={[styles.heroText, { color: palette.inkSoft }]}>Review and manage the latest records for your account.</Text>
-            </View>
-          </View>
-        </GlassCard>
-
         {showForm && (
           <ActionForm title={title} form={form} updateForm={updateForm} onSubmit={submitForm} acting={acting} user={user} />
         )}
@@ -841,6 +837,24 @@ function ActionForm({ title, form, updateForm, onSubmit, acting, user }) {
   const needsSubjectList = isAssignment || isTeacherForm;
   const [classNames, setClassNames] = useState([]);
   const [subjectNames, setSubjectNames] = useState([]);
+  const isTeacherAssignmentPublisher = isAssignment && user?.role === "teacher";
+  const teacherClassSubjectMap = new Map();
+
+  if (isTeacherAssignmentPublisher) {
+    const classAssignments = Array.isArray(user?.teacherProfile?.classAssignments)
+      ? user.teacherProfile.classAssignments
+      : [];
+    for (const assignment of classAssignments) {
+      const className = String(assignment?.className || assignment?.class || "").trim();
+      const subject = String(assignment?.subject || assignment?.subjectName || assignment?.paperSubject || "").trim();
+      if (!className || !subject) continue;
+
+      const classKey = className.toLowerCase();
+      const entry = teacherClassSubjectMap.get(classKey) || { name: className, subjects: new Map() };
+      entry.subjects.set(subject.toLowerCase(), subject);
+      teacherClassSubjectMap.set(classKey, entry);
+    }
+  }
 
   useEffect(() => {
     if (!needsClassList) return;
@@ -890,14 +904,43 @@ function ActionForm({ title, form, updateForm, onSubmit, acting, user }) {
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
+  const teacherClassOptions = [...teacherClassSubjectMap.values()].map((item) => item.name);
+  const getTeacherSubjectOptions = (classes) => {
+    const classKeys = classes.map((item) => item.toLowerCase());
+    if (!classKeys.length || classKeys.some((key) => !teacherClassSubjectMap.has(key))) return [];
+
+    const [firstClass, ...remainingClasses] = classKeys;
+    return [...teacherClassSubjectMap.get(firstClass).subjects.entries()]
+      .filter(([subject]) =>
+        remainingClasses.every((classKey) => teacherClassSubjectMap.get(classKey).subjects.has(subject))
+      )
+      .map(([, subject]) => subject);
+  };
+  const teacherSubjectOptions = getTeacherSubjectOptions(targetClassValues);
   const noticeClassOptions = [ALL_CLASSES_OPTION, ...classNames];
-  const setTargetClasses = (nextArray) => updateForm("targetClasses", nextArray.join(", "));
+  const assignmentClassOptions = isTeacherAssignmentPublisher ? teacherClassOptions : classNames;
+  const setTargetClasses = (nextArray) => {
+    updateForm("targetClasses", nextArray.join(", "));
+    if (
+      isTeacherAssignmentPublisher &&
+      form.subject?.trim() &&
+      !getTeacherSubjectOptions(nextArray).some((subject) => subject.toLowerCase() === form.subject.trim().toLowerCase())
+    ) {
+      updateForm("subject", "");
+    }
+  };
 
   const disabled =
     title === "Teacher Assignment"
       ? !form.name?.trim() || !form.email?.trim() || !form.mobile?.trim()
       : title === "Assignment" || title === "Assignments"
-      ? !form.title?.trim() || !form.description?.trim() || !form.checkingDate || !form.targetClasses?.trim()
+      ? !form.title?.trim() ||
+        !form.description?.trim() ||
+        !form.checkingDate ||
+        !form.targetClasses?.trim() ||
+        (isTeacherAssignmentPublisher &&
+          (!teacherSubjectOptions.some((subject) => subject.toLowerCase() === form.subject?.trim().toLowerCase()) ||
+            targetClassValues.some((className) => !teacherClassSubjectMap.has(className.toLowerCase()))))
       : !form.title?.trim() ||
         (!(title === "Application") && !form.description?.trim()) ||
         (title === "Application" && !form.message?.trim());
@@ -964,11 +1007,19 @@ function ActionForm({ title, form, updateForm, onSubmit, acting, user }) {
         <TextInput style={styles.input} value={form.category} onChangeText={(value) => updateForm("category", value)} placeholder="Category" />
       )}
       {(title === "Assignment" || title === "Assignments") && (
-        subjectNames.length ? (
-          <Select label="Subject" value={form.subject} onChange={(value) => updateForm("subject", value)} options={subjectNames} placeholder="Select subject" />
-        ) : (
-          <TextInput style={styles.input} value={form.subject} onChangeText={(value) => updateForm("subject", value)} placeholder="Subject e.g. Mathematics" placeholderTextColor={palette.inkFaint} />
-        )
+        isTeacherAssignmentPublisher ? (
+          teacherSubjectOptions.length ? (
+            <Select label="Subject" value={form.subject} onChange={(value) => updateForm("subject", value)} options={teacherSubjectOptions} placeholder="Select assigned subject" />
+          ) : (
+            <Text style={{ color: palette.inkFaint, fontWeight: "700" }}>
+              No common assigned subject is available for the selected class(es).
+            </Text>
+          )
+        ) : subjectNames.length ? (
+            <Select label="Subject" value={form.subject} onChange={(value) => updateForm("subject", value)} options={subjectNames} placeholder="Select subject" />
+          ) : (
+            <TextInput style={styles.input} value={form.subject} onChangeText={(value) => updateForm("subject", value)} placeholder="Subject e.g. Mathematics" placeholderTextColor={palette.inkFaint} />
+          )
       )}
       <TextInput
         style={[styles.input, styles.textArea]}
@@ -1000,7 +1051,7 @@ function ActionForm({ title, form, updateForm, onSubmit, acting, user }) {
         <>
           <MultiSelect
             label="Target Classes"
-            options={classNames}
+            options={assignmentClassOptions}
             values={targetClassValues}
             onChange={setTargetClasses}
             hint="Select one or more classes for this assignment."
@@ -1329,33 +1380,6 @@ function StateCard({ icon, title, text }) {
 }
 
 const styles = {
-  heroCard: {
-    borderRadius: 20,
-    marginBottom: 14,
-  },
-  heroCardInner: {
-    padding: 16,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  heroIcon: {
-    width: 54,
-    height: 54,
-    borderRadius: 17,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 14,
-  },
-  heroTitle: {
-    color: "#0F172A",
-    fontSize: 18,
-    fontWeight: "900",
-  },
-  heroText: {
-    color: "#64748B",
-    lineHeight: 20,
-    marginTop: 4,
-  },
   card: {
     borderRadius: 20,
     marginBottom: 14,

@@ -23,6 +23,11 @@ import AiAssistantScreen from "./assistant/AiAssistantScreen";
 import CertificationScreen from "./about/CertificationScreen";
 import AboutScreen from "./about/AboutScreen";
 
+const examinationModule = (initialSection) =>
+  function ExaminationModuleScreen({ user }) {
+    return <ExaminationManageScreen user={user} initialSection={initialSection} />;
+  };
+
 export const moduleScreens = {
   Settings: SettingsScreen,
   "Admin Management": AdminManagementScreen,
@@ -43,9 +48,10 @@ export const moduleScreens = {
   Finance: FinanceScreen,
   Payroll: PayrollScreen,
   "My Salary": PayrollScreen,
-  "Exam Creation": ExaminationManageScreen,
-  "Paper Creation": ExaminationManageScreen,
-  "Marks Management": ExaminationManageScreen,
+  "Exam Creation": examinationModule("exam"),
+  "Paper Creation": examinationModule("paper"),
+  "Paper Analysis": examinationModule("paper"),
+  "Marks Management": examinationModule("marks"),
   Vault: VaultScreen,
   "Feature Page": AiAssistantScreen,
   Certification: CertificationScreen,

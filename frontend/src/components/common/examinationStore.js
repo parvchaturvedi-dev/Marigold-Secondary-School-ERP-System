@@ -416,6 +416,27 @@ export const submitPaperForApproval = async (paperId) => {
   return examinationStateCache;
 };
 
+// PATCH /examinations/papers/:id/teacher-decision (assigned teacher only)
+export const decideTeacherOnPaper = async (paperId, decision, comment) => {
+  const response = await authFetch(
+    `${API_BASE_URL}/examinations/papers/${encodeURIComponent(paperId)}/teacher-decision`,
+    {
+      method: 'PATCH',
+      headers: withAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ decision, comment }),
+    }
+  );
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload?.message || 'Could not record teacher decision.');
+  }
+  if (payload?.state) {
+    examinationStateCache = normalizeExaminationState(payload.state);
+    broadcastExaminationUpdate();
+  }
+  return examinationStateCache;
+};
+
 // PATCH /examinations/papers/:id/admin-decision  (admin only)
 // Body: { decision: 'approved' | 'rejected', comment }
 export const decideAdminOnPaper = async (paperId, decision, comment = '') => {

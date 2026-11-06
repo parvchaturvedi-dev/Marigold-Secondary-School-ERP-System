@@ -174,18 +174,6 @@ export default function AcademicCalendarScreen({ user }) {
       <AuroraBackground />
       <PageHeader title="Academic Calendar" />
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <GlassCard style={styles.headerCard}>
-          <View style={styles.headerRow}>
-            <View style={styles.headerIcon}>
-              <Ionicons name="calendar-outline" size={22} color={glassColors.accent} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.headerTitle}>Academic Calendar</Text>
-              <Text style={styles.headerSubtitle}>Latest school calendar PDF</Text>
-            </View>
-          </View>
-        </GlassCard>
-
         {canManage && (
           <GlassCard style={styles.manageCard}>
             <Text style={styles.manageTitle}>Manage Calendar</Text>
@@ -263,35 +251,6 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 40,
     gap: 14,
-  },
-  headerCard: {
-    padding: 16,
-  },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  headerIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: `${glassColors.accent}33`,
-    backgroundColor: `${glassColors.accent}1f`,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: "900",
-    color: colors.text,
-  },
-  headerSubtitle: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: colors.muted,
-    marginTop: 3,
   },
   stateCard: {
     padding: 28,
