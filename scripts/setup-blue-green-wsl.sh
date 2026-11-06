@@ -130,7 +130,7 @@ if contents.count(old) != 1:
 path.write_text(contents.replace(old, "import /etc/caddy/mgps-active-upstream"))
 PY
 
-printf 'reverse_proxy 127.0.0.1:5000\n' >"$CADDY_UPSTREAM"
+printf 'reverse_proxy 127.0.0.1:5001\n' >"$CADDY_UPSTREAM"
 chmod 0644 "$CADDY_UPSTREAM"
 
 if ! caddy validate --config "$CADDY_FILE" --adapter caddyfile; then
