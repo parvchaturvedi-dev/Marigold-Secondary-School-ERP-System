@@ -106,6 +106,43 @@ test('board result lookup is limited to a student account linked to the requeste
   assert.equal(canReadBoardStudentResult({ role: 'clerk' }, 'B-1'), true);
 });
 
+test('teachers are limited to their assigned subjects inside each class', () => {
+  const subjectState = {
+    exams: [{ id: 'EXAM-1', name: 'Quarterly' }],
+    papers: [
+      { id: 'P-1', className: 'Class 6', subject: 'Mathematics' },
+      { id: 'P-2', className: 'Class 6', subject: 'Science' },
+    ],
+    schedules: [
+      { id: 'S-1', className: 'Class 6', subject: 'Mathematics' },
+      { id: 'S-2', className: 'Class 6', subject: 'Science' },
+    ],
+    marks: [
+      { id: 'M-1', className: 'Class 6', subject: 'Mathematics', rows: [{ studentId: 'A-1', marks: 90 }] },
+      { id: 'M-2', className: 'Class 6', subject: 'Science', rows: [{ studentId: 'A-1', marks: 80 }] },
+    ],
+    deliveries: [],
+    boardClasses: ['Class 6'],
+    boardResults: [],
+    gradeScale: [{ grade: 'A' }],
+    principalSignature: '',
+  };
+
+  const teacherAuth = {
+    role: 'teacher',
+    teacherProfile: {
+      classAssignments: [
+        { className: 'Class 6', subject: 'Mathematics' },
+      ],
+    },
+  };
+
+  const result = filterExaminationState(subjectState, teacherAuth);
+  assert.deepEqual(result.papers.map((paper) => paper.id), ['P-1']);
+  assert.deepEqual(result.schedules.map((schedule) => schedule.id), ['S-1']);
+  assert.deepEqual(result.marks.map((mark) => mark.id), ['M-1']);
+});
+
 test('teacher state writes preserve other classes and reject unauthorized classes', () => {
   const previous = {
     ...state,
@@ -137,6 +174,37 @@ test('teacher state writes preserve other classes and reject unauthorized classe
       }, {
         role: 'teacher',
         allottedClasses: ['Class 6'],
+      }),
+    { statusCode: 403 }
+  );
+});
+
+test('teacher writes reject a different subject inside an assigned class', () => {
+  const previous = {
+    ...state,
+    marks: [
+      { id: 'M-1', className: 'Class 6', subject: 'Mathematics', rows: [{ studentId: 'A-1', marks: 80 }] },
+      { id: 'M-2', className: 'Class 6', subject: 'Science', rows: [{ studentId: 'A-1', marks: 70 }] },
+    ],
+    papers: [],
+    schedules: [],
+  };
+
+  const unauthorizedSubject = {
+    marks: [
+      { id: 'M-2', className: 'Class 6', subject: 'Science', rows: [{ studentId: 'A-1', marks: 95 }] },
+    ],
+    papers: [],
+    schedules: [],
+  };
+
+  assert.throws(
+    () =>
+      mergeTeacherExaminationState(previous, unauthorizedSubject, {
+        role: 'teacher',
+        teacherProfile: {
+          classAssignments: [{ className: 'Class 6', subject: 'Mathematics' }],
+        },
       }),
     { statusCode: 403 }
   );

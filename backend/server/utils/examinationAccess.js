@@ -2,6 +2,67 @@ import { getAssignedClassNames } from './moduleStateAccess.js';
 
 const normalizeIdentifier = (value) => String(value || '').trim().toUpperCase();
 const normalizeClassName = (value) => String(value || '').trim().toLowerCase();
+const normalizeSubjectName = (value) => String(value || '').trim().toLowerCase();
+
+const getSubjectName = (row = {}) => {
+  const candidates = [
+    row?.subject,
+    row?.subjectName,
+    row?.paperSubject,
+    row?.examSubject,
+    row?.subjectCode,
+    row?.subjectTitle,
+  ];
+
+  for (const candidate of candidates) {
+    const text = String(candidate || '').trim();
+    if (text) return text;
+  }
+
+  return '';
+};
+
+const getTeacherAssignmentMap = (auth = {}) => {
+  const map = new Map();
+  const rawAssignments = Array.isArray(auth.teacherProfile?.classAssignments)
+    ? auth.teacherProfile.classAssignments
+    : Array.isArray(auth.classAssignments)
+      ? auth.classAssignments
+      : [];
+
+  for (const assignment of rawAssignments) {
+    const className = normalizeClassName(assignment?.className || assignment?.class || '');
+    const subject = normalizeSubjectName(
+      assignment?.subject || assignment?.subjectName || assignment?.paperSubject || assignment?.examSubject
+    );
+    if (!className) continue;
+    const assignedSubjects = map.get(className) || new Set();
+    if (subject) assignedSubjects.add(subject);
+    map.set(className, assignedSubjects);
+  }
+
+  for (const className of getAssignedClassNames(auth)) {
+    if (!map.has(className)) map.set(className, new Set());
+  }
+
+  return map;
+};
+
+const canAccessTeacherRow = (row = {}, auth = {}) => {
+  const className = normalizeClassName(row?.className || '');
+  if (!className) return false;
+
+  const teacherAssignments = getTeacherAssignmentMap(auth);
+  if (!teacherAssignments.has(className)) return false;
+
+  const allowedSubjects = teacherAssignments.get(className) || new Set();
+  if (allowedSubjects.size === 0) return true;
+
+  const rowSubject = normalizeSubjectName(getSubjectName(row));
+  if (!rowSubject) return true;
+
+  return allowedSubjects.has(rowSubject);
+};
 
 export const getStudentIdentifiers = (auth = {}) => {
   const profiles = [
@@ -37,6 +98,9 @@ const matchesStudent = (record, identifiers) =>
 const filterClassRows = (rows, classes) =>
   rows.filter((row) => classes.has(normalizeClassName(row?.className)));
 
+const filterTeacherRows = (rows, auth = {}) =>
+  rows.filter((row) => canAccessTeacherRow(row, auth));
+
 const filterStudentMarks = (marks, identifiers) =>
   marks
     .map((record) => {
@@ -57,10 +121,10 @@ export const filterExaminationState = (state, auth = {}) => {
     const classes = getAssignedClassNames(auth);
     return {
       ...state,
-      papers: filterClassRows(state.papers, classes),
-      schedules: filterClassRows(state.schedules, classes),
-      marks: filterClassRows(state.marks, classes),
-      deliveries: filterClassRows(state.deliveries, classes),
+      papers: filterTeacherRows(state.papers, auth),
+      schedules: filterTeacherRows(state.schedules, auth),
+      marks: filterTeacherRows(state.marks, auth),
+      deliveries: filterTeacherRows(state.deliveries, auth),
       boardClasses: state.boardClasses.filter((className) =>
         classes.has(normalizeClassName(className))
       ),
@@ -101,7 +165,7 @@ export class ExaminationAuthorizationError extends Error {
   }
 }
 
-const mergeAssignedRows = (currentRows, submittedRows, classes) => {
+const mergeAssignedRows = (currentRows, submittedRows, classes, auth = {}) => {
   const submitted = Array.isArray(submittedRows) ? submittedRows : [];
   const existingUnassignedIds = new Set(
     currentRows
@@ -111,13 +175,25 @@ const mergeAssignedRows = (currentRows, submittedRows, classes) => {
   );
 
   for (const row of submitted) {
-    if (!classes.has(normalizeClassName(row?.className)) || existingUnassignedIds.has(row?.id)) {
+    if (!classes.has(normalizeClassName(row?.className)) || !canAccessTeacherRow(row, auth)) {
+      throw new ExaminationAuthorizationError();
+    }
+    if (existingUnassignedIds.has(row?.id)) {
       throw new ExaminationAuthorizationError();
     }
   }
 
+  const retainedCurrentRows = currentRows.filter((row) => {
+    const className = normalizeClassName(row?.className || '');
+    if (!className) return false;
+    if (!classes.has(className)) return true;
+    return canAccessTeacherRow(row, auth);
+  });
+
+  const submittedIds = new Set(submitted.map((row) => row?.id).filter(Boolean));
+
   return [
-    ...currentRows.filter((row) => !classes.has(normalizeClassName(row?.className))),
+    ...retainedCurrentRows.filter((row) => !submittedIds.has(row?.id)),
     ...submitted,
   ];
 };
@@ -128,8 +204,8 @@ export const mergeTeacherExaminationState = (currentState, submittedState, auth 
 
   return {
     ...currentState,
-    marks: mergeAssignedRows(currentState.marks, submittedState.marks, classes),
-    papers: mergeAssignedRows(currentState.papers, submittedState.papers, classes),
-    schedules: mergeAssignedRows(currentState.schedules, submittedState.schedules, classes),
+    marks: mergeAssignedRows(currentState.marks, submittedState.marks, classes, auth),
+    papers: mergeAssignedRows(currentState.papers, submittedState.papers, classes, auth),
+    schedules: mergeAssignedRows(currentState.schedules, submittedState.schedules, classes, auth),
   };
 };

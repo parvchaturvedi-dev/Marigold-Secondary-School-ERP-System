@@ -29,7 +29,7 @@ const TeacherAssignment = () => {
     assignedClassTeacherFor: ''
   });
 
-  const [, setTeachersDb] = useMongoState('admin-teacher-management-list', []);
+  const [teachersDb, setTeachersDb] = useMongoState('admin-teacher-management-list', []);
   const [, setClassesDb] = useMongoState('admin-class-management-classes', []);
   const [roleDocuments, , documentState] = useMongoState('admin-document-requirements', { Teacher: [] });
   const teacherDocuments = Array.isArray(roleDocuments?.Teacher) ? roleDocuments.Teacher : [];
@@ -111,6 +111,22 @@ const TeacherAssignment = () => {
       return;
     }
 
+    const classTeacherClass = teacherForm.isClassTeacher === 'Yes' ? teacherForm.assignedClassTeacherFor : '';
+    if (classTeacherClass) {
+      const existingClassTeacher = (teachersDb || []).find(
+        (teacher) =>
+          teacher.id !== teacherForm.id &&
+          teacher.isClassTeacher === 'Yes' &&
+          teacher.assignedClassTeacherFor === classTeacherClass
+      );
+
+      if (existingClassTeacher && !window.confirm(
+        `⚠️ ${classTeacherClass} already has a class teacher (${existingClassTeacher.name}). Replacing them with ${teacherForm.name || 'this teacher'} will remove the previous assignment.`
+      )) {
+        return;
+      }
+    }
+
     // Capture snapshot record inside master context pool
     const finalRecord = {
       ...teacherForm,
@@ -126,7 +142,22 @@ const TeacherAssignment = () => {
         })),
     };
 
-    setTeachersDb(prev => [finalRecord, ...prev]);
+    setTeachersDb((prev) => {
+      const nextTeachers = prev.map((teacher) => {
+        const isDuplicateClassTeacher =
+          teacher.id !== finalRecord.id &&
+          teacher.isClassTeacher === 'Yes' &&
+          teacher.assignedClassTeacherFor === finalRecord.assignedClassTeacherFor;
+        if (!isDuplicateClassTeacher) return teacher;
+        return {
+          ...teacher,
+          isClassTeacher: 'No',
+          assignedClassTeacherFor: '',
+          classTeacherFor: '',
+        };
+      });
+      return [finalRecord, ...nextTeachers];
+    });
     if (finalRecord.isClassTeacher === 'Yes' && finalRecord.assignedClassTeacherFor) {
       setClassesDb((classes) => {
         const hasClass = classes.some((classRecord) => classRecord.name === finalRecord.assignedClassTeacherFor);

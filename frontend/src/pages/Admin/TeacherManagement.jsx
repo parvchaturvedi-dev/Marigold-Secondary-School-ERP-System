@@ -273,7 +273,42 @@ const TeacherManagement = ({ role = 'admin' }) => {
           : '',
     };
 
-    setTeachersList(prev => prev.map(t => t.id === sanitizedTeacher.id ? sanitizedTeacher : t));
+    const targetClass = sanitizedTeacher.isClassTeacher === 'Yes' ? sanitizedTeacher.assignedClassTeacherFor : '';
+    const duplicateClassTeacher =
+      targetClass &&
+      teachersList.find(
+        (teacher) =>
+          teacher.id !== sanitizedTeacher.id &&
+          teacher.isClassTeacher === 'Yes' &&
+          teacher.assignedClassTeacherFor === targetClass
+      );
+
+    if (duplicateClassTeacher) {
+      const confirmed = window.confirm(
+        `⚠️ ${targetClass} already has a class teacher (${duplicateClassTeacher.name}). Replacing them with ${sanitizedTeacher.name || 'this teacher'} will remove the previous assignment.`
+      );
+      if (!confirmed) return;
+    }
+
+    setTeachersList((prev) =>
+      prev.map((teacher) => {
+        const isPreviousClassTeacher =
+          teacher.isClassTeacher === 'Yes' &&
+          teacher.assignedClassTeacherFor === targetClass &&
+          teacher.id !== sanitizedTeacher.id;
+        if (isPreviousClassTeacher) {
+          return {
+            ...teacher,
+            isClassTeacher: 'No',
+            assignedClassTeacherFor: '',
+            classTeacherFor: '',
+          };
+        }
+
+        if (teacher.id === sanitizedTeacher.id) return sanitizedTeacher;
+        return teacher;
+      })
+    );
     setClassesDb((classes) => {
       const cleanedClasses = classes.map((classRecord) => {
         const currentClassTeacherId = classRecord.classTeacherId || classRecord.teacherId || '';

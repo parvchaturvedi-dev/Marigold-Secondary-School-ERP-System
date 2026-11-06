@@ -11,9 +11,9 @@
 // Staff lists are read from module-state via formKit's `useModuleState`. The month
 // report comes from `GET /attendance/staff-report`.
 //
-// CSV export uses the Expo SDK 54 File API (`new File(Paths.cache, name)` +
-// `file.write`) — the legacy `writeAsStringAsync` throws at runtime on SDK 54 —
-// and hands the file to `expo-sharing`.
+// CSV export uses the Expo SDK 58 File API (`new File(Paths.cache, name)` +
+// `file.write`) — the legacy `writeAsStringAsync` path is not the recommended
+// runtime path on the current SDK — and hands the file to `expo-sharing`.
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";

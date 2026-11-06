@@ -42,6 +42,9 @@ const parseDatabaseUrl = (value, label, { neonOnly = false, localOnly = false } 
       PGPASSWORD: decodeURIComponent(url.password),
       PGDATABASE: database,
       PGSSLMODE: neonOnly ? 'verify-full' : url.searchParams.get('sslmode') || 'prefer',
+      ...(neonOnly && !process.env.PGSSLROOTCERT
+        ? { PGSSLROOTCERT: '/etc/ssl/certs/ca-certificates.crt' }
+        : {}),
     },
   };
 };
@@ -123,6 +126,7 @@ const getDatabaseInfo = async (database) => {
     const result = await client.query(`
       SELECT current_database() AS database,
              current_setting('server_version') AS version,
+             current_setting('server_version_num')::integer AS version_num,
              current_user AS username
     `);
     return result.rows[0];
@@ -242,6 +246,14 @@ const run = async () => {
     getDatabaseInfo(neon),
     getDatabaseInfo(local),
   ]);
+  const neonMajorVersion = Math.floor(neonInfo.version_num / 10000);
+  const localMajorVersion = Math.floor(localInfo.version_num / 10000);
+  if (localMajorVersion < neonMajorVersion) {
+    throw new Error(
+      `The laptop PostgreSQL version (${localMajorVersion}) is older than Neon (${neonMajorVersion}). ` +
+      'PostgreSQL restores should target the same or a newer major version. Upgrade the laptop PostgreSQL server before migrating.'
+    );
+  }
   console.log(`Source: Neon database "${neonInfo.database}" (PostgreSQL ${neonInfo.version}).`);
   console.log(`Target: laptop database "${localInfo.database}" (PostgreSQL ${localInfo.version}).`);
   console.log('The local database will be replaced; Neon will remain unchanged.');
@@ -268,6 +280,7 @@ const run = async () => {
   runCommand('sudo', ['systemctl', 'stop', 'mgps-erp'], process.env, 'Stopping the ERP backend');
   let backendStopped = true;
   let replacementStarted = false;
+  let targetSafeToStart = true;
   try {
     console.log('Creating protected backups before replacing the laptop database...');
     dumpDatabase(neon, neonBackup, 'Backing up Neon');
@@ -277,6 +290,7 @@ const run = async () => {
 
     console.log('Replacing laptop database contents with the Neon backup...');
     replacementStarted = true;
+    targetSafeToStart = false;
     await restoreDatabase(local, neonBackup, 'Restoring Neon data onto the laptop');
     const [neonCounts, localCounts] = await Promise.all([
       getTableCounts(neon, 'Neon source'),
@@ -284,6 +298,7 @@ const run = async () => {
     ]);
     verifyCounts(neonCounts, localCounts, 'Neon source', 'laptop target');
 
+    targetSafeToStart = true;
     console.log('Migration verified. Neon remains unchanged and the backend still uses local PostgreSQL.');
     console.log(`Neon backup: ${neonBackup}`);
     console.log(`Pre-migration laptop backup: ${localBackup}`);
@@ -293,6 +308,7 @@ const run = async () => {
       console.error('Restoring the pre-migration laptop backup...');
       try {
         await restoreDatabase(local, localBackup, 'Recovering the laptop database');
+        targetSafeToStart = true;
         console.error(`Laptop database recovery succeeded. Backup retained at ${localBackup}`);
       } catch (restoreError) {
         console.error(`Automatic recovery failed: ${restoreError.message}`);
@@ -302,12 +318,16 @@ const run = async () => {
     throw error;
   } finally {
     if (backendStopped) {
-      const restart = spawnSync('sudo', ['systemctl', 'start', 'mgps-erp'], {
-        stdio: 'inherit',
-      });
       backendStopped = false;
-      if (restart.status !== 0) {
-        console.error('Backend did not restart; check: sudo systemctl status mgps-erp');
+      if (!targetSafeToStart) {
+        console.error('Backend left stopped because the laptop database could not be recovered.');
+      } else {
+        const restart = spawnSync('sudo', ['systemctl', 'start', 'mgps-erp'], {
+          stdio: 'inherit',
+        });
+        if (restart.status !== 0) {
+          console.error('Backend did not restart; check: sudo systemctl status mgps-erp');
+        }
       }
     }
   }

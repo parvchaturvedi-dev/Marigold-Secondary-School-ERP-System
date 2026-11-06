@@ -18,7 +18,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
-// SDK 54 file API: read a picked file's base64 via `new File(uri).base64()`.
+// SDK 58 file API: read a picked file's base64 via `new File(uri).base64()`.
 import { File } from "expo-file-system";
 
 import PageHeader from "../../../components/cards/PageHeader";

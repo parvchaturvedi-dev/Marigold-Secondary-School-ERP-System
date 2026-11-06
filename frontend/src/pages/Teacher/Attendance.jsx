@@ -57,7 +57,10 @@ const Attendance = ({ session }) => {
     );
   }, [masterData.teachers, session?.username]);
 
-  const assignedClass = teacher?.isClassTeacher === 'Yes' ? teacher.assignedClassTeacherFor || '' : '';
+  const assignedClass =
+    teacher?.isClassTeacher === 'Yes' || teacher?.assignedClassTeacherFor || teacher?.classTeacherFor
+      ? teacher?.assignedClassTeacherFor || teacher?.classTeacherFor || ''
+      : '';
   const [attendanceDate, setAttendanceDate] = useState(todayKey());
   const [overrideToken, setOverrideToken] = useState('');
   const [draftStatus, setDraftStatus] = useState({});

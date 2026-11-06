@@ -14,7 +14,7 @@
     },
     "owner": "parvchaturvediofficial",
     "description": "Marigold Secondary School ERP Mobile Application",
-    "sdkVersion": "54.0.0",
+    "sdkVersion": "58.0.0",
     "platforms": [
       "ios",
       "android",
@@ -55,7 +55,9 @@
           "color": "#E4002B"
         }
       ],
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-font",
+      "expo-router"
     ]
   }
 }

@@ -39,7 +39,7 @@ const boardStudentResultFileSchema = new mongoose.Schema(
     },
     storage: {
       type: String,
-      enum: ['mongo', 'cloudinary', 'local', 'postgres'],
+      enum: ['mongo', 'cloudinary', 'postgres'],
       default: 'mongo',
     },
     publicId: {

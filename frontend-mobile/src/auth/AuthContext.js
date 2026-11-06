@@ -110,7 +110,8 @@ export function AuthProvider({ children }) {
           setSelectedModule(null);
           setScreen("password-change");
         } else {
-          openNotificationInbox(session.role);
+          setSelectedModule(null);
+          setScreen(`${session.role}-dashboard`);
         }
         if (session.mustChangePassword) {
           disconnectRealtime();
@@ -129,7 +130,8 @@ export function AuthProvider({ children }) {
                 setSelectedModule(null);
                 setScreen("password-change");
               } else if (session.mustChangePassword) {
-                openNotificationInbox(serverSession.role);
+                setSelectedModule(null);
+                setScreen(`${serverSession.role}-dashboard`);
               }
               await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(serverSession));
               if (serverSession.mustChangePassword) {
@@ -230,7 +232,8 @@ export function AuthProvider({ children }) {
         setScreen("password-change");
         disconnectRealtime();
       } else {
-        openNotificationInbox(role);
+        setSelectedModule(null);
+        setScreen(`${role}-dashboard`);
         registerPushToken();
         connectRealtime(sessionData.token);
       }
@@ -335,8 +338,13 @@ export function AuthProvider({ children }) {
       return;
     }
 
+    const dashboardScreen = `${user.role}-dashboard`;
     setSelectedModule(null);
-    setScreen(`${user.role}-dashboard`);
+    setScreen((currentScreen) => {
+      // Keep the app on the same dashboard instance instead of mounting a second
+      // copy when the user taps Home from a module screen.
+      return currentScreen === dashboardScreen ? currentScreen : dashboardScreen;
+    });
   }
 
   async function completePasswordChange() {

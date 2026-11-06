@@ -1,9 +1,5 @@
 import { v2 as cloudinary } from 'cloudinary';
-import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
 import { Readable } from 'node:stream';
-import { fileURLToPath } from 'node:url';
 import { getPostgresPool, isDatabaseConnected } from '../db.js';
 import { getCachedAsset, setCachedAsset, invalidateCachedAsset } from './assetCache.js';
 
@@ -15,7 +11,6 @@ import { getCachedAsset, setCachedAsset, invalidateCachedAsset } from './assetCa
 // ---------------------------------------------------------------------------
 
 let configured = false;
-const moduleDirectory = dirname(fileURLToPath(import.meta.url));
 
 const configure = () => {
   // Preferred: a single CLOUDINARY_URL connection string
@@ -52,80 +47,52 @@ configure();
 export const isCloudinaryConfigured = () => configured;
 export const isFileStorageConfigured = () => isDatabaseConnected();
 export const isFileStoredExternally = (record) =>
-  ['cloudinary', 'local', 'postgres'].includes(record?.storage);
-
-const localStorageRoot = () =>
-  resolve(process.env.FILE_STORAGE_DIR || resolve(moduleDirectory, '../../uploads'));
-
-const localStoragePath = (publicId) => {
-  const fileKey = createHash('sha256').update(String(publicId)).digest('hex');
-  return resolve(localStorageRoot(), fileKey.slice(0, 2), fileKey);
-};
+  ['cloudinary', 'postgres'].includes(record?.storage);
 
 // Preserve uploaded bytes regardless of MIME type; the download route sets
 // the correct response content type from the stored metadata.
 export const resourceTypeForMime = () => 'raw';
 
-// Store new file bytes on the server's persistent local disk, not in PostgreSQL.
+// Prefer external storage so uploaded file bytes do not grow the ERP database.
 // Returns { publicId, resourceType, bytes, format, storage } or throws.
 export const uploadBuffer = async (buffer, { folder = 'mgps', publicId, mimeType } = {}) => {
+  if (!configured) {
+    throw new Error('Cloudinary file storage is not configured.');
+  }
+
   const bytes = Buffer.from(buffer);
-  const id = publicId || randomUUID();
-
-  if (process.env.FILE_STORAGE_DRIVER !== 'local' && configured) {
-    const result = await new Promise((resolveUpload, reject) => {
-      const stream = cloudinary.uploader.upload_stream(
-        {
-          folder,
-          public_id: id,
-          resource_type: 'raw',
-          type: 'authenticated',
-          overwrite: true,
-          invalidate: true,
-        },
-        (error, uploaded) => {
-          if (error) {
-            reject(error);
-            return;
-          }
-          if (!uploaded?.public_id) {
-            reject(new Error('Cloudinary did not return an asset identifier.'));
-            return;
-          }
-          resolveUpload(uploaded);
+  const result = await new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder,
+        ...(publicId ? { public_id: publicId } : {}),
+        resource_type: 'raw',
+        type: 'authenticated',
+        overwrite: true,
+        invalidate: true,
+      },
+      (error, uploaded) => {
+        if (error) {
+          reject(error);
+          return;
         }
-      );
-      Readable.from([bytes]).pipe(stream);
-    });
+        if (!uploaded?.public_id) {
+          reject(new Error('Cloudinary did not return an asset identifier.'));
+          return;
+        }
+        resolve(uploaded);
+      }
+    );
+    Readable.from([bytes]).pipe(stream);
+  });
 
-    invalidateCachedAsset(`raw:${result.public_id}`);
-    return {
-      publicId: result.public_id,
-      resourceType: 'raw',
-      bytes: result.bytes ?? bytes.length,
-      format: result.format || mimeType?.split('/')[1] || '',
-      storage: 'cloudinary',
-    };
-  }
-
-  const destination = localStoragePath(id);
-  const temporary = `${destination}.${randomUUID()}.tmp`;
-  await mkdir(dirname(destination), { recursive: true });
-  try {
-    await writeFile(temporary, bytes, { flag: 'wx', mode: 0o600 });
-    await rename(temporary, destination);
-  } catch (error) {
-    await rm(temporary, { force: true });
-    throw error;
-  }
-
-  invalidateCachedAsset(`local:${id}`);
+  invalidateCachedAsset(`raw:${result.public_id}`);
   return {
-    publicId: id,
-    resourceType: 'local',
-    bytes: bytes.length,
-    format: mimeType?.split('/')[1] || '',
-    storage: 'local',
+    publicId: result.public_id,
+    resourceType: 'raw',
+    bytes: result.bytes ?? bytes.length,
+    format: result.format || mimeType?.split('/')[1] || '',
+    storage: 'cloudinary',
   };
 };
 
@@ -154,18 +121,10 @@ export const streamAssetToResponse = async (
   response.send(buffer);
 };
 
-// Read local assets from disk and retain support for legacy PostgreSQL and
-// Cloudinary references.
+// Read file bytes from PostgreSQL first, then fall back to Cloudinary for
+// legacy references whose PostgreSQL copy has been moved.
 export const fetchAssetBuffer = async (publicId, resourceType = 'raw') => {
   const key = `${resourceType}:${publicId}`;
-  if (resourceType === 'local') {
-    const cached = getCachedAsset(key);
-    if (cached) return cached;
-    const buffer = await readFile(localStoragePath(publicId));
-    setCachedAsset(key, buffer);
-    return buffer;
-  }
-
   if (resourceType === 'postgres') {
     const result = await getPostgresPool().query(
       `SELECT data FROM public.cloudinary_assets
@@ -216,11 +175,6 @@ export const fetchAssetBuffer = async (publicId, resourceType = 'raw') => {
 export const deleteAsset = async (publicId, resourceType = 'raw') => {
   invalidateCachedAsset(`${resourceType}:${publicId}`);
   if (!publicId) return;
-  if (resourceType === 'local') {
-    await rm(localStoragePath(publicId), { force: true });
-    return;
-  }
-
   if (resourceType === 'postgres') {
     const result = await getPostgresPool().query(
       `DELETE FROM public.cloudinary_assets

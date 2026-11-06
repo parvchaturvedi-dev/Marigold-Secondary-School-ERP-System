@@ -47,7 +47,8 @@ async function registerNotificationCategories() {
 export function setupNotificationHandler() {
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
-      // SDK 54 requires these two for foreground alerts (shouldShowAlert deprecated).
+      // SDK 58 keeps these flags for foreground alerts while the older
+      // shouldShowAlert behavior remains deprecated.
       shouldShowBanner: true,
       shouldShowList: true,
       shouldPlaySound: true,
