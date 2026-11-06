@@ -1,0 +1,20 @@
+[Unit]
+Description=MGPS ERP backend slot %i
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=parv
+WorkingDirectory=/var/lib/mgps-erp/slots/%i
+EnvironmentFile=/etc/mgps-erp/slots/%i.env
+ExecStart=/bin/bash -lc 'source "$HOME/.nvm/nvm.sh" && nvm use 22 >/dev/null && exec npm --prefix backend run start'
+Restart=on-failure
+RestartSec=3
+KillSignal=SIGTERM
+TimeoutStopSec=35
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

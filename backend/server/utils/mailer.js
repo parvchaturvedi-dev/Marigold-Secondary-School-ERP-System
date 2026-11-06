@@ -127,7 +127,7 @@ const deliverOutboxPayload = (payload) => sendBrevoRequest(getMailConfig(), payl
 export const startBrevoOutboxWorker = () => {
   if (!getMailConfig().isReady) {
     console.warn('[brevo-outbox] Worker not started; Brevo or outbox encryption configuration is missing.');
-    return () => {};
+    return async () => {};
   }
   return startOutboxWorker(deliverOutboxPayload);
 };

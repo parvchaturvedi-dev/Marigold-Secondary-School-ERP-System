@@ -1,11 +1,23 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-STATE_FILE="/var/lib/mgps-erp-auto-update/deployed-commit"
+STATE_DIR="/var/lib/mgps-erp-auto-update"
+STATE_FILE="$STATE_DIR/deployed-commit"
 
 log() {
   printf '[mgps-erp-auto-update] %s\n' "$*"
 }
+
+if [[ "${EUID}" -ne 0 ]]; then
+  log "Updater must run as root."
+  exit 1
+fi
+
+exec 9>/run/lock/mgps-erp-deploy.lock
+if ! flock -n 9; then
+  log "Another deployment operation is in progress; skipping this timer run."
+  exit 0
+fi
 
 app_git() {
   runuser -u "$DEPLOY_USER" -- git -C "$PROJECT_DIR" "$@"
@@ -66,6 +78,11 @@ if ! app_git cat-file -e "${deployed_commit}^{commit}" 2>/dev/null ||
   ! app_git merge-base --is-ancestor "$deployed_commit" "$current_commit"; then
   log "Cannot safely compare the last deployed commit with the current checkout."
   exit 1
+fi
+
+if [[ -f "$STATE_DIR/blue-green-enabled" ]]; then
+  log "Using blue-green deployment for ${current_commit:0:12}."
+  exec /bin/bash "$PROJECT_DIR/scripts/deploy-blue-green-wsl.sh" "$current_commit"
 fi
 
 changed_manifests="$(app_git diff --name-only "$deployed_commit" "$current_commit" -- \

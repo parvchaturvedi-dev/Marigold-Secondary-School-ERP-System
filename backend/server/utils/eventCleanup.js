@@ -1,7 +1,8 @@
 import Event from '../models/Event.js';
 import { deleteAsset, isFileStoredExternally } from './cloudinary.js';
 import { emitRealtimeEvent } from '../realtime.js';
-import { isMongoConnected } from '../db.js';
+import { getPostgresPool, isMongoConnected } from '../db.js';
+import { withPostgresAdvisoryLock } from './postgresAdvisoryLock.js';
 
 // ---------------------------------------------------------------------------
 // Automatic event retention.
@@ -18,6 +19,7 @@ import { isMongoConnected } from '../db.js';
 // ---------------------------------------------------------------------------
 
 export const EVENT_RETENTION_DAYS = 5;
+const EVENT_CLEANUP_LOCK_ID = 731904221;
 
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -43,46 +45,58 @@ export const eventEndKey = (event) => {
 export const cleanupExpiredEvents = async () => {
   if (!isMongoConnected()) return { deleted: 0, skipped: 0 };
 
-  const cutoff = new Date();
-  cutoff.setHours(0, 0, 0, 0);
-  cutoff.setDate(cutoff.getDate() - EVENT_RETENTION_DAYS);
-  const cutoffKey = dateKey(cutoff);
+  const lockResult = await withPostgresAdvisoryLock(
+    getPostgresPool(),
+    EVENT_CLEANUP_LOCK_ID,
+    async () => {
+      const cutoff = new Date();
+      cutoff.setHours(0, 0, 0, 0);
+      cutoff.setDate(cutoff.getDate() - EVENT_RETENTION_DAYS);
+      const cutoffKey = dateKey(cutoff);
 
-  const events = await Event.find({}).select('durationType date fromDate toDate storage publicId resourceType');
+      const events = await Event.find({})
+        .select('durationType date fromDate toDate storage publicId resourceType');
 
-  let deleted = 0;
-  let skipped = 0;
+      let deleted = 0;
+      let skipped = 0;
 
-  for (const event of events) {
-    const endKey = eventEndKey(event);
-    if (!endKey) {
-      skipped += 1;
-      continue;
+      for (const event of events) {
+        const endKey = eventEndKey(event);
+        if (!endKey) {
+          skipped += 1;
+          continue;
+        }
+        // 'YYYY-MM-DD' strings compare correctly with <=.
+        if (endKey > cutoffKey) continue;
+
+        if (isFileStoredExternally(event) && event.publicId) {
+          await deleteAsset(event.publicId, event.resourceType || 'raw');
+        }
+        await Event.deleteOne({ _id: event._id });
+        deleted += 1;
+      }
+
+      if (deleted > 0) {
+        emitRealtimeEvent('mgps-erp-events-updated');
+        console.log(`[eventCleanup] removed ${deleted} expired event(s) (older than ${EVENT_RETENTION_DAYS} days).`);
+      }
+
+      return { deleted, skipped };
     }
-    // 'YYYY-MM-DD' strings compare correctly with <=.
-    if (endKey > cutoffKey) continue;
+  );
 
-    if (isFileStoredExternally(event) && event.publicId) {
-      await deleteAsset(event.publicId, event.resourceType || 'raw');
-    }
-    await Event.deleteOne({ _id: event._id });
-    deleted += 1;
-  }
-
-  if (deleted > 0) {
-    emitRealtimeEvent('mgps-erp-events-updated');
-    console.log(`[eventCleanup] removed ${deleted} expired event(s) (older than ${EVENT_RETENTION_DAYS} days).`);
-  }
-
-  return { deleted, skipped };
+  return lockResult.acquired
+    ? lockResult.value
+    : { deleted: 0, skipped: 0, skippedBecauseLocked: true };
 };
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 // Run once at boot, then daily. Failures are logged, never fatal.
 export const scheduleEventCleanup = () => {
+  let running = Promise.resolve();
   const run = () => {
-    cleanupExpiredEvents().catch((error) => {
+    running = cleanupExpiredEvents().catch((error) => {
       console.error('[eventCleanup] failed:', { name: error?.name, code: error?.code });
     });
   };
@@ -90,5 +104,8 @@ export const scheduleEventCleanup = () => {
   run();
   const timer = setInterval(run, ONE_DAY_MS);
   timer.unref?.();
-  return timer;
+  return async () => {
+    clearInterval(timer);
+    await running;
+  };
 };

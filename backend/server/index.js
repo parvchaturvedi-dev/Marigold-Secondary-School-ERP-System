@@ -32,7 +32,7 @@ import studentDocumentRoutes from './routes/studentDocuments.js';
 import teacherDocumentRoutes from './routes/teacherDocuments.js';
 import timetableRoutes from './routes/timetable.js';
 import vaultRoutes from './routes/vault.js';
-import { connectPostgres, getDbStatus, isMongoConnected } from './db.js';
+import { closePostgres, connectPostgres, getDbStatus, isMongoConnected } from './db.js';
 import { scheduleEventCleanup } from './utils/eventCleanup.js';
 import { requireAuth } from './middleware/auth.js';
 import { verifyAuthToken } from './utils/authToken.js';
@@ -243,11 +243,43 @@ app.use((error, request, response, next) => {
 });
 
 await connectPostgres();
-startBrevoOutboxWorker();
+const stopBrevoOutboxWorker = startBrevoOutboxWorker();
+const stopEventCleanup = scheduleEventCleanup();
 
 // Events are transient: five days after an event finishes it (and its poster
 // image) is removed automatically. Runs at boot, then once a day.
-scheduleEventCleanup();
+let shuttingDown = false;
+const shutdown = (signal) => {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`MGPS ERP API received ${signal}; shutting down gracefully.`);
+
+  const timeout = setTimeout(() => {
+    console.error('MGPS ERP API graceful shutdown timed out.');
+    process.exit(1);
+  }, 30_000);
+  timeout.unref();
+
+  void (async () => {
+    try {
+      await Promise.all([stopBrevoOutboxWorker(), stopEventCleanup()]);
+      await new Promise((resolve) => io.close(resolve));
+      await closePostgres();
+      clearTimeout(timeout);
+      process.exit(0);
+    } catch (error) {
+      clearTimeout(timeout);
+      console.error('MGPS ERP API shutdown failed:', {
+        name: error.name,
+        code: error.code,
+      });
+      process.exit(1);
+    }
+  })();
+};
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
 server.listen(port, () => {
   console.log(`MGPS ERP API running on port ${port}`);

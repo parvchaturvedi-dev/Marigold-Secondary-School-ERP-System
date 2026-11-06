@@ -145,6 +145,10 @@ export const startBrevoOutboxWorker = (deliver) => {
   let stopped = false;
   let timeout;
   let working = false;
+  let resolveStopped;
+  const stoppedPromise = new Promise((resolve) => {
+    resolveStopped = resolve;
+  });
 
   const run = async () => {
     if (stopped || working) return;
@@ -177,6 +181,8 @@ export const startBrevoOutboxWorker = (deliver) => {
       if (!stopped) {
         timeout = setTimeout(run, WORKER_INTERVAL_MS);
         timeout.unref?.();
+      } else {
+        resolveStopped();
       }
     }
   };
@@ -187,5 +193,7 @@ export const startBrevoOutboxWorker = (deliver) => {
   return () => {
     stopped = true;
     clearTimeout(timeout);
+    if (!working) resolveStopped();
+    return stoppedPromise;
   };
 };
