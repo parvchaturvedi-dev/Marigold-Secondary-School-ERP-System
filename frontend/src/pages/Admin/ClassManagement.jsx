@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Layers, Users, UserCheck } from 'lucide-react';
+import { ArrowUpRight, Layers, Users, UserCheck } from 'lucide-react';
 import ClassDetail from './ClassDetail';
 import { useMongoState } from '../../components/common/mongoState';
 import { getClassName, sortClassNames, useMasterData } from '../../components/common/masterData';
@@ -85,14 +85,17 @@ const ClassManagement = () => {
           <div 
             key={cls.id}
             onClick={() => setSelectedClassContext(cls)}
-            className="glass-card glass-hover p-5 rounded-3xl flex flex-col justify-between group transition-all cursor-pointer min-h-[150px]"
+            className="mgps-animated-card glass-card glass-hover p-5 rounded-3xl flex flex-col justify-between group transition-all cursor-pointer min-h-[150px]"
           >
+            <span className="mgps-card-corner" aria-hidden="true">
+              <ArrowUpRight className="h-4 w-4" />
+            </span>
             {/* Top Identity Block */}
             <div className="flex items-center gap-4 border-b border-slate-100/80 pb-3">
               <div className="w-11 h-9 rounded-xl bg-indigo-50/60 text-slate-900 flex items-center justify-center font-bold text-sm border border-slate-200/70 shadow-xs">
                 {cls.name.replace(/\D/g, "") || cls.name.charAt(0)}
               </div>
-              <span className="text-sm font-bold text-slate-900 group-hover:text-black transition-colors">{cls.name}</span>
+              <span className="mgps-card-title text-sm font-bold text-slate-900 group-hover:text-black transition-colors">{cls.name}</span>
             </div>
 
             {/* Center Dynamic Metadata Blocks */}

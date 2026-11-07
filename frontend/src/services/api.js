@@ -65,7 +65,9 @@ export const getAuthToken = () => {
 
 export const withAuthHeaders = (headers = {}) => {
   const token = getAuthToken();
-  return token ? { ...headers, Authorization: `Bearer ${token}` } : headers;
+  return token && !headers.Authorization
+    ? { ...headers, Authorization: `Bearer ${token}` }
+    : headers;
 };
 
 export const api = axios.create({
@@ -87,7 +89,9 @@ api.interceptors.request.use(async (config) => {
     if (pathname.startsWith('/api/auth/')) {
       if (token) {
         config.headers = config.headers || {};
-        config.headers.Authorization = `Bearer ${token}`;
+        if (!config.headers.Authorization) {
+          config.headers.Authorization = `Bearer ${token}`;
+        }
       }
       return config;
     }

@@ -7,7 +7,7 @@ const StudentLayout = ({ children, session, onLogout, onPageChange, onStudentCha
   return (
     <div className="flex h-screen w-full max-w-full overflow-hidden font-sans relative">
       <AuroraBackground />
-      <Sidebar currentActive={currentActive} onPageChange={onPageChange} role="student" />
+      <Sidebar currentActive={currentActive} onPageChange={onPageChange} role="student" session={session} />
       <div className="min-w-0 flex-1 flex flex-col h-full overflow-hidden">
         <Header
           session={session}

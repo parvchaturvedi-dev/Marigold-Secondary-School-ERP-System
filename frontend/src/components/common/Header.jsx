@@ -12,6 +12,7 @@ import {
   Users,
   X,
 } from 'lucide-react';
+import Logo from '../../assets/logo.png';
 import { apiFetch } from './api';
 import { formatNotificationTime, useNotificationsDatabase } from './notificationStore';
 
@@ -35,6 +36,7 @@ const Header = ({ session, onLogout, onPageChange, onStudentChange }) => {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showStudentMenu, setShowStudentMenu] = useState(false);
 
+  const searchInputRef = useRef(null);
   const searchDebounceRef = useRef(null);
   const searchRequestIdRef = useRef(0);
   const isMountedRef = useRef(true);
@@ -94,11 +96,7 @@ const Header = ({ session, onLogout, onPageChange, onStudentChange }) => {
     session?.accountDisplayName ||
     session?.username ||
     'MGPS User';
-  const activeStudentMeta = activeStudent
-    ? `${activeStudent.className}-${activeStudent.section} | Roll ${activeStudent.rollNo}`
-    : '';
   const avatarUrl = activeStudent?.photoDataUrl || session?.photoDataUrl || '';
-
   const handleSearchChange = (e) => {
     const value = e.target.value;
     setSearchQuery(value);
@@ -140,6 +138,16 @@ const Header = ({ session, onLogout, onPageChange, onStudentChange }) => {
     setShowSearchInput(false);
   };
 
+  const closeSearch = () => {
+    setShowSearchInput(false);
+    setShowSearchDropdown(false);
+    setSearchQuery('');
+    setSearchResults([]);
+    setSearchError(null);
+    setSearchLoading(false);
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+  };
+
   const handleStudentSelection = (studentId) => {
     const nextStudent = studentProfiles.find((student) => student.id === studentId);
     if (!nextStudent || nextStudent.id === session?.selectedStudentId) {
@@ -161,23 +169,16 @@ const Header = ({ session, onLogout, onPageChange, onStudentChange }) => {
   };
 
   return (
-    // shrink-0 lagaya hai taaki page content ise compress na kare
-    <header className="bg-white/40 backdrop-blur-xl px-4 sm:px-8 py-4 flex items-center justify-between font-sans select-none border-b border-white/60 shrink-0 relative z-40">
+    <header className="flex shrink-0 flex-col gap-4 bg-[#fdfdfd] px-4 pb-4 pt-16 font-sans sm:gap-5 sm:px-[30px] sm:py-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-1 items-center gap-3 pl-14 sm:pl-0">
+          <img src={Logo} alt="" className="h-10 w-10 shrink-0 object-contain sm:h-12 sm:w-12" />
+          <h1 className="truncate text-base font-extrabold leading-tight tracking-tight text-[#15181c] sm:text-xl">
+            Marigold Secondary School
+          </h1>
+        </div>
 
-      {/* Left Side: Welcome Message */}
-      <div className="flex flex-col min-w-0">
-        <h1 className="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-1.5 truncate">
-          Welcome, <span className="text-gradient">{displayName}</span>
-        </h1>
-        <p className="text-xs text-slate-500 mt-0.5 truncate">
-          {isStudentPortal && activeStudent
-            ? `${activeStudentMeta} | ${session?.isSiblingAccount ? session?.accountDisplayName : 'Solo student account'}`
-            : "Here's what happening in your institutional domain."}
-        </p>
-      </div>
-
-      {/* Right Side: Action Control Panel (Capsule Style) */}
-      <div className="flex items-center gap-2 bg-white/55 backdrop-blur-md border border-white/70 px-3 sm:px-4 py-2 rounded-full shadow-sm relative shrink-0">
+        <div className="relative ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
         {isStudentPortal && activeStudent && (
           <>
             <div className="relative">
@@ -188,10 +189,10 @@ const Header = ({ session, onLogout, onPageChange, onStudentChange }) => {
                   setShowUnreadBox(false);
                   setShowProfileMenu(false);
                 }}
-                className={`h-8 flex items-center gap-2 pl-2.5 pr-2 rounded-full border text-[11px] font-black transition-all ${
+                className={`flex h-[42px] items-center gap-2 rounded-xl border px-3 text-[11px] font-bold transition-all ${
                   showStudentMenu
-                    ? 'btn-primary border-transparent'
-                    : 'bg-white/70 text-slate-800 border-white/80 hover:border-indigo-300 hover:shadow-sm'
+                    ? 'border-slate-900 bg-slate-900 text-white'
+                    : 'border-[#edeff2] bg-[#fafbfc] text-slate-700 hover:border-slate-300'
                 }`}
                 title="Select student user"
               >
@@ -251,102 +252,132 @@ const Header = ({ session, onLogout, onPageChange, onStudentChange }) => {
               )}
             </div>
 
-            <span className="w-[1px] h-4 bg-slate-300/60 mx-1"></span>
           </>
         )}
 
-        {/* 1. FUNCTIONAL SEARCH ENGINE BAR */}
-        <div className="relative flex items-center transition-all duration-300">
-          {showSearchInput && (
-            <form onSubmit={handleSearchSubmit} className="mr-2 animate-fadeIn relative">
+        <div
+          className="relative flex items-center"
+          onMouseEnter={() => setShowSearchInput(true)}
+          onMouseLeave={() => {
+            if (!searchQuery.trim() && document.activeElement !== searchInputRef.current) {
+              setShowSearchInput(false);
+              setShowSearchDropdown(false);
+            }
+          }}
+        >
+          <form
+            onSubmit={handleSearchSubmit}
+            className={`relative h-[46px] overflow-visible transition-[width] duration-300 sm:h-[54px] ${
+              showSearchInput ? 'w-[min(360px,calc(100vw-180px))]' : 'w-[46px] sm:w-[52px]'
+            }`}
+          >
+            <div className={`relative flex h-full items-center overflow-hidden transition-all duration-300 ${
+              showSearchInput
+                ? 'rounded-xl border border-slate-200 bg-white shadow-[0_6px_18px_rgba(15,23,42,0.10)] focus-within:border-slate-300'
+                : 'rounded-xl border border-transparent bg-[#15181c] shadow-[0_4px_14px_rgba(15,23,42,0.08)]'
+            }`}>
+              <button
+                type={showSearchInput ? 'submit' : 'button'}
+                onClick={() => {
+                  if (!showSearchInput) setShowSearchInput(true);
+                }}
+                aria-label="Search"
+                className={`absolute left-0 top-0 z-10 flex h-full w-[46px] shrink-0 items-center justify-center bg-transparent sm:w-[52px] ${
+                  showSearchInput ? 'text-slate-900' : 'text-white'
+                }`}
+              >
+                <Search className="h-[19px] w-[19px]" strokeWidth={2.2} />
+              </button>
               <input
+                ref={searchInputRef}
                 type="text"
-                placeholder="Search database..."
+                placeholder="Search pages, students..."
                 value={searchQuery}
                 onChange={handleSearchChange}
                 onFocus={() => {
+                  setShowSearchInput(true);
                   if (searchQuery.trim().length >= 2) setShowSearchDropdown(true);
                 }}
-                autoFocus
-                className="bg-white/70 text-xs font-bold text-slate-800 px-3 py-1.5 rounded-full border border-white/80 outline-none w-36 md:w-48 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all placeholder:text-slate-400"
+                autoFocus={showSearchInput}
+                tabIndex={showSearchInput ? 0 : -1}
+                aria-label="Search pages, students..."
+                className={`h-full min-w-0 flex-1 bg-transparent pl-[48px] pr-11 text-sm font-medium text-slate-800 outline-none placeholder:text-slate-400 transition-opacity sm:pl-[54px] ${
+                  showSearchInput ? 'opacity-100' : 'pointer-events-none opacity-0'
+                }`}
               />
-
-              {showSearchDropdown && (
-                <div className="absolute left-0 top-full mt-2 w-72 sm:w-80 glass-strong rounded-2xl z-50 text-xs font-bold overflow-hidden animate-scaleUp">
-                  <div className="bg-gradient-to-r from-indigo-500/10 to-violet-500/10 px-4 py-2.5 border-b border-white/60 flex items-center justify-between">
-                    <span className="text-slate-900">Search Results</span>
-                    <button
-                      type="button"
-                      onClick={() => setShowSearchDropdown(false)}
-                      className="p-0.5 rounded-md hover:bg-white/80 text-slate-500 hover:text-slate-900 transition-colors"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-
-                  <div className="max-h-72 overflow-y-auto divide-y divide-slate-100/80">
-                    {searchLoading ? (
-                      <p className="p-4 text-center text-slate-500 text-[11px] italic font-semibold">Searching…</p>
-                    ) : searchError ? (
-                      <p className="p-4 text-center text-rose-600 text-[11px] font-semibold">{searchError}</p>
-                    ) : searchResults.length === 0 ? (
-                      <p className="p-4 text-center text-slate-500 text-[11px] italic font-semibold">No results found.</p>
-                    ) : (
-                      searchResults.map((result, idx) => (
-                        <button
-                          key={`${result.type}-${result.label}-${idx}`}
-                          type="button"
-                          onClick={() => handleSearchResultClick(result)}
-                          className="w-full text-left px-4 py-2.5 hover:bg-white/80 transition-colors flex items-center justify-between gap-3"
-                        >
-                          <span className="min-w-0">
-                            <span className="block truncate font-black text-slate-900">{result.label}</span>
-                            {result.sublabel && (
-                              <span className="block text-[10px] font-semibold text-slate-500 truncate mt-0.5">
-                                {result.sublabel}
-                              </span>
-                            )}
-                          </span>
-                          <span className="shrink-0 text-[9px] px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-600 border border-indigo-100 uppercase tracking-wide">
-                            {SEARCH_TYPE_LABELS[result.type] || result.type}
-                          </span>
-                        </button>
-                      ))
-                    )}
-                  </div>
-                </div>
+              {showSearchInput && (
+                <button
+                  type="button"
+                  onClick={closeSearch}
+                  aria-label="Close search"
+                  className="absolute right-2 flex h-8 w-8 items-center justify-center rounded-full text-slate-700 transition-colors hover:bg-slate-100"
+                >
+                  <X className="h-[18px] w-[18px]" />
+                </button>
               )}
-            </form>
-          )}
-          <button
-            type="button"
-            onClick={() => {
-              const next = !showSearchInput;
-              setShowSearchInput(next);
-              if (!next) {
-                setShowSearchDropdown(false);
-                setSearchQuery('');
-                setSearchResults([]);
-              }
-            }}
-            className={`p-1.5 rounded-full transition-all ${showSearchInput ? 'btn-primary' : 'hover:bg-white/80 text-slate-500 hover:text-slate-900'}`}
-            title="Search Engine Toggle"
-          >
-            <Search className="w-4 h-4" />
-          </button>
+            </div>
+
+            {showSearchInput && showSearchDropdown && (
+              <div className="absolute left-0 top-full z-50 mt-2 w-full overflow-hidden rounded-2xl border border-slate-200 bg-white text-xs font-bold shadow-xl animate-scaleUp">
+                <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-2.5">
+                  <span className="text-slate-900">Search Results</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowSearchDropdown(false)}
+                    aria-label="Close search results"
+                    className="rounded-md p-0.5 text-slate-500 transition-colors hover:bg-white hover:text-slate-900"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+
+                <div className="max-h-72 divide-y divide-slate-100 overflow-y-auto">
+                  {searchLoading ? (
+                    <p className="p-4 text-center text-[11px] font-semibold italic text-slate-500">Searching…</p>
+                  ) : searchError ? (
+                    <p className="p-4 text-center text-[11px] font-semibold text-rose-600">{searchError}</p>
+                  ) : searchResults.length === 0 ? (
+                    <p className="p-4 text-center text-[11px] font-semibold italic text-slate-500">No results found.</p>
+                  ) : (
+                    searchResults.map((result, idx) => (
+                      <button
+                        key={`${result.type}-${result.label}-${idx}`}
+                        type="button"
+                        onClick={() => handleSearchResultClick(result)}
+                        className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left transition-colors hover:bg-slate-50"
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate font-black text-slate-900">{result.label}</span>
+                          {result.sublabel && (
+                            <span className="mt-0.5 block truncate text-[10px] font-semibold text-slate-500">
+                              {result.sublabel}
+                            </span>
+                          )}
+                        </span>
+                        <span className="shrink-0 rounded-md border border-indigo-100 bg-indigo-50 px-2 py-0.5 text-[9px] uppercase tracking-wide text-indigo-600">
+                          {SEARCH_TYPE_LABELS[result.type] || result.type}
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </form>
         </div>
 
-        <span className="w-[1px] h-4 bg-slate-300/60 mx-1"></span>
-
-        {/* 2. NOTIFICATIONS CONTROLLER COMPONENT */}
         <div className="relative">
           <button
             type="button"
             onClick={() => { setShowUnreadBox(!showUnreadBox); setShowProfileMenu(false); setShowStudentMenu(false); }}
-            className={`p-1.5 rounded-full transition-all relative ${showUnreadBox ? 'btn-primary' : 'hover:bg-white/80 text-slate-500 hover:text-slate-900'}`}
+            className={`relative flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-xl border transition-all sm:h-[54px] sm:w-[52px] ${
+              showUnreadBox
+                ? 'border-slate-900 bg-slate-900 text-white'
+                : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-950'
+            }`}
             title="Notifications Hub"
           >
-            <Bell className="w-4 h-4" />
+            <Bell className="h-[18px] w-[18px]" />
             {unreadCount > 0 && (
               <span className="absolute top-1 right-1 w-2 h-2 bg-rose-500 rounded-full border border-white animate-pulse"></span>
             )}
@@ -399,20 +430,22 @@ const Header = ({ session, onLogout, onPageChange, onStudentChange }) => {
           )}
         </div>
 
-        <span className="w-[1px] h-4 bg-slate-300/60 mx-1"></span>
-
-        {/* 3. HOVERABLE PROFILE CONTEXT BOX */}
         <div
           className="relative"
           onMouseEnter={() => { setShowProfileMenu(true); setShowStudentMenu(false); }}
           onMouseLeave={() => setShowProfileMenu(false)}
         >
-          <button type="button" className="flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-br from-indigo-100 to-violet-100 hover:from-indigo-200 hover:to-violet-200 transition-all border border-white/80 shadow-sm overflow-hidden ring-2 ring-white/60">
-            {avatarUrl ? (
-              <img src={avatarUrl} alt={displayName} className="w-full h-full object-cover" />
-            ) : (
-              <User className="w-4 h-4 text-indigo-500" />
-            )}
+          <button
+            type="button"
+            onClick={() => setShowProfileMenu(true)}
+            aria-expanded={showProfileMenu}
+            aria-label="Open profile menu"
+            className="flex h-[46px] w-[46px] items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-white shadow-sm transition-colors hover:bg-slate-50 sm:h-[46px] sm:w-[46px]"
+          >
+            {avatarUrl
+              ? <img src={avatarUrl} alt={displayName} className="h-full w-full object-cover" />
+              : <User className="h-4 w-4 text-indigo-500" />
+            }
           </button>
 
           {/* DYNAMIC HOVER DROPDOWN PANEL MODULE */}
@@ -455,6 +488,7 @@ const Header = ({ session, onLogout, onPageChange, onStudentChange }) => {
           )}
         </div>
 
+      </div>
       </div>
 
       {/* 4. LEFT TO RIGHT SLIDE-OUT PANEL DRAWER */}

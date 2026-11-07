@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { read, utils } from '@e965/xlsx';
-import { UserCheck, MoreVertical, Edit2, UserX, Mail, Phone, BookOpen, GraduationCap, Search, X, Plus, Trash2, FileText, CheckCircle2, Download, Upload } from 'lucide-react';
+import { UserCheck, MoreVertical, Edit2, UserX, Mail, Phone, BookOpen, GraduationCap, Search, X, Plus, Trash2, FileText, CheckCircle2, Download, Upload, ArrowUpRight } from 'lucide-react';
 import { useMongoState } from '../../components/common/mongoState';
 import { useMasterData } from '../../components/common/masterData';
 import { buildTeacherImportRecord } from '../../utils/teacherBulkImport';
@@ -435,7 +435,10 @@ const TeacherManagement = ({ role = 'admin' }) => {
       {/* CORE CARDS SYSTEM GRID DISPLAY */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredTeachers.map((teacher) => (
-          <div key={teacher.id} className="glass-card glass-hover rounded-3xl p-5 relative flex flex-col justify-between group transition-all">
+          <div key={teacher.id} className="mgps-animated-card glass-card glass-hover rounded-3xl p-5 relative flex flex-col justify-between group transition-all">
+            <span className="mgps-card-corner pointer-events-none" aria-hidden="true">
+              <ArrowUpRight className="h-4 w-4" />
+            </span>
 
             {/* INLINE ACTION DROPDOWN LAYER CONTROL */}
             <div className="absolute top-4 right-4">

@@ -490,9 +490,12 @@ AES-256-GCM encrypted SQLite database. Windows `safeStorage` protects the encryp
 Settings exposes session selection with an approximate compressed archive-payload size, editable local
 past-session drafts, read-only completed snapshots, and current-session backup/rollover actions only
 inside Electron. Completed rollover snapshots include PostgreSQL-backed model data (except User
-login/account records) and stored asset bytes; the server verifies the snapshot hash before changing
-the online session. Rollover promotion, attendance/assignment/examination resets, and fee-ledger
-preservation run transactionally on the backend.
+login/account records) and stored asset bytes, except assignments, applications, leave requests,
+notifications, meetings, and notices, which are excluded from snapshots. The server verifies the
+snapshot hash before changing the online session. Rollover promotion, data cleanup, archive sanitization,
+attendance/assignment/examination resets, and fee-ledger preservation run transactionally on the backend.
+On rollover, the listed operational records are permanently cleared from live data and removed from
+all existing server-side session archives; other archived records remain available.
 
 While a local archive is selected, module-state and examination data are read from the local archive;
 snapshot edits are rejected, and other cloud API operations are blocked rather than sent to the live

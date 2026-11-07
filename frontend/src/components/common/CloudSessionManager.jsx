@@ -176,13 +176,13 @@ const CloudSessionManager = ({ canEditCurrentSession = false, canDeleteArchives 
       return;
     }
     const confirmed = window.confirm(
-      `Start ${target}?\n\nA verified server-side snapshot of ${currentSession} will be saved first. Students will be promoted, past attendance, marks, assignments and notices will be archived or reset, and fee ledgers will remain unchanged. This affects the shared online database.`
+      `Start ${target}?\n\nA verified server-side snapshot of ${currentSession} will be saved, excluding assignments, applications, leave requests, notifications, meetings and notices. Those records will be permanently deleted from live data and removed from all existing server-side session archives. Students will be promoted, attendance and marks will be archived or reset, and fee ledgers will remain unchanged. This cannot be undone.`
     );
     if (!confirmed) return;
 
     setBusy(true);
     setError('');
-    setFeedback('Saving a verified server-side archive and applying rollover…');
+    setFeedback('Saving a verified archive, permanently purging session data, and applying rollover…');
     try {
       const result = await apiFetch('/desktop-sessions/rollover', {
         method: 'POST',
@@ -200,7 +200,7 @@ const CloudSessionManager = ({ canEditCurrentSession = false, canDeleteArchives 
       setSelectedArchive(null);
       await refresh();
       setFeedback(
-        `Session ${result.currentSession} started. Promoted ${result.promotedCount}; retained ${result.retainedCount}; graduated ${result.graduatedCount}; moved to alumni pending ${result.movedToPendingCount}. A server-side archive is available below.`
+        `Session ${result.currentSession} started. Promoted ${result.promotedCount}; retained ${result.retainedCount}; graduated ${result.graduatedCount}; moved to alumni pending ${result.movedToPendingCount}. Permanently deleted the selected records and sanitized ${result.archivesSanitized} existing server archive(s).`
       );
     } catch (rolloverError) {
       setError(rolloverError.message || 'Session rollover failed.');
@@ -271,7 +271,7 @@ const CloudSessionManager = ({ canEditCurrentSession = false, canDeleteArchives 
           Past-session snapshots are stored on the ERP server and are read-only.
         </p>
         <p className="mt-1 text-[10px] font-semibold text-slate-500">
-          Archives include copied records and media, so each rollover uses additional server database storage.
+          Rollover permanently clears assignments, applications, leave requests, notifications, meetings, and notices from live data and all server archives. Other records and media remain in the archive.
         </p>
       </div>
 

@@ -7,7 +7,7 @@ const AdminLayout = ({ children, session, onLogout, onPageChange, onStudentChang
   return (
     <div className="flex h-screen w-full max-w-full overflow-hidden font-sans relative">
       <AuroraBackground />
-      <Sidebar currentActive={currentActive} onPageChange={onPageChange} role="admin" />
+      <Sidebar currentActive={currentActive} onPageChange={onPageChange} role="admin" session={session} />
       <div className="min-w-0 flex-1 flex flex-col h-full overflow-hidden">
         <Header
           session={session}

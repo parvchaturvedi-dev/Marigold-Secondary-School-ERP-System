@@ -75,10 +75,19 @@ const Login = ({ onLoginSuccess }) => {
       return;
     }
 
+    const loginToken = forcedResetModal.session?.token;
+    if (!loginToken) {
+      setResetError('Your login session has expired. Sign in again to upgrade the temporary password.');
+      return;
+    }
+
     try {
       await apiFetch('/auth/change-password', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${loginToken}`,
+        },
         body: JSON.stringify({ currentPassword, newPassword, confirmPassword }),
       });
 

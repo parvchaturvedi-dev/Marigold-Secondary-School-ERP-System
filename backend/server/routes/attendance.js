@@ -965,11 +965,18 @@ router.get('/staff-records', requireRole('admin', 'clerk'), async (request, resp
     const date = log.attendanceDate;
     const day = staff._days.get(date) || { date, clockInAt: null, clockOutAt: null, status: log.status };
     const stamp = log.scannedAt ? new Date(log.scannedAt).toISOString() : null;
-    if (log.action === 'clock-out') {
-      day.clockOutAt = stamp;
-    } else {
-      day.clockInAt = stamp;
-    }
+    const clockInAt = log.clockInAt
+      ? new Date(log.clockInAt).toISOString()
+      : log.action !== 'clock-out'
+        ? stamp
+        : null;
+    const clockOutAt = log.clockOutAt
+      ? new Date(log.clockOutAt).toISOString()
+      : log.action === 'clock-out'
+        ? stamp
+        : null;
+    day.clockInAt = clockInAt || day.clockInAt;
+    day.clockOutAt = clockOutAt || day.clockOutAt;
     // Prefer a present-ish status label if any log for the day was present.
     if (log.status === 'present' || log.status === 'manual') day.status = log.status;
     else if (!day.status) day.status = log.status;

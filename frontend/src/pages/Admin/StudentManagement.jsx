@@ -3,6 +3,7 @@ import { read, utils } from '@e965/xlsx';
 import {
   AlertCircle,
   ArrowLeft,
+  ArrowUpRight,
   ArrowUpDown,
   Download,
   FileSpreadsheet,
@@ -480,13 +481,16 @@ const StudentManagement = ({ setActivePage }) => {
               <div
                 key={cls.name}
                 onClick={() => setSelectedClassView(cls.name)}
-                className="glass-card glass-hover rounded-3xl p-5 flex flex-col justify-between group hover:border-indigo-300/70 transition-all cursor-pointer min-h-[130px]"
+                className="mgps-animated-card glass-card glass-hover rounded-3xl p-5 flex flex-col justify-between group hover:border-indigo-300/70 transition-all cursor-pointer min-h-[130px]"
               >
+                <span className="mgps-card-corner" aria-hidden="true">
+                  <ArrowUpRight className="h-4 w-4" />
+                </span>
                 <div className="flex items-center gap-4">
                   <div className="w-11 h-9 rounded-xl bg-indigo-50/60 text-slate-900 flex items-center justify-center font-bold text-sm border border-white/70">
                     {cls.name.replace(/\D/g, "") || cls.name.charAt(0)}
                   </div>
-                  <span className="text-sm font-bold text-slate-900 group-hover:text-black transition-colors">{cls.name}</span>
+                  <span className="mgps-card-title text-sm font-bold text-slate-900 group-hover:text-black transition-colors">{cls.name}</span>
                 </div>
 
                 <div className="text-[11px] font-bold text-slate-500 pt-2 border-t border-slate-100/80 mt-4 flex justify-between items-center">

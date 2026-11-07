@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   LayoutGrid,
   Calendar,
@@ -24,13 +24,13 @@ import {
   Computer,
   BookOpen,
   BarChart3,
-  ChevronDown,
   ClipboardCheck,
   Menu,
   X,
   GitCommit,
   PenTool,
   Plus,
+  Minus,
   Search,
   UserPlus,
   Award,
@@ -43,73 +43,10 @@ import {
 } from 'lucide-react';
 import Logo from '../../assets/logo.png';
 
-// --- Typing Animation Component ---
-const TypingLogo = () => {
-  const [currentWordIndex, setCurrentWordIndex] = useState(0);
-  const [currentText, setCurrentText] = useState('');
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [typingSpeed, setTypingSpeed] = useState(100);
-  const words = useMemo(
-    () => [
-      "MARIGOLD",
-      "M - Minds",
-      "A - Achievers",
-      "R - Radiant",
-      "I - Inspire",
-      "G - Guidance",
-      "O - Opportunity",
-      "L - Leadership",
-      "D - Discipline"
-    ],
-    []
-  );
-
-  useEffect(() => {
-    const handleTyping = () => {
-      const fullWord = words[currentWordIndex];
-
-      if (!isDeleting) {
-        // Character type karna
-        setCurrentText(fullWord.substring(0, currentText.length + 1));
-        setTypingSpeed(100); // Typing ki speed
-
-        // Agar poora word type ho gaya to rukna
-        if (currentText === fullWord) {
-          setTypingSpeed(1500); // Poora word type hone ke baad pause duration (1.5s)
-          setIsDeleting(true);
-        }
-      } else {
-        // Character mitana (Erase karna)
-        setCurrentText(fullWord.substring(0, currentText.length - 1));
-        setTypingSpeed(50); // Erase hone ki speed
-
-        // Agar word poora mit gaya to agla word chalana
-        if (currentText === '') {
-          setIsDeleting(false);
-          setCurrentWordIndex((prevIndex) => (prevIndex + 1) % words.length);
-          setTypingSpeed(500); // Agla word shuru hone se pehle pause
-        }
-      }
-    };
-
-    const timer = setTimeout(handleTyping, typingSpeed);
-    return () => clearTimeout(timer);
-  }, [currentText, isDeleting, currentWordIndex, typingSpeed, words]);
-
-  return (
-    <span className="inline-flex items-center text-md font-bold tracking-wider text-slate-800 whitespace-nowrap">
-      {currentText}
-      <span className="w-[2px] h-5 bg-indigo-500 ml-0.5 animate-pulse"></span>
-    </span>
-  );
-};
-
 // --- Main Sidebar Component ---
-const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
-  // Screen width track controllers
+const Sidebar = ({ currentActive, onPageChange, role = 'admin', session }) => {
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
-  const [isCollapsed, setIsCollapsed] = useState(false);
 
   // Sub-menus dynamic expansion state trackers
   const [openSubMenus, setOpenSubMenus] = useState({
@@ -121,18 +58,11 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
     'Timetable Desk': false,
   });
 
-  // Keep responsive window breaks synchronised
   useEffect(() => {
     const handleResize = () => {
       setWindowWidth(window.innerWidth);
-      if (window.innerWidth <= 920) {
-        setIsCollapsed(true);
-      } else {
-        setIsCollapsed(false);
-      }
     };
     window.addEventListener('resize', handleResize);
-    handleResize(); // Initial safe component boot execution check
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
@@ -422,10 +352,25 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
   const menuItems = (roleMenuItems[role] || adminMenuItems).filter(
     (item) => item.name !== 'Paathshala History' || window.mgpsDesktop?.isDesktop
   );
+  const utilityMenuItems = ['Settings', 'Profile']
+    .map((name) => menuItems.find((item) => item.name === name))
+    .filter(Boolean);
+  const navigationItems = menuItems.filter((item) => !['Settings', 'Profile'].includes(item.name));
+  const quickLinks = navigationItems.slice(0, 4);
+  const profilePhoto = session?.activeStudent?.photoDataUrl || session?.photoDataUrl || '';
 
   const isGroupActive = (item) => {
     if (!item.hasSub) return currentActive === item.name;
     return item.subItems.some(sub => sub.name === currentActive);
+  };
+
+  const handleItemClick = (item) => {
+    if (item.hasSub) {
+      toggleSubMenu(item.name);
+      return;
+    }
+    if (onPageChange) onPageChange(item.name);
+    if (windowWidth <= 500) setIsMobileOpen(false);
   };
 
   const renderNavButton = (item, isSubChild = false) => {
@@ -434,68 +379,41 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
     const isDropdownOpen = openSubMenus[item.name] || isActive;
 
     return (
-      <div key={item.name} className="w-full relative group/item">
+      <div key={item.name} className="relative w-full">
         <button
-          onClick={() => {
-            if (item.hasSub) {
-              toggleSubMenu(item.name);
-            } else {
-              if (onPageChange) onPageChange(item.name);
-              if (windowWidth <= 500) setIsMobileOpen(false);
-            }
-          }}
-          className={`
-            flex items-center justify-between px-4 py-2.5 rounded-2xl transition-all duration-200 text-left w-full font-medium text-[13.5px]
+          type="button"
+          onClick={() => handleItemClick(item)}
+          aria-expanded={item.hasSub ? isDropdownOpen : undefined}
+          className={`flex w-full items-center justify-between rounded-2xl px-3.5 py-3 text-left text-[14px] font-medium transition-colors duration-200
             ${isActive
-              ? 'btn-primary font-semibold'
+              ? 'bg-[#17191b] font-semibold text-white'
               : isSubChild
-                ? 'bg-transparent text-slate-500 hover:bg-white/60 hover:text-slate-900'
-                : 'text-slate-600 hover:bg-white/70 hover:text-slate-900 hover:shadow-sm'
-            }
-          `}
+                ? 'text-slate-500 hover:bg-blue-50 hover:text-blue-700'
+                : 'text-slate-700 hover:bg-blue-50 hover:text-blue-700'
+            }`}
         >
-          <div className="flex items-center gap-3.5 truncate">
+          <span className="flex min-w-0 items-center gap-3 truncate">
             <IconComponent
-              className={`w-4.5 h-4.5 shrink-0 transition-colors ${isActive ? 'text-white' : 'text-slate-400 group-hover/item:text-indigo-500'}`}
-              strokeWidth={2}
+              className={`h-[18px] w-[18px] shrink-0 ${isActive ? 'text-white' : 'text-slate-500'}`}
+              strokeWidth={2.2}
             />
-            <span className={`truncate transition-opacity duration-200
-              ${isCollapsed ? 'opacity-0 lg:group-hover/sidebar:opacity-100' : 'opacity-100'}
-            `}>
-              {item.name}
-            </span>
+            <span className="truncate">{item.name}</span>
             {item.badge && (
-              <span className={`ml-2 text-[9px] font-black uppercase bg-amber-100 text-amber-700 border border-amber-300 px-1.5 py-0.5 rounded-md shrink-0 transition-opacity duration-200
-                ${isCollapsed ? 'opacity-0 lg:group-hover/sidebar:opacity-100' : 'opacity-100'}
-              `}>
+              <span className="shrink-0 rounded-md border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[9px] font-black uppercase text-blue-700">
                 {item.badge}
               </span>
             )}
-          </div>
-
+          </span>
           {item.hasSub && (
-            <ChevronDown className={`w-4 h-4 transition-transform duration-200 shrink-0
-              ${isActive ? 'text-white/80' : 'text-slate-400'}
-              ${isDropdownOpen ? 'rotate-180' : ''}
-              ${isCollapsed ? 'opacity-0 lg:group-hover/sidebar:opacity-100' : 'opacity-100'}
-            `} />
+            isDropdownOpen
+              ? <Minus className={`h-4 w-4 shrink-0 ${isActive ? 'text-white/80' : 'text-slate-400'}`} />
+              : <Plus className={`h-4 w-4 shrink-0 ${isActive ? 'text-white/80' : 'text-slate-400'}`} />
           )}
         </button>
-
-        {isCollapsed && windowWidth > 500 && (
-          <div className="absolute left-full top-1/2 -translate-y-1/2 ml-4 px-3 py-1.5 bg-slate-900/90 backdrop-blur-md text-white text-[12px] font-bold rounded-lg opacity-0 invisible -translate-x-2 group-hover/item:opacity-100 group-hover/item:visible group-hover/item:translate-x-0 transition-all shadow-xl pointer-events-none z-50 whitespace-nowrap">
-            {item.name}
-          </div>
-        )}
-
         {item.hasSub && (
           <div
-            className={`overflow-hidden transition-all duration-300 ease-in-out pl-4 flex flex-col gap-1 mt-1
-              ${isCollapsed
-                ? 'max-h-0 lg:group-hover/sidebar:max-h-[360px]'
-                : (isDropdownOpen ? 'max-h-[360px]' : 'max-h-0')
-              }
-            `}
+            className={`ml-4 mt-1 flex flex-col gap-1 overflow-hidden border-l border-slate-200 pl-3 transition-all duration-300 ease-in-out
+              ${isDropdownOpen ? 'max-h-[600px] opacity-100' : 'max-h-0 opacity-0'}`}
           >
             {item.subItems.map(subItem => renderNavButton(subItem, true))}
           </div>
@@ -504,62 +422,142 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
     );
   };
 
+  const renderRailButton = (item) => {
+    const IconComponent = item.icon;
+    const isActive = isGroupActive(item);
+
+    return (
+      <button
+        key={item.name}
+        type="button"
+        onClick={() => handleItemClick(item)}
+        aria-label={item.name}
+        title={item.name}
+        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl transition-all duration-200
+          ${isActive
+            ? 'border border-slate-200 bg-white text-slate-950 shadow-[0_5px_15px_rgba(15,23,42,0.08)]'
+            : 'text-slate-700 hover:bg-blue-50 hover:text-blue-700'
+          }`}
+      >
+        <IconComponent className="h-[21px] w-[21px]" strokeWidth={2.2} />
+      </button>
+    );
+  };
+
+  const renderUtilityButton = (item, compact = false) => {
+    const IconComponent = item.icon;
+    const isActive = currentActive === item.name;
+
+    return (
+      <button
+        key={item.name}
+        type="button"
+        onClick={() => handleItemClick(item)}
+        aria-label={item.name}
+        title={compact ? item.name : undefined}
+        className={compact
+          ? `flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full transition-colors
+              ${isActive ? 'ring-2 ring-blue-500 ring-offset-2' : 'hover:bg-blue-50'}`
+          : `flex w-full items-center gap-3 rounded-2xl px-3.5 py-3 text-left text-[14px] font-medium transition-colors
+              ${isActive ? 'bg-blue-50 text-blue-700' : 'text-slate-700 hover:bg-blue-50 hover:text-blue-700'}`
+        }
+      >
+        {item.name === 'Profile' && profilePhoto
+          ? <img src={profilePhoto} alt="" className="h-9 w-9 rounded-full object-cover" />
+          : <IconComponent className={`${compact ? 'h-[21px] w-[21px]' : 'h-[18px] w-[18px]'} shrink-0`} strokeWidth={2.2} />
+        }
+        {!compact && <span className="truncate">{item.name}</span>}
+      </button>
+    );
+  };
+
+  const isMobile = windowWidth <= 500;
+  const mobilePanelVisibility = isMobileOpen ? 'translate-x-0' : '-translate-x-full';
+
   return (
     <>
-      {/* FIXED FLOATING HAMBURGER TRIGGER SWITCH FOR SMALL SCREENS (< 500px) */}
-      {windowWidth <= 500 && (
-        <div className="fixed top-4 left-4 z-50">
+      {isMobile && (
+        <div className="fixed left-4 top-4 z-50">
           <button
             onClick={() => setIsMobileOpen(!isMobileOpen)}
-            className="p-2.5 glass-strong text-slate-800 rounded-xl focus:outline-none active:scale-95 transition-transform"
+            aria-label={isMobileOpen ? 'Close navigation' : 'Open navigation'}
+            className="rounded-xl border border-slate-200 bg-white p-2.5 text-slate-800 shadow-lg transition-transform active:scale-95"
           >
-            {isMobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            {isMobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
         </div>
       )}
 
-      {/* SEMI-TRANSLUCENT SCREEN BACKDROP OVERLAY */}
-      {windowWidth <= 500 && isMobileOpen && (
+      {isMobile && isMobileOpen && (
         <div
           onClick={() => setIsMobileOpen(false)}
-          className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm z-40 transition-opacity animate-fadeIn"
+          className="fixed inset-0 z-40 bg-slate-950/30 backdrop-blur-sm"
         />
       )}
 
-      {/* MASTER FLEX CONTROL SIDEBAR PANEL LAYER */}
-      <div className={`h-screen bg-white/55 backdrop-blur-2xl flex flex-col px-4 font-sans select-none overflow-y-auto no-scrollbar shrink-0 border-r border-white/60 shadow-[4px_0_24px_rgba(79,70,229,0.05)] z-40 transition-all duration-300 ease-in-out
-        ${windowWidth <= 500
-          ? (isMobileOpen ? 'fixed top-0 left-0 w-72 translate-x-0' : 'fixed top-0 left-0 w-72 -translate-x-full')
-          : (isCollapsed ? 'w-22 hover:w-72' : 'w-72')
-        }
-        ${isCollapsed ? 'group/sidebar' : ''}
-      `}>
-
-        {/* BRAND LOGO FRAME CONTAINER */}
-        <div className="sticky top-0 bg-white/10 backdrop-blur-xl z-10 flex items-center gap-3 px-2 pt-6 pb-4 mb-2 shrink-0 min-h-[64px]">
-          <div className="w-9 h-9 shrink-0 rounded-xl bg-gradient-to-br from-indigo-500/10 to-violet-500/10 border border-white/70 shadow-sm flex items-center justify-center p-1">
-            <img src={Logo} alt="Logo" className="w-full h-full object-contain" />
-          </div>
-
-          <div className={`transition-opacity duration-200 overflow-hidden
-            ${isCollapsed ? 'opacity-0 w-0 lg:group-hover/sidebar:opacity-100 lg:group-hover/sidebar:w-auto' : 'opacity-100 w-auto'}
-          `}>
-            <TypingLogo />
-          </div>
-
-          {/* Jab sidebar collapsed ho aur mouse hover na ho tab short text 'MGPS' dikhega */}
-          {isCollapsed && (
-            <span className="absolute left-14 text-xl font-bold tracking-wider text-gradient lg:group-hover/sidebar:opacity-0 transition-opacity duration-200">
-              MGPS
-            </span>
-          )}
+      {!isMobile && (
+        <div className="group/sidebar relative z-50 h-full w-[100px] shrink-0 py-3 pl-3">
+          <aside className="flex h-full w-[76px] flex-col items-center rounded-[36px] border border-slate-200 bg-white px-2 py-4 shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
+            <div className="mb-4 flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl">
+              <img src={Logo} alt="Marigold logo" className="h-8 w-8 object-contain" />
+            </div>
+            <nav aria-label="Quick navigation" className="flex w-full flex-col items-center gap-2">
+              {quickLinks.map(renderRailButton)}
+            </nav>
+            <div className="flex flex-1 justify-center py-5" aria-hidden="true">
+              <span className="relative h-16 w-px bg-slate-200 after:absolute after:left-1/2 after:top-1/2 after:h-2 after:w-2 after:-translate-x-1/2 after:-translate-y-1/2 after:rounded-full after:bg-slate-400" />
+            </div>
+            <div className="flex w-full flex-col items-center gap-2">
+              {utilityMenuItems.map(item => renderUtilityButton(item, true))}
+            </div>
+          </aside>
+          <aside
+            aria-label="Main navigation"
+            className="invisible pointer-events-none absolute left-[100px] top-3 flex h-[calc(100%-24px)] w-[300px] translate-x-[-6px] flex-col rounded-[32px] border border-slate-200 bg-white p-5 opacity-0 shadow-[0_12px_36px_rgba(15,23,42,0.10)] transition-all duration-200 group-hover/sidebar:pointer-events-auto group-hover/sidebar:visible group-hover/sidebar:translate-x-0 group-hover/sidebar:opacity-100"
+          >
+            <div className="mb-3 flex shrink-0 items-center gap-3 border-b border-slate-200 px-1 pb-4">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 p-1">
+                <img src={Logo} alt="" className="h-full w-full object-contain" />
+              </div>
+              <span className="whitespace-nowrap text-[19px] font-semibold tracking-tight text-slate-950">
+                MGHUB-ERP
+              </span>
+            </div>
+            <nav aria-label="Main menu" className="no-scrollbar flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto pb-3">
+              {navigationItems.map(item => renderNavButton(item, false))}
+            </nav>
+            {utilityMenuItems.length > 0 && (
+              <div className="flex shrink-0 flex-col gap-1 border-t border-slate-200 pt-3">
+                {utilityMenuItems.map(item => renderUtilityButton(item))}
+              </div>
+            )}
+          </aside>
         </div>
+      )}
 
-        {/* COMPREHENSIVE NAVIGATION SCROLL LINK LIST */}
-        <nav className="flex flex-col gap-1.5 pb-6">
-          {menuItems.map(item => renderNavButton(item, false))}
-        </nav>
-      </div>
+      {isMobile && (
+        <aside
+          aria-label="Main navigation"
+          className={`fixed left-0 top-0 z-50 flex h-screen w-72 flex-col border-r border-slate-200 bg-white p-5 shadow-2xl transition-transform duration-300 ${mobilePanelVisibility}`}
+        >
+          <div className="mb-3 flex shrink-0 items-center gap-3 border-b border-slate-200 px-1 pb-4 pt-2">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 p-1">
+              <img src={Logo} alt="" className="h-full w-full object-contain" />
+            </div>
+            <span className="whitespace-nowrap text-[19px] font-semibold tracking-tight text-slate-950">
+              Marigold
+            </span>
+          </div>
+          <nav aria-label="Main menu" className="no-scrollbar flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto pb-3">
+            {navigationItems.map(item => renderNavButton(item, false))}
+          </nav>
+          {utilityMenuItems.length > 0 && (
+            <div className="flex shrink-0 flex-col gap-1 border-t border-slate-200 pt-3">
+              {utilityMenuItems.map(item => renderUtilityButton(item))}
+            </div>
+          )}
+        </aside>
+      )}
     </>
   );
 };

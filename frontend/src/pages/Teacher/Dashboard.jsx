@@ -1,18 +1,17 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
-  BarChart3,
   BellRing,
   CalendarDays,
-  CheckCircle2,
   ClipboardList,
   GraduationCap,
-  Layers,
   Search,
   UserRound,
 } from 'lucide-react';
 import { apiFetch } from '../../components/common/api';
 import { useNotificationsDatabase, formatNotificationTime } from '../../components/common/notificationStore';
 import { getTeacherProfile } from './teacherPortalData';
+import PortalStatCard from '../../components/common/PortalStatCard';
+import PortalWelcomeCard from '../../components/common/PortalWelcomeCard';
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
@@ -107,7 +106,6 @@ const Dashboard = ({ session, setActivePage }) => {
     return () => {
       alive = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.allottedClasses, profile.classTeacherFor]);
 
   useEffect(() => {
@@ -144,61 +142,12 @@ const Dashboard = ({ session, setActivePage }) => {
     };
   }, [session?.username, session?.allottedClasses]);
 
-  const quickLinks = [
-    { label: 'My Class', page: 'My Class', icon: Layers },
-    { label: 'Attendance', page: 'Attendance', icon: CheckCircle2 },
-    { label: 'Assignments', page: 'Assignment', icon: ClipboardList },
-    { label: 'Marks', page: 'Marks Management', icon: BarChart3 },
-  ];
-
   const stats = summary?.stats || [];
   const statIcons = { Classes: GraduationCap, Assignments: ClipboardList, Notices: Search };
 
   return (
     <div className="space-y-6 pb-8 select-none font-sans text-slate-900">
-      <section className="glass-card rounded-3xl p-6 flex flex-col xl:flex-row xl:items-center justify-between gap-6">
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[10px] font-black uppercase bg-indigo-100 text-indigo-700 border border-indigo-200 px-2.5 py-1 rounded-md">
-              Teacher Portal
-            </span>
-            <span className="text-[10px] font-mono font-black bg-white/50 px-2.5 py-1 rounded-md">
-              {profile.employeeId}
-            </span>
-          </div>
-
-          <div>
-            <h2 className="text-2xl font-black tracking-tight text-gradient">{profile.displayName}</h2>
-            <p className="text-xs font-bold text-slate-500 mt-1">
-              {profile.designation} | {profile.department}
-            </p>
-          </div>
-
-          <p className="text-xs text-slate-500 font-semibold max-w-2xl leading-relaxed">
-            Your workspace is scoped to allotted classes, teaching load, attendance registers,
-            assignment publishing, and examination review.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 min-w-full xl:min-w-[520px]">
-          {quickLinks.map((link) => {
-            const Icon = link.icon;
-
-            return (
-              <button
-                key={link.label}
-                type="button"
-                onClick={() => setActivePage?.(link.page)}
-                className="glass-soft glass-hover rounded-2xl p-3 text-left transition-colors"
-              >
-                <Icon className="w-4 h-4 mb-2 text-slate-900" />
-                <span className="text-[11px] font-black block">{link.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </section>
-
+      <PortalWelcomeCard session={session} />
       <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 stagger">
         {summaryLoading ? (
           [0, 1, 2].map((key) => <MetricSkeleton key={key} />)
@@ -209,19 +158,26 @@ const Dashboard = ({ session, setActivePage }) => {
         ) : (
           <>
             {stats.map((stat) => (
-              <MetricCard
+              <PortalStatCard
                 key={stat.title}
                 icon={statIcons[stat.title] || GraduationCap}
                 label={stat.title}
                 value={stat.value}
                 note={stat.subtitle}
+                onClick={() =>
+                  setActivePage?.(
+                    { Classes: 'My Class', Assignments: 'Assignment', Notices: 'Notices' }[stat.title] ||
+                      'Timetable'
+                  )
+                }
               />
             ))}
-            <MetricCard
+            <PortalStatCard
               icon={CalendarDays}
               label={summary?.action?.label || 'Status'}
               value={summary?.action?.title || '—'}
               note={summary?.action?.subtitle || 'Not available'}
+              onClick={() => setActivePage?.('Timetable')}
             />
           </>
         )}
@@ -328,22 +284,6 @@ const Dashboard = ({ session, setActivePage }) => {
     </div>
   );
 };
-
-const MetricCard = ({ icon, label, value, note }) => (
-  <div className="glass-card glass-hover rounded-3xl p-4 min-h-32 flex flex-col justify-between">
-    <div className="flex items-center justify-between">
-      <span className="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white flex items-center justify-center">
-        {React.createElement(icon, { className: 'w-5 h-5' })}
-      </span>
-      <BarChart3 className="w-4 h-4 text-slate-400" />
-    </div>
-    <div>
-      <p className="text-[11px] font-bold text-slate-500">{label}</p>
-      <p className="text-2xl font-black mt-1">{value}</p>
-      <p className="text-[10px] font-semibold text-slate-500 mt-1">{note}</p>
-    </div>
-  </div>
-);
 
 const MetricSkeleton = () => (
   <div className="glass-card rounded-3xl p-4 min-h-32 flex flex-col justify-between">

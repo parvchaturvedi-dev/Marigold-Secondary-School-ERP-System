@@ -5,10 +5,20 @@ import mongoose from 'mongoose';
 import { getPostgresPool } from '../db.js';
 import { requireRole } from '../middleware/auth.js';
 import { planSessionPromotion } from '../utils/desktopSessionLogic.js';
+import {
+  ROLLOVER_CLEARED_MODEL_NAMES,
+  sanitizeRolloverSnapshot,
+} from '../utils/sessionRolloverData.js';
 
 const router = express.Router();
 const INITIAL_SESSION = '2026-27';
 const EXCLUDED_ARCHIVE_MODELS = new Set(['User']);
+const ROLLOVER_CLEANUP_RESULT_KEYS = {
+  Application: 'applicationsReset',
+  LeaveRequest: 'leaveRequestsReset',
+  Notification: 'notificationsReset',
+  Meeting: 'meetingsReset',
+};
 const safeIdentifier = (value) => `"${String(value).replaceAll('"', '""')}"`;
 
 const desktopOnly = (request, response, next) => {
@@ -53,6 +63,49 @@ const readAssets = async (queryable) => {
   }));
 };
 
+const getRolloverClearedTableNames = () =>
+  ROLLOVER_CLEARED_MODEL_NAMES.map(
+    (name) => mongoose.model(name).collection.collectionName
+  );
+
+const sanitizeStoredArchives = async (client, clearedTableNames, moduleStateTableName) => {
+  const archives = await client.query(
+    'SELECT id, snapshot_gzip FROM public.session_archives FOR UPDATE'
+  );
+  let sanitizedCount = 0;
+
+  for (const archive of archives.rows) {
+    const snapshot = JSON.parse(gunzipSync(archive.snapshot_gzip).toString('utf8'));
+    const sanitized = sanitizeRolloverSnapshot(snapshot, {
+      clearedTableNames,
+      moduleStateTableName,
+    });
+    if (!sanitized.changed) continue;
+
+    const snapshotBytes = Buffer.from(JSON.stringify(sanitized.snapshot));
+    const compressedSnapshot = gzipSync(snapshotBytes);
+    const snapshotHash = createHash('sha256').update(snapshotBytes).digest('hex');
+    await client.query(
+      `UPDATE public.session_archives
+       SET snapshot_sha256 = $2,
+           record_count = $3,
+           compressed_bytes = $4,
+           snapshot_gzip = $5
+       WHERE id = $1`,
+      [
+        archive.id,
+        snapshotHash,
+        sanitized.snapshot.recordCount,
+        compressedSnapshot.length,
+        compressedSnapshot,
+      ]
+    );
+    sanitizedCount += 1;
+  }
+
+  return sanitizedCount;
+};
+
 const omitBinaryValues = (value) => {
   if (Array.isArray(value)) return value.map(omitBinaryValues);
   if (!value || typeof value !== 'object') return value;
@@ -65,20 +118,29 @@ const omitBinaryValues = (value) => {
 
 const makeSnapshot = async (queryable, sessionName) => {
   const tables = {};
+  const clearedTableNames = new Set(getRolloverClearedTableNames());
+  const moduleStateTableName = mongoose.model('ModuleState').collection.collectionName;
   for (const name of mongoose.modelNames()) {
-    if (EXCLUDED_ARCHIVE_MODELS.has(name)) continue;
+    if (EXCLUDED_ARCHIVE_MODELS.has(name) || name === 'ModuleState') continue;
     const model = mongoose.model(name);
+    if (clearedTableNames.has(model.collection.collectionName)) continue;
     tables[model.collection.collectionName] = await readModelRows(queryable, model);
   }
   tables.cloudinary_assets = await readAssets(queryable);
-  const digestInput = JSON.stringify({ sessionName, tables });
+  const moduleStates = await readModelRows(queryable, mongoose.model('ModuleState'));
+  const sanitized = sanitizeRolloverSnapshot(
+    { recordCount: 0, tables: { ...tables, [moduleStateTableName]: moduleStates } },
+    { clearedTableNames: [], moduleStateTableName }
+  );
+  const snapshotTables = sanitized.snapshot.tables;
+  const digestInput = JSON.stringify({ sessionName, tables: snapshotTables });
   return {
     snapshot: {
       schemaVersion: 1,
       sessionName,
       createdAt: new Date().toISOString(),
-      recordCount: Object.values(tables).reduce((total, rows) => total + rows.length, 0),
-      tables,
+      recordCount: sanitized.snapshot.recordCount,
+      tables: snapshotTables,
     },
     sha256: createHash('sha256').update(digestInput).digest('hex'),
   };
@@ -395,6 +457,7 @@ router.post('/rollover', requireRole('admin', 'clerk'), async (request, response
         .filter((name) => !EXCLUDED_ARCHIVE_MODELS.has(name))
         .map((name) => safeIdentifier(mongoose.model(name).collection.collectionName)),
       '"cloudinary_assets"',
+      '"session_archives"',
     ])];
     await client.query(
       `LOCK TABLE ${lockTables.map((table) => `public.${table}`).join(', ')} IN SHARE ROW EXCLUSIVE MODE`
@@ -455,7 +518,6 @@ router.post('/rollover', requireRole('admin', 'clerk'), async (request, response
       return { ...classRecord, studentCount: plan.studentCountByClass[name] || 0 };
     });
     await setModuleState(client, 'admin-class-management-classes', nextClasses);
-    await setModuleState(client, 'admin-notices-list', []);
 
     const attendanceTable = safeIdentifier(mongoose.model('AttendanceLog').collection.collectionName);
     const assignmentTable = safeIdentifier(mongoose.model('Assignment').collection.collectionName);
@@ -463,6 +525,22 @@ router.post('/rollover', requireRole('admin', 'clerk'), async (request, response
     const attendanceDeleted = await client.query(`DELETE FROM public.${attendanceTable}`);
     const assignmentsDeleted = await client.query(`DELETE FROM public.${assignmentTable}`);
     const examinationsDeleted = await client.query(`DELETE FROM public.${examinationTable}`);
+    const rolloverCleanupCounts = {};
+    for (const name of ROLLOVER_CLEARED_MODEL_NAMES.filter((modelName) => modelName !== 'Assignment')) {
+      const table = safeIdentifier(mongoose.model(name).collection.collectionName);
+      const deleted = await client.query(`DELETE FROM public.${table}`);
+      rolloverCleanupCounts[ROLLOVER_CLEANUP_RESULT_KEYS[name]] = deleted.rowCount;
+    }
+
+    const noticesState = await getModuleState(client, 'admin-notices-list', true);
+    const noticesReset = Array.isArray(noticesState.value) ? noticesState.value.length : 0;
+    const moduleStateTableName = mongoose.model('ModuleState').collection.collectionName;
+    const archivesSanitized = await sanitizeStoredArchives(
+      client,
+      getRolloverClearedTableNames(),
+      moduleStateTableName
+    );
+    await setModuleState(client, 'admin-notices-list', []);
 
     await client.query(
       `UPDATE public.desktop_session_state
@@ -478,6 +556,9 @@ router.post('/rollover', requireRole('admin', 'clerk'), async (request, response
       attendanceRecordsReset: attendanceDeleted.rowCount,
       assignmentsReset: assignmentsDeleted.rowCount,
       examinationStatesReset: examinationsDeleted.rowCount,
+      ...rolloverCleanupCounts,
+      noticesReset,
+      archivesSanitized,
       localArchiveId: archiveId,
     };
     await client.query(
