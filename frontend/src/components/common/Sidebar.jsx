@@ -161,6 +161,14 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
     { name: 'Attendance', icon: CheckSquare },
     { name: 'Admin Management', icon: UserCheck },
     {
+      name: 'WhatsApp Desk',
+      icon: MessageSquare,
+      hasSub: true,
+      subItems: [
+        { name: 'WhatsApp Integration', icon: MessageSquare },
+      ],
+    },
+    {
       name: 'Class Desk',
       icon: Layers,
       hasSub: true,

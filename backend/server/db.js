@@ -104,6 +104,16 @@ export const connectPostgres = async () => {
       CREATE INDEX IF NOT EXISTS brevo_email_outbox_pending_idx
       ON public.brevo_email_outbox (available_at, created_at)
       WHERE status IN ('queued', 'sending')
+
+      ;
+      CREATE TABLE IF NOT EXISTS public.whatsapp_integration_config (
+        id SMALLINT PRIMARY KEY CHECK (id = 1),
+        config_ciphertext BYTEA NOT NULL,
+        config_iv BYTEA NOT NULL,
+        config_auth_tag BYTEA NOT NULL,
+        updated_by TEXT NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )
     `);
     await activePool.query(`
       CREATE TABLE IF NOT EXISTS public.desktop_session_state (

@@ -31,6 +31,7 @@ export const portalRoutes = {
       Assignment: lazyPage('../pages/Admin/Assignment'),
       Attendance: lazyPage('../pages/Admin/Attendance'),
       'Admin Management': lazyPage('../pages/Admin/AdminManagement'),
+      'WhatsApp Integration': lazyPage('../pages/Admin/WhatsappIntegration'),
       'Class Management': lazyPage('../pages/Admin/ClassManagement'),
       'Clerk Management': lazyPage('../pages/Admin/ClerkManagement'),
       'Clerk Profile': lazyPage('../pages/Admin/ClerkProfile'),

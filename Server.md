@@ -576,7 +576,7 @@ backend par rahenge.
    ka data baad mein final live database par copy nahi hoga.
 
 Project ke web frontend mein production variable set na ho to woh default se
-purane Render API ko use karta hai:
+Cloudflare Tunnel API ko use karta hai:
 [frontend/src/services/api.js](./frontend/src/services/api.js).
 
 ### Mobile app — alag naya APK build lagega

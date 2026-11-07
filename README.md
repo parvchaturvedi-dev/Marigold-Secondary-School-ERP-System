@@ -548,6 +548,12 @@ outbox and dispatched/retried by the backend; configure `BREVO_OUTBOX_ENCRYPTION
 64-character hex secret alongside the Brevo API key and sender address. Legacy MongoDB and
 Cloudinary import scripts are optional and are not used by the running backend.
 
+The admin portal's WhatsApp Desk stores Meta WhatsApp Cloud API credentials encrypted with
+AES-256-GCM in PostgreSQL. Configure a stable `WHATSAPP_CONFIG_ENCRYPTION_KEY` (64-character hex)
+on the backend; enter the WhatsApp access token, Phone Number ID, and optional Business Account ID
+in **Admin → WhatsApp Desk → WhatsApp Integration**. The access token is never returned to the
+browser after saving.
+
 Mobile reads the API base URL from `EXPO_PUBLIC_API_BASE_URL` (defaults to the deployed Render URL).
 
 ---
