@@ -1,7 +1,17 @@
 /* global process */
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
+
+const frontendRoot = dirname(fileURLToPath(import.meta.url));
+
+const stripLocalOrigin = (proxy) => {
+  const removeOrigin = (proxyRequest) => proxyRequest.removeHeader('origin');
+  proxy.on('proxyReq', removeOrigin);
+  proxy.on('proxyReqWs', removeOrigin);
+};
 
 // Only group third-party libs into a single `vendor` chunk (keeping the heavy,
 // lazy-loaded 3D libs out so they stay in their own async chunk). App code is
@@ -19,11 +29,13 @@ const chunkNameFor = (id) => {
 };
 
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), '');
-  const devApiTarget = env.VITE_DEV_API_TARGET || 'http://127.0.0.1:5000';
+  const env = loadEnv(mode, frontendRoot, '');
+  const devApiTarget =
+    env.VITE_DEV_API_TARGET || 'https://api.marigoldschoolbehror.com';
 
   return {
     plugins: [react(), tailwindcss()],
+    envDir: frontendRoot,
     // The workspace hoists a second React copy to the repo root, and
     // @react-three/fiber resolves against it. Dedupe so the orb and the app
     // share ONE React instance (otherwise r3f's <Canvas> throws
@@ -39,11 +51,13 @@ export default defineConfig(({ mode }) => {
         '/api': {
           target: devApiTarget,
           changeOrigin: true,
+          configure: stripLocalOrigin,
         },
         '/socket.io': {
           target: devApiTarget,
           changeOrigin: true,
           ws: true,
+          configure: stripLocalOrigin,
         },
       },
     },

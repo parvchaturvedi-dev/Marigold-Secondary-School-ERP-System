@@ -199,6 +199,47 @@ router.get('/archives', requireRole('admin', 'clerk'), async (_request, response
   }
 });
 
+router.get('/storage-usage', requireRole('admin', 'clerk'), async (_request, response, next) => {
+  try {
+    const pool = getPostgresPool();
+    const sessionName = await currentSession(pool);
+    const liveTables = [
+      ...mongoose.modelNames()
+        .filter((name) => !EXCLUDED_ARCHIVE_MODELS.has(name))
+        .map((name) => mongoose.model(name).collection.collectionName),
+      'cloudinary_assets',
+    ];
+    const [databaseResult, liveResult, archiveResult] = await Promise.all([
+      pool.query('SELECT pg_database_size(current_database())::bigint AS database_bytes'),
+      pool.query(
+        `SELECT COALESCE(SUM(pg_total_relation_size(to_regclass(format('public.%I', table_name)))), 0)::bigint
+           AS live_session_bytes
+         FROM unnest($1::text[]) AS live_table(table_name)`,
+        [liveTables]
+      ),
+      pool.query(
+        `SELECT id, source_session, target_session, compressed_bytes::bigint AS compressed_bytes
+         FROM public.session_archives
+         ORDER BY created_at DESC`
+      ),
+    ]);
+
+    response.json({
+      currentSession: sessionName,
+      databaseBytes: Number(databaseResult.rows[0]?.database_bytes || 0),
+      currentSessionBytes: Number(liveResult.rows[0]?.live_session_bytes || 0),
+      currentSessionIsEstimate: true,
+      archives: archiveResult.rows.map((archive) => ({
+        ...archive,
+        compressed_bytes: Number(archive.compressed_bytes || 0),
+        isEstimate: false,
+      })),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.delete('/archives/:id', requireRole('admin'), async (request, response, next) => {
   if (!/^[0-9a-f-]{36}$/i.test(request.params.id)) {
     response.status(400).json({ message: 'Session archive identifier is invalid.' });

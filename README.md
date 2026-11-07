@@ -552,7 +552,11 @@ The admin portal's WhatsApp Desk stores Meta WhatsApp Cloud API credentials encr
 AES-256-GCM in PostgreSQL. Configure a stable `WHATSAPP_CONFIG_ENCRYPTION_KEY` (64-character hex)
 on the backend; enter the WhatsApp access token, Phone Number ID, and optional Business Account ID
 in **Admin → WhatsApp Desk → WhatsApp Integration**. The access token is never returned to the
-browser after saving.
+browser after saving. Admins can add or import recipient contacts, assign priorities, select school
+users or saved recipients, and send a required text message with an optional image, MP4, or PDF
+attachment from **WhatsApp Desk → WhatsApp Recipients / WhatsApp Message**. Bulk sends are capped at
+100 unique phone numbers per request, and the backend reports Meta API acceptance separately from
+final delivery; approved templates are still required outside WhatsApp's customer-service window.
 
 Mobile reads the API base URL from `EXPO_PUBLIC_API_BASE_URL` (defaults to the deployed Render URL).
 

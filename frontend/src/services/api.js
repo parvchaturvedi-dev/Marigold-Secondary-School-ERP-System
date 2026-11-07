@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const PRODUCTION_API_BASE_URL = 'https://api.mghub.marigoldschoolbehror.com/api';
+const PRODUCTION_API_BASE_URL = 'https://api.marigoldschoolbehror.com/api';
 
 const normalizeApiBaseUrl = (value) => {
   const rawValue = String(value || '/api').trim().replace(/\/+$/, '');

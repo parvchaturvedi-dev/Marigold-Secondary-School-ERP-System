@@ -113,7 +113,20 @@ export const connectPostgres = async () => {
         config_auth_tag BYTEA NOT NULL,
         updated_by TEXT NOT NULL,
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-      )
+      );
+
+      CREATE TABLE IF NOT EXISTS public.whatsapp_recipients (
+        id UUID PRIMARY KEY,
+        name TEXT NOT NULL CHECK (length(trim(name)) > 0),
+        phone_number TEXT NOT NULL UNIQUE,
+        priority TEXT NOT NULL CHECK (priority IN ('high', 'medium', 'low')),
+        created_by TEXT NOT NULL,
+        updated_by TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS whatsapp_recipients_priority_name_idx
+      ON public.whatsapp_recipients (priority, name)
     `);
     await activePool.query(`
       CREATE TABLE IF NOT EXISTS public.desktop_session_state (

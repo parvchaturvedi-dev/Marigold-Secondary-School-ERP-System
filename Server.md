@@ -157,7 +157,7 @@ karwao.
 
 5. Server par Ubuntu Server install karne ke liye 8 GB ya usse bada USB drive.
 6. School domain/DNS account ka admin access. Is guide ke example mein API
-   address `api.mghub.marigoldschoolbehror.com` hai. Domain account tumhare
+   address `api.marigoldschoolbehror.com` hai. Domain account tumhare
    control mein na ho to domain owner/IT person ki madad lo.
 7. GitHub repository ka access, PostgreSQL server ka backup banane ki access,
    aur production environment variables/secrets ka access.
@@ -536,16 +536,16 @@ badal sakta hai, isliye domain owner/IT person se karwao.
    hota hai; token ke saath **sirf Cloudflare dashboard mein dikhaya command**
    chalao. Isse connector restart ke baad bhi chalu reh sakta hai.
 5. Tunnel ke “Published application route”/“Public hostname” mein:
-   - Hostname: `api.mghub.marigoldschoolbehror.com`
+   - Hostname: `api.marigoldschoolbehror.com`
    - Service type: `HTTP`
    - Service URL: `localhost:5000`
 6. Route save karke connector status `Healthy`/connected check karo.
    Cloudflare tunnel hostname HTTPS dega. Naya API address yeh hoga:
-   `https://api.mghub.marigoldschoolbehror.com/api`
+   `https://api.marigoldschoolbehror.com/api`
 7. Server par test karo:
 
 ```bash
-curl -i https://api.mghub.marigoldschoolbehror.com/api/health
+curl -i https://api.marigoldschoolbehror.com/api/health
 ```
 
 HTTP `200`, `"ok":true`, `"database":"connected"` expected hai. Agar domain
@@ -563,7 +563,7 @@ backend par rahenge.
 1. Vercel dashboard → MGPS ERP frontend project → **Settings → Environment
    Variables** kholo.
 2. `VITE_API_BASE_URL` naam aur value
-   `https://api.mghub.marigoldschoolbehror.com/api` rakho. **Preview** environment
+   `https://api.marigoldschoolbehror.com/api` rakho. **Preview** environment
    select karo, Production nahi.
 3. Save karo aur ek Preview deployment banao/redeploy karo. Uska preview URL
    kholo; test login aur records wahan try karo. Preview backend test DB ko use
@@ -589,7 +589,7 @@ hai: [frontend-mobile/src/api/apiClient.js](./frontend-mobile/src/api/apiClient.
 1. Production APK abhi build/distribute mat karo. Sirf preview test APK chahiye
    to Expo/EAS project ke **preview** environment mein
    `EXPO_PUBLIC_API_BASE_URL` ko
-   `https://api.mghub.marigoldschoolbehror.com/api` set karo.
+   `https://api.marigoldschoolbehror.com/api` set karo.
 2. Test phone ke liye preview APK banao. Repository ke mobile README mein jo
    tested preview build profile diya hai wahi use karo; project root se mobile
    folder mein jaana hota hai:
@@ -660,13 +660,13 @@ curl -i http://127.0.0.1:5000/api/health
 Health check mein `"database":"connected"` aana chahiye. Ab Vercel dashboard →
 frontend project → **Settings → Environment Variables** kholo. Production ke
 `VITE_API_BASE_URL` ko
-`https://api.mghub.marigoldschoolbehror.com/api` set karke save karo. Phir
+`https://api.marigoldschoolbehror.com/api` set karke save karo. Phir
 **Deployments** se production deployment redeploy karo. Website par login aur
 important records/files test accounts se check karo.
 
 Mobile ke liye EAS **production** environment mein
 `EXPO_PUBLIC_API_BASE_URL` ko
-`https://api.mghub.marigoldschoolbehror.com/api` set karke production APK build
+`https://api.marigoldschoolbehror.com/api` set karke production APK build
 karo:
 
 ```bash
@@ -798,7 +798,7 @@ PC wapas chalu hone ke baad login karke check karo:
 sudo systemctl status postgresql --no-pager
 sudo systemctl status mgps-erp --no-pager
 sudo systemctl status cloudflared --no-pager
-curl -i https://api.mghub.marigoldschoolbehror.com/api/health
+curl -i https://api.marigoldschoolbehror.com/api/health
 ```
 
 Server ko bilkul bijli se disconnect karke test karne ke bajaye pehle safe

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Archive, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
+import { Archive, ChevronLeft, ChevronRight, HardDrive, RefreshCw } from 'lucide-react';
 import { apiFetch } from './api';
 
 const nextSessionName = (sessionName) => {
@@ -16,8 +16,14 @@ const formatBytes = (value) => {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 };
 
+const storagePercent = (bytes, totalBytes) => {
+  if (!totalBytes) return 0;
+  return Math.min(100, Math.max(0, (Number(bytes || 0) / Number(totalBytes)) * 100));
+};
+
 const CloudSessionManager = ({ canEditCurrentSession = false, canDeleteArchives = false }) => {
   const [currentSession, setCurrentSession] = useState('');
+  const [storageUsage, setStorageUsage] = useState(null);
   const [editingCurrentSession, setEditingCurrentSession] = useState(false);
   const [editedSessionName, setEditedSessionName] = useState('');
   const [archives, setArchives] = useState([]);
@@ -33,12 +39,14 @@ const CloudSessionManager = ({ canEditCurrentSession = false, canDeleteArchives 
   const [busy, setBusy] = useState(false);
 
   const refresh = async () => {
-    const [sessionResult, archiveResult] = await Promise.all([
+    const [sessionResult, archiveResult, storageResult] = await Promise.all([
       apiFetch('/desktop-sessions/current-session'),
       apiFetch('/desktop-sessions/archives'),
+      apiFetch('/desktop-sessions/storage-usage'),
     ]);
     setCurrentSession(sessionResult.currentSession);
     setArchives(archiveResult);
+    setStorageUsage(storageResult);
   };
 
   useEffect(() => {
@@ -120,6 +128,9 @@ const CloudSessionManager = ({ canEditCurrentSession = false, canDeleteArchives 
         body: JSON.stringify({ sessionName }),
       });
       setCurrentSession(result.currentSession);
+      setStorageUsage((current) =>
+        current ? { ...current, currentSession: result.currentSession } : current
+      );
       setEditingCurrentSession(false);
       setFeedback(`Current session renamed to ${result.currentSession}. Past archives were not changed.`);
     } catch (saveError) {
@@ -263,6 +274,77 @@ const CloudSessionManager = ({ canEditCurrentSession = false, canDeleteArchives 
           Archives include copied records and media, so each rollover uses additional server database storage.
         </p>
       </div>
+
+      {storageUsage && (
+        <div className="space-y-3 rounded-2xl border border-slate-200 bg-white/70 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h4 className="flex items-center gap-2 text-sm font-black text-slate-800">
+              <HardDrive className="h-4 w-4 text-indigo-600" />
+              Session storage
+            </h4>
+            <span className="text-xs font-bold text-slate-600">
+              Database currently used: {formatBytes(storageUsage.databaseBytes)}
+            </span>
+          </div>
+          <div className="space-y-3">
+            <div>
+              <div className="mb-1 flex flex-wrap items-baseline justify-between gap-x-3 text-xs">
+                <span className="font-bold text-slate-800">
+                  Current session · {storageUsage.currentSession}
+                  <span className="ml-1 font-medium text-slate-500">(live data estimate)</span>
+                </span>
+                <span className="font-black text-indigo-700">
+                  {formatBytes(storageUsage.currentSessionBytes)} / {formatBytes(storageUsage.databaseBytes)}
+                </span>
+              </div>
+              <div
+                role="progressbar"
+                aria-label={`Current session estimated usage: ${formatBytes(storageUsage.currentSessionBytes)} of ${formatBytes(storageUsage.databaseBytes)} database storage used`}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round(storagePercent(storageUsage.currentSessionBytes, storageUsage.databaseBytes))}
+                className="h-2 overflow-hidden rounded-full bg-slate-200"
+              >
+                <div
+                  className="h-full rounded-full bg-indigo-500"
+                  style={{ width: `${storagePercent(storageUsage.currentSessionBytes, storageUsage.databaseBytes)}%` }}
+                />
+              </div>
+            </div>
+
+            {storageUsage.archives.map((archive) => (
+              <div key={archive.id}>
+                <div className="mb-1 flex flex-wrap items-baseline justify-between gap-x-3 text-xs">
+                  <span className="font-bold text-slate-800">
+                    {archive.source_session} → {archive.target_session}
+                    <span className="ml-1 font-medium text-slate-500">(compressed archive)</span>
+                  </span>
+                  <span className="font-black text-slate-700">
+                    {formatBytes(archive.compressed_bytes)} / {formatBytes(storageUsage.databaseBytes)}
+                  </span>
+                </div>
+                <div
+                  role="progressbar"
+                  aria-label={`${archive.source_session} archive usage: ${formatBytes(archive.compressed_bytes)} of ${formatBytes(storageUsage.databaseBytes)} database storage used`}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={Math.round(storagePercent(archive.compressed_bytes, storageUsage.databaseBytes))}
+                  className="h-2 overflow-hidden rounded-full bg-slate-200"
+                >
+                  <div
+                    className="h-full rounded-full bg-amber-500"
+                    style={{ width: `${storagePercent(archive.compressed_bytes, storageUsage.databaseBytes)}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+            <p className="text-[10px] font-medium text-slate-500">
+              Current session size is the live ERP table/media footprint estimate. Past-session values are exact compressed archive sizes.
+              Database usage is current allocated PostgreSQL size, not the hosting plan quota; table/index overhead means session rows are informational, not additive.
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
         <button

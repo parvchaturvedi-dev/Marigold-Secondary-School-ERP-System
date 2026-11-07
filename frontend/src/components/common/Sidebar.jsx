@@ -39,6 +39,7 @@ import {
   FileCheck2,
   History,
   Package,
+  Send,
 } from 'lucide-react';
 import Logo from '../../assets/logo.png';
 
@@ -166,6 +167,8 @@ const Sidebar = ({ currentActive, onPageChange, role = 'admin' }) => {
       hasSub: true,
       subItems: [
         { name: 'WhatsApp Integration', icon: MessageSquare },
+        { name: 'WhatsApp Recipients', icon: Contact },
+        { name: 'WhatsApp Message', icon: Send },
       ],
     },
     {
